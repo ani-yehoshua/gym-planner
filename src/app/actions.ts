@@ -15,6 +15,14 @@ async function requireUser() {
   return { supabase, user };
 }
 
+/** Throw (instead of silently no-op) when a Supabase write fails. */
+function check(
+  { error }: { error: { message: string } | null },
+  what: string,
+) {
+  if (error) throw new Error(`${what}: ${error.message}`);
+}
+
 // ---------------------------------------------------------------------------
 // onboarding
 // ---------------------------------------------------------------------------
@@ -33,26 +41,32 @@ export async function saveOnboarding(formData: FormData) {
     return v === null || v === "" ? null : Number(v);
   };
 
-  await supabase
-    .from("profiles")
-    .update({
-      display_name: displayName || null,
-      units,
-      onboarded_at: new Date().toISOString(),
-    })
-    .eq("id", user.id);
+  check(
+    await supabase
+      .from("profiles")
+      .update({
+        display_name: displayName || null,
+        units,
+        onboarded_at: new Date().toISOString(),
+      })
+      .eq("id", user.id),
+    "save profile",
+  );
 
-  await supabase
-    .from("user_constants")
-    .update({
-      experience: experience || null,
-      primary_goal: primaryGoal || null,
-      focus_muscles: focusMuscles,
-      current_bodyweight: num("current_bodyweight"),
-      target_bodyweight: num("target_bodyweight"),
-      weekly_gain_target: num("weekly_gain_target"),
-    })
-    .eq("user_id", user.id);
+  check(
+    await supabase
+      .from("user_constants")
+      .update({
+        experience: experience || null,
+        primary_goal: primaryGoal || null,
+        focus_muscles: focusMuscles,
+        current_bodyweight: num("current_bodyweight"),
+        target_bodyweight: num("target_bodyweight"),
+        weekly_gain_target: num("weekly_gain_target"),
+      })
+      .eq("user_id", user.id),
+    "save constants",
+  );
 
   const templateId = String(formData.get("template_id") || "");
   if (templateId && templateId !== "none") {
