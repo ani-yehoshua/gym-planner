@@ -25,13 +25,6 @@ function LoginForm() {
     setStatus(error ? "error" : "sent");
   }
 
-  async function google() {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo },
-    });
-  }
-
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-6 p-6">
       <div>
@@ -70,18 +63,9 @@ function LoginForm() {
         </form>
       )}
 
-      <div className="flex items-center gap-3 text-xs text-zinc-600">
-        <span className="h-px flex-1 bg-zinc-800" />
-        or
-        <span className="h-px flex-1 bg-zinc-800" />
-      </div>
-
-      <button
-        onClick={google}
-        className="rounded-lg border border-zinc-700 px-3 py-2 text-sm font-medium hover:bg-zinc-900"
-      >
-        Continue with Google
-      </button>
+      <p className="text-xs text-zinc-600">
+        New here? The same link creates your account.
+      </p>
     </div>
   );
 }
