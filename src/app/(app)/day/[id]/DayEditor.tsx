@@ -8,7 +8,14 @@ import {
   removeDayExercise,
   setDayCategory,
 } from "@/app/actions";
-import { CATEGORY_LABEL, CATEGORY_ORDER, CATEGORY_STYLE, MUSCLE_LABEL } from "@/lib/labels";
+import {
+  CATEGORY_LABEL,
+  CATEGORY_ORDER,
+  CATEGORY_STYLE,
+  MUSCLE_LABEL,
+  dayAcceptsExercise,
+} from "@/lib/labels";
+import { ExerciseDetailBody } from "@/components/exercise-detail";
 import type { Enums } from "@/lib/supabase/database.types";
 
 type Cat = Enums<"muscle_category">;
@@ -17,6 +24,9 @@ type CatalogItem = {
   name: string;
   category: Cat;
   primary_muscles: Enums<"muscle_group">[];
+  secondary_muscles: Enums<"muscle_group">[];
+  howto_text: string | null;
+  media_url: string | null;
 };
 type DayEx = {
   id: string;
@@ -49,7 +59,6 @@ export default function DayEditor({
 }) {
   const [pending, start] = useTransition();
 
-  // local edits keyed by `${pdeId}:${setNo}` for the current user
   const initial = useMemo(() => {
     const m = new Map<string, { weight: string; reps: string }>();
     for (const l of logs) {
@@ -64,6 +73,7 @@ export default function DayEditor({
 
   const [values, setValues] = useState(initial);
   const [extra, setExtra] = useState<Record<string, number>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
   const [showAdd, setShowAdd] = useState(day.exercises.length === 0);
 
@@ -72,13 +82,10 @@ export default function DayEditor({
   function cell(pdeId: string, setNo: number) {
     return values.get(`${pdeId}:${setNo}`) ?? { weight: "", reps: "" };
   }
-
-  function update(pdeId: string, setNo: number, field: "weight" | "reps", raw: string) {
+  function update(pdeId: string, setNo: number, f: "weight" | "reps", raw: string) {
     const key = `${pdeId}:${setNo}`;
-    const nextCell = { ...cell(pdeId, setNo), [field]: raw };
-    setValues((prev) => new Map(prev).set(key, nextCell));
+    setValues((prev) => new Map(prev).set(key, { ...cell(pdeId, setNo), [f]: raw }));
   }
-
   function persist(pdeId: string, setNo: number) {
     const c = cell(pdeId, setNo);
     start(() =>
@@ -91,26 +98,21 @@ export default function DayEditor({
       }),
     );
   }
-
   function rowsFor(ex: DayEx) {
-    const base = Math.max(ex.targetSets, 1);
-    return base + (extra[ex.id] ?? 0);
+    return Math.max(ex.targetSets, 1) + (extra[ex.id] ?? 0);
   }
-
   function myStats(ex: DayEx) {
     let volume = 0;
     let top = 0;
     for (let s = 1; s <= rowsFor(ex) + 2; s++) {
       const c = values.get(`${ex.id}:${s}`);
-      if (!c) continue;
+      if (!c || c.weight === "" || c.reps === "") continue;
       const w = Number(c.weight);
-      const r = Number(c.reps);
-      if (c.weight !== "" && c.reps !== "") volume += w * r;
-      if (c.weight !== "" && c.reps !== "" && w > top) top = w;
+      volume += w * Number(c.reps);
+      if (w > top) top = w;
     }
     return { volume, top };
   }
-
   function otherStats(pdeId: string, userId: string) {
     let volume = 0;
     let top = 0;
@@ -124,13 +126,32 @@ export default function DayEditor({
     return { volume, top };
   }
 
-  const filtered = catalog
-    .filter((c) => (day.category ? c.category === day.category : true))
-    .filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
+  function tryAdd(item: CatalogItem) {
+    if (!dayAcceptsExercise(day.category, item.category)) {
+      const dayName = day.category ? CATEGORY_LABEL[day.category] : "this";
+      if (
+        !confirm(
+          `${item.name} is a ${CATEGORY_LABEL[item.category]} exercise, not typical for a ${dayName} day. Add it anyway?`,
+        )
+      )
+        return;
+    }
+    start(() => addExerciseToDay(day.id, item.id));
+    setQuery("");
+  }
+
+  const matches = catalog.filter((c) =>
+    c.name.toLowerCase().includes(query.toLowerCase()),
+  );
+  const accepted = matches
+    .filter((c) => dayAcceptsExercise(day.category, c.category))
     .slice(0, 40);
+  const offCategory = matches
+    .filter((c) => !dayAcceptsExercise(day.category, c.category))
+    .slice(0, 12);
 
   const inputCls =
-    "w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-center text-sm outline-none focus:border-zinc-500";
+    "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm outline-none focus:border-text-muted";
 
   return (
     <div className="flex flex-col gap-5">
@@ -143,7 +164,7 @@ export default function DayEditor({
             className={`rounded-md border px-2.5 py-1 text-xs ${
               day.category === c
                 ? CATEGORY_STYLE[c]
-                : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                : "border-border text-text-muted hover:border-text-muted"
             }`}
           >
             {CATEGORY_LABEL[c]}
@@ -156,12 +177,20 @@ export default function DayEditor({
         {day.exercises.map((ex) => {
           const mine = myStats(ex);
           const others = members.filter((m) => m.user_id !== currentUserId);
+          const isOpen = expanded[ex.id];
+          const mismatched = !dayAcceptsExercise(day.category, ex.exercise.category);
           return (
-            <li key={ex.id} className="rounded-xl border border-zinc-800 p-3">
+            <li key={ex.id} className="rounded-xl border border-border p-3">
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-medium">{ex.exercise.name}</div>
-                  <div className="text-xs text-zinc-500">
+                <button
+                  onClick={() => setExpanded((p) => ({ ...p, [ex.id]: !p[ex.id] }))}
+                  className="text-left"
+                >
+                  <div className="font-medium">
+                    {ex.exercise.name}
+                    <span className="ml-1 text-xs text-text-muted">{isOpen ? "▴" : "▾"}</span>
+                  </div>
+                  <div className="text-xs text-text-muted">
                     {ex.targetSets} ×{" "}
                     {ex.targetRepMin && ex.targetRepMax
                       ? `${ex.targetRepMin}–${ex.targetRepMax}`
@@ -170,17 +199,29 @@ export default function DayEditor({
                       <> · {ex.exercise.primary_muscles.map((m) => MUSCLE_LABEL[m]).join(", ")}</>
                     )}
                   </div>
-                </div>
+                  {mismatched && (
+                    <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      {CATEGORY_LABEL[ex.exercise.category]} exercise on a{" "}
+                      {day.category ? CATEGORY_LABEL[day.category] : ""} day
+                    </div>
+                  )}
+                </button>
                 <button
                   onClick={() => start(() => removeDayExercise(ex.id, day.id))}
-                  className="text-xs text-zinc-500 hover:text-rose-400"
+                  className="text-xs text-text-muted hover:text-rose-400"
                 >
                   Remove
                 </button>
               </div>
 
+              {isOpen && (
+                <div className="mt-3 rounded-lg bg-surface p-3">
+                  <ExerciseDetailBody ex={ex.exercise} />
+                </div>
+              )}
+
               <div className="mt-3 flex flex-col gap-1.5">
-                <div className="grid grid-cols-[1.5rem_1fr_1fr] items-center gap-2 text-[11px] uppercase text-zinc-500">
+                <div className="grid grid-cols-[1.5rem_1fr_1fr] items-center gap-2 text-[11px] uppercase text-text-muted">
                   <span>Set</span>
                   <span className="text-center">Weight</span>
                   <span className="text-center">Reps</span>
@@ -189,7 +230,7 @@ export default function DayEditor({
                   const c = cell(ex.id, s);
                   return (
                     <div key={s} className="grid grid-cols-[1.5rem_1fr_1fr] items-center gap-2">
-                      <span className="text-sm text-zinc-500">{s}</span>
+                      <span className="text-sm text-text-muted">{s}</span>
                       <input
                         inputMode="decimal"
                         className={inputCls}
@@ -208,31 +249,29 @@ export default function DayEditor({
                   );
                 })}
                 <button
-                  onClick={() =>
-                    setExtra((p) => ({ ...p, [ex.id]: (p[ex.id] ?? 0) + 1 }))
-                  }
-                  className="mt-1 self-start text-xs text-zinc-500 hover:text-zinc-300"
+                  onClick={() => setExtra((p) => ({ ...p, [ex.id]: (p[ex.id] ?? 0) + 1 }))}
+                  className="mt-1 self-start text-xs text-text-muted hover:text-text"
                 >
                   + set
                 </button>
               </div>
 
-              <div className="mt-2 flex gap-4 text-xs text-zinc-400">
+              <div className="mt-2 flex gap-4 text-xs text-text-muted">
                 <span>
-                  Top set <span className="text-zinc-200">{mine.top || "—"}</span>
+                  Top set <span className="text-text">{mine.top || "—"}</span>
                 </span>
                 <span>
-                  Volume <span className="text-zinc-200">{mine.volume || "—"}</span>
+                  Volume <span className="text-text">{mine.volume || "—"}</span>
                 </span>
               </div>
 
               {day.partyId && others.length > 0 && (
-                <div className="mt-2 border-t border-zinc-800 pt-2 text-xs text-zinc-500">
+                <div className="mt-2 border-t border-border pt-2 text-xs text-text-muted">
                   {others.map((m) => {
                     const o = otherStats(ex.id, m.user_id);
                     return (
                       <div key={m.user_id} className="flex gap-3">
-                        <span className="text-zinc-400">{nameById.get(m.user_id)}</span>
+                        <span className="text-text-muted">{nameById.get(m.user_id)}</span>
                         <span>top {o.top || "—"}</span>
                         <span>vol {o.volume || "—"}</span>
                       </div>
@@ -247,14 +286,14 @@ export default function DayEditor({
 
       {/* add exercise */}
       {showAdd ? (
-        <div className="rounded-xl border border-zinc-800 p-3">
+        <div className="rounded-xl border border-border p-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">
               Add {day.category ? CATEGORY_LABEL[day.category] : ""} exercise
             </span>
             <button
               onClick={() => setShowAdd(false)}
-              className="text-xs text-zinc-500 hover:text-zinc-300"
+              className="text-xs text-text-muted hover:text-text"
             >
               Done
             </button>
@@ -264,34 +303,52 @@ export default function DayEditor({
             placeholder="Search…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-zinc-500"
+            className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-text-muted"
           />
           <ul className="mt-2 max-h-72 overflow-y-auto">
-            {filtered.map((c) => (
+            {accepted.map((c) => (
               <li key={c.id}>
                 <button
-                  onClick={() => {
-                    start(() => addExerciseToDay(day.id, c.id));
-                    setQuery("");
-                  }}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-zinc-800"
+                  onClick={() => tryAdd(c)}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2"
                 >
                   <span>{c.name}</span>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-text-muted">
                     {c.primary_muscles.map((m) => MUSCLE_LABEL[m]).join(", ")}
                   </span>
                 </button>
               </li>
             ))}
-            {filtered.length === 0 && (
-              <li className="px-2 py-3 text-sm text-zinc-500">No matches.</li>
+            {accepted.length === 0 && (
+              <li className="px-2 py-3 text-sm text-text-muted">
+                No {day.category ? CATEGORY_LABEL[day.category] : ""} matches.
+              </li>
+            )}
+
+            {offCategory.length > 0 && (
+              <>
+                <li className="px-2 pb-1 pt-3 text-[11px] uppercase text-text-muted">
+                  Other categories
+                </li>
+                {offCategory.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      onClick={() => tryAdd(c)}
+                      className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm text-text-muted hover:bg-surface-2"
+                    >
+                      <span>{c.name}</span>
+                      <span className="text-xs">{CATEGORY_LABEL[c.category]}</span>
+                    </button>
+                  </li>
+                ))}
+              </>
             )}
           </ul>
         </div>
       ) : (
         <button
           onClick={() => setShowAdd(true)}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900"
+          className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface"
         >
           + Add exercise
         </button>
@@ -301,13 +358,13 @@ export default function DayEditor({
         onClick={() => {
           if (confirm("Delete this day?")) start(() => deleteDay(day.id));
         }}
-        className="self-start text-xs text-zinc-600 hover:text-rose-400"
+        className="self-start text-xs text-text-muted hover:text-rose-400"
       >
         Delete day
       </button>
 
       {pending && (
-        <span className="fixed bottom-16 left-1/2 -translate-x-1/2 rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">
+        <span className="fixed bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-surface-2 px-3 py-1 text-xs text-text-muted">
           Saving…
         </span>
       )}

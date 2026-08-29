@@ -77,6 +77,66 @@ export async function saveOnboarding(formData: FormData) {
 }
 
 // ---------------------------------------------------------------------------
+// account — edit onboarding answers later
+// ---------------------------------------------------------------------------
+export async function updateAccount(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const displayName = String(formData.get("display_name") || "").trim();
+  const units = (String(formData.get("units")) as Enums<"unit_system">) || "lb";
+  const experience = String(formData.get("experience") || "") as
+    | Enums<"experience_level">
+    | "";
+  const primaryGoal = String(formData.get("primary_goal") || "");
+  const focusMuscles = formData.getAll("focus_muscles").map(String) as Enums<"muscle_group">[];
+  const num = (k: string) => {
+    const v = formData.get(k);
+    return v === null || v === "" ? null : Number(v);
+  };
+
+  check(
+    await supabase
+      .from("profiles")
+      .update({ display_name: displayName || null, units })
+      .eq("id", user.id),
+    "update profile",
+  );
+
+  check(
+    await supabase
+      .from("user_constants")
+      .update({
+        experience: experience || null,
+        primary_goal: primaryGoal || null,
+        focus_muscles: focusMuscles,
+        current_bodyweight: num("current_bodyweight"),
+        target_bodyweight: num("target_bodyweight"),
+        weekly_gain_target: num("weekly_gain_target"),
+      })
+      .eq("user_id", user.id),
+    "update constants",
+  );
+
+  revalidatePath("/account");
+}
+
+/** Delete every solo planned day from today forward (before re-applying a template). */
+export async function clearUpcomingCalendar() {
+  const { supabase, user } = await requireUser();
+  const todayISO = new Date().toISOString().slice(0, 10);
+  check(
+    await supabase
+      .from("planned_days")
+      .delete()
+      .eq("owner_user", user.id)
+      .gte("date", todayISO),
+    "clear calendar",
+  );
+  revalidatePath("/");
+  revalidatePath("/account");
+}
+
+// ---------------------------------------------------------------------------
 // templates
 // ---------------------------------------------------------------------------
 async function applyTemplateInternal(
@@ -98,9 +158,8 @@ async function applyTemplateInternal(
 
   for (let w = 0; w < weeks; w++) {
     for (const td of tmpl.template_days) {
-      // weekday: 0 = Sunday ... convert to Monday-start offset
-      const offset = (td.weekday + 6) % 7;
-      const date = addDays(start, w * 7 + offset);
+      // weekday: 0 = Sunday, matching the Sunday-start calendar week
+      const date = addDays(start, w * 7 + td.weekday);
 
       const { data: day } = await supabase
         .from("planned_days")
@@ -150,14 +209,18 @@ export async function createExercise(formData: FormData) {
   const category = String(formData.get("category")) as Enums<"muscle_category">;
   const primary = formData.getAll("primary_muscles").map(String) as Enums<"muscle_group">[];
   if (!name || !category) return;
-  await supabase.from("exercises").insert({
-    name,
-    category,
-    primary_muscles: primary,
-    howto_text: String(formData.get("howto_text") || "") || null,
-    created_by: user.id,
-    is_public: false,
-  });
+  check(
+    await supabase.from("exercises").insert({
+      name,
+      category,
+      primary_muscles: primary,
+      howto_text: String(formData.get("howto_text") || "") || null,
+      media_url: String(formData.get("media_url") || "") || null,
+      created_by: user.id,
+      is_public: false,
+    }),
+    "create exercise",
+  );
   revalidatePath("/exercises");
 }
 

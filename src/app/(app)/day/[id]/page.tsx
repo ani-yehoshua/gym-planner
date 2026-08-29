@@ -19,7 +19,7 @@ export default async function DayPage({
   const { data: day } = await supabase
     .from("planned_days")
     .select(
-      "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, exercises(id, name, category, primary_muscles))",
+      "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -48,18 +48,18 @@ export default async function DayPage({
 
   const { data: catalog } = await supabase
     .from("exercises")
-    .select("id, name, category, primary_muscles")
+    .select("id, name, category, primary_muscles, secondary_muscles, howto_text, media_url")
     .order("name");
 
   return (
     <div className="flex flex-col gap-4">
-      <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200">
+      <Link href="/" className="text-sm text-text-muted hover:text-text">
         ← Calendar
       </Link>
       <div>
         <h1 className="text-lg font-semibold">{formatLong(day.date)}</h1>
         {day.party_id && (
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-text-muted">
             Shared with{" "}
             <Link href={`/parties/${day.party_id}`} className="underline">
               {day.parties?.name ?? "party"}

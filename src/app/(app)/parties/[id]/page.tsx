@@ -49,48 +49,48 @@ export default async function PartyPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <Link href="/parties" className="text-sm text-zinc-400 hover:text-zinc-200">
+      <Link href="/parties" className="text-sm text-text-muted hover:text-text">
         ← Parties
       </Link>
 
       <div>
         <h1 className="text-lg font-semibold">{party.name}</h1>
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-text-muted">
           {party.invite_type === "open" ? "Open party" : "Invite only"}
         </p>
       </div>
 
       {invites?.[0] && (
-        <div className="rounded-xl border border-zinc-800 p-4">
-          <div className="text-xs uppercase text-zinc-500">Invite code</div>
+        <div className="rounded-xl border border-border p-4">
+          <div className="text-xs uppercase text-text-muted">Invite code</div>
           <div className="mt-1 font-mono text-2xl tracking-widest">{invites[0].code}</div>
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-text-muted">
             Share this code — others join from the Parties tab.
           </p>
         </div>
       )}
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-400">
+        <h2 className="mb-2 text-sm font-semibold text-text-muted">
           Members ({members?.length ?? 0})
         </h2>
         <ul className="flex flex-col gap-1">
           {(members ?? []).map((m) => (
             <li
               key={m.user_id}
-              className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2 text-sm"
+              className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
             >
               <span>
                 {m.profiles?.display_name || "Member"}
-                {m.user_id === user.id && <span className="text-zinc-500"> (you)</span>}
+                {m.user_id === user.id && <span className="text-text-muted"> (you)</span>}
               </span>
-              {m.role === "owner" && <span className="text-xs text-zinc-500">Owner</span>}
+              {m.role === "owner" && <span className="text-xs text-text-muted">Owner</span>}
             </li>
           ))}
         </ul>
       </div>
 
-      <form action={createPartyDay} className="rounded-xl border border-zinc-800 p-4">
+      <form action={createPartyDay} className="rounded-xl border border-border p-4">
         <span className="text-sm font-medium">Plan a shared day</span>
         <input type="hidden" name="party_id" value={id} />
         <div className="mt-2 flex flex-wrap gap-2">
@@ -99,11 +99,11 @@ export default async function PartyPage({
             name="date"
             required
             defaultValue={today()}
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
           <select
             name="category"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           >
             <option value="">Category…</option>
             {CATEGORY_ORDER.filter((c) => c !== "rest").map((c) => (
@@ -112,7 +112,7 @@ export default async function PartyPage({
               </option>
             ))}
           </select>
-          <button className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-black">
+          <button className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg">
             Open day
           </button>
         </div>
@@ -120,13 +120,13 @@ export default async function PartyPage({
 
       {(days ?? []).length > 0 && (
         <div>
-          <h2 className="mb-2 text-sm font-semibold text-zinc-400">Upcoming shared days</h2>
+          <h2 className="mb-2 text-sm font-semibold text-text-muted">Upcoming shared days</h2>
           <ul className="flex flex-col gap-1">
             {days!.map((d) => (
               <li key={d.id}>
                 <Link
                   href={`/day/${d.id}`}
-                  className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2 text-sm hover:bg-zinc-900"
+                  className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface"
                 >
                   <span className="flex items-center gap-2">
                     {formatLong(d.date)}
@@ -138,7 +138,7 @@ export default async function PartyPage({
                       </span>
                     )}
                   </span>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-text-muted">
                     {d.planned_day_exercises.length} exercises
                   </span>
                 </Link>
@@ -150,7 +150,7 @@ export default async function PartyPage({
 
       {!isOwner && (
         <form action={leave}>
-          <button className="text-xs text-zinc-600 hover:text-rose-400">Leave party</button>
+          <button className="text-xs text-text-muted hover:text-rose-400">Leave party</button>
         </form>
       )}
     </div>

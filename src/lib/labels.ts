@@ -26,19 +26,42 @@ export const CATEGORY_ORDER: Enums<"muscle_category">[] = [
   "rest",
 ];
 
-// tailwind classes per category — used for chips / day headers
+// tailwind classes per category — used for chips / day headers (theme-aware)
 export const CATEGORY_STYLE: Record<Enums<"muscle_category">, string> = {
-  push: "bg-rose-500/15 text-rose-300 border-rose-500/30",
-  pull: "bg-sky-500/15 text-sky-300 border-sky-500/30",
-  legs: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  upper: "bg-violet-500/15 text-violet-300 border-violet-500/30",
-  lower: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  full_body: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
-  core: "bg-orange-500/15 text-orange-300 border-orange-500/30",
-  cardio: "bg-teal-500/15 text-teal-300 border-teal-500/30",
-  custom: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
-  rest: "bg-zinc-700/40 text-zinc-400 border-zinc-600/40",
+  push: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
+  pull: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
+  legs: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+  upper: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30",
+  lower: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+  full_body: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30",
+  core: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30",
+  cardio: "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30",
+  custom: "bg-surface-2 text-text-muted border-border",
+  rest: "bg-surface-2 text-text-muted border-border",
 };
+
+// Which exercise categories belong on a day of a given category.
+// Upper/Lower/Full-Body days draw from the push/pull/legs pools.
+export const DAY_ACCEPTS: Record<Enums<"muscle_category">, Enums<"muscle_category">[]> = {
+  push: ["push"],
+  pull: ["pull"],
+  legs: ["legs"],
+  upper: ["push", "pull", "upper", "core"],
+  lower: ["legs", "lower", "core"],
+  full_body: ["push", "pull", "legs", "upper", "lower", "full_body", "core"],
+  core: ["core"],
+  cardio: ["cardio"],
+  custom: ["push", "pull", "legs", "upper", "lower", "full_body", "core", "cardio", "custom"],
+  rest: ["push", "pull", "legs", "upper", "lower", "full_body", "core", "cardio", "custom"],
+};
+
+export function dayAcceptsExercise(
+  dayCategory: Enums<"muscle_category"> | null,
+  exerciseCategory: Enums<"muscle_category">,
+): boolean {
+  if (!dayCategory) return true;
+  return DAY_ACCEPTS[dayCategory].includes(exerciseCategory);
+}
 
 export const MUSCLE_LABEL: Record<Enums<"muscle_group">, string> = {
   chest: "Chest",

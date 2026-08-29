@@ -51,13 +51,13 @@ export default async function CalendarPage({
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">{formatRange(dates[0], dates[6])}</h1>
         <div className="flex items-center gap-1 text-sm">
-          <Link href={`/?week=${prevWeek}`} className="rounded-md px-2 py-1 hover:bg-zinc-900">
+          <Link href={`/?week=${prevWeek}`} className="rounded-md px-2 py-1 hover:bg-surface">
             ←
           </Link>
-          <Link href="/" className="rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-900">
+          <Link href="/" className="rounded-md px-2 py-1 text-text-muted hover:bg-surface">
             Today
           </Link>
-          <Link href={`/?week=${nextWeek}`} className="rounded-md px-2 py-1 hover:bg-zinc-900">
+          <Link href={`/?week=${nextWeek}`} className="rounded-md px-2 py-1 hover:bg-surface">
             →
           </Link>
         </div>
@@ -71,12 +71,12 @@ export default async function CalendarPage({
             <li
               key={date}
               className={`rounded-xl border p-3 ${
-                isToday ? "border-zinc-500 bg-zinc-900/60" : "border-zinc-800"
+                isToday ? "border-text-muted bg-surface/60" : "border-border"
               }`}
             >
               <div className="flex items-center gap-2">
                 <div className="w-10 shrink-0 text-center">
-                  <div className="text-[11px] uppercase text-zinc-500">{dowShort(date)}</div>
+                  <div className="text-[11px] uppercase text-text-muted">{dowShort(date)}</div>
                   <div className="text-lg font-semibold leading-none">{dayOfMonth(date)}</div>
                 </div>
 
@@ -87,7 +87,7 @@ export default async function CalendarPage({
                       <select
                         name="category"
                         defaultValue=""
-                        className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
+                        className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm"
                       >
                         <option value="">Plan a day…</option>
                         {CATEGORY_ORDER.filter((c) => c !== "rest").map((c) => (
@@ -96,7 +96,7 @@ export default async function CalendarPage({
                           </option>
                         ))}
                       </select>
-                      <button className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-black">
+                      <button className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-fg">
                         Add
                       </button>
                     </form>
@@ -106,7 +106,7 @@ export default async function CalendarPage({
                         <Link
                           key={d.id}
                           href={`/day/${d.id}`}
-                          className="flex items-center justify-between rounded-lg bg-zinc-800/60 px-3 py-2 hover:bg-zinc-800"
+                          className="flex items-center justify-between rounded-lg bg-surface-2/60 px-3 py-2 hover:bg-surface-2"
                         >
                           <span className="flex items-center gap-2">
                             {d.category && (
@@ -117,12 +117,12 @@ export default async function CalendarPage({
                               </span>
                             )}
                             {d.party_id && (
-                              <span className="text-xs text-zinc-400">
+                              <span className="text-xs text-text-muted">
                                 · {d.parties?.name ?? "Party"}
                               </span>
                             )}
                           </span>
-                          <span className="text-xs text-zinc-500">
+                          <span className="text-xs text-text-muted">
                             {d.planned_day_exercises.length} exercises
                           </span>
                         </Link>

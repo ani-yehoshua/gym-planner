@@ -18,11 +18,10 @@ export function addDays(s: string, n: number): string {
   return toISODate(d);
 }
 
-// Monday-start week containing `s`
+// Sunday-start week containing `s`
 export function startOfWeek(s: string): string {
   const d = parseISODate(s);
-  const dow = (d.getDay() + 6) % 7; // 0 = Monday
-  d.setDate(d.getDate() - dow);
+  d.setDate(d.getDate() - d.getDay()); // getDay(): 0 = Sunday
   return toISODate(d);
 }
 

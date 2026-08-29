@@ -30,10 +30,10 @@ export default async function PartiesPage({
             <li key={m.parties.id}>
               <Link
                 href={`/parties/${m.parties.id}`}
-                className="flex items-center justify-between rounded-xl border border-zinc-800 px-4 py-3 hover:bg-zinc-900"
+                className="flex items-center justify-between rounded-xl border border-border px-4 py-3 hover:bg-surface"
               >
                 <span className="font-medium">{m.parties.name}</span>
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-text-muted">
                   {m.role === "owner" ? "Owner" : "Member"} ·{" "}
                   {m.parties.invite_type === "open" ? "Open" : "Invite only"}
                 </span>
@@ -42,7 +42,7 @@ export default async function PartiesPage({
           ) : null,
         )}
         {(memberships ?? []).length === 0 && (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-text-muted">
             You&apos;re not in any parties yet. Create one to plan and train with others.
           </p>
         )}
@@ -51,39 +51,39 @@ export default async function PartiesPage({
       <div className="grid gap-4 sm:grid-cols-2">
         <form
           action={createParty}
-          className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4"
+          className="flex flex-col gap-2 rounded-xl border border-border p-4"
         >
           <span className="text-sm font-medium">Create a party</span>
           <input
             name="name"
             required
             placeholder="Party name"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
           <select
             name="invite_type"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           >
             <option value="invite_only">Invite only</option>
             <option value="open">Open (anyone with the code)</option>
           </select>
-          <button className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-black">
+          <button className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg">
             Create
           </button>
         </form>
 
         <form
           action={joinParty}
-          className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4"
+          className="flex flex-col gap-2 rounded-xl border border-border p-4"
         >
           <span className="text-sm font-medium">Join with a code</span>
           <input
             name="code"
             required
             placeholder="ABC123"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm uppercase"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm uppercase"
           />
-          <button className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">
+          <button className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface">
             Join
           </button>
           {error === "join" && (

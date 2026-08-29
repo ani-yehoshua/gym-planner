@@ -49,15 +49,15 @@ function LoginForm() {
   }
 
   const input =
-    "rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-zinc-500";
+    "rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-text-muted";
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold">
-          Gym<span className="text-zinc-400">Planner</span>
+          Gym<span className="text-text-muted">Planner</span>
         </h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-1 text-sm text-text-muted">
           Plan your training, log every set, lift with your crew.
         </p>
       </div>
@@ -75,18 +75,18 @@ function LoginForm() {
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50"
           >
             {busy ? "Sending…" : "Email me a code"}
           </button>
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-text-muted">
             New here? The same code creates your account.
           </p>
         </form>
       ) : (
         <form onSubmit={verify} className="flex flex-col gap-3">
-          <p className="text-sm text-zinc-400">
-            Enter the 6-digit code sent to <span className="text-zinc-200">{email}</span>.
+          <p className="text-sm text-text-muted">
+            Enter the 6-digit code sent to <span className="text-text">{email}</span>.
           </p>
           <input
             inputMode="numeric"
@@ -100,7 +100,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={busy || code.length < 6}
-            className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50"
           >
             {busy ? "Verifying…" : "Sign in"}
           </button>
@@ -111,7 +111,7 @@ function LoginForm() {
               setCode("");
               setError("");
             }}
-            className="text-xs text-zinc-500 hover:text-zinc-300"
+            className="text-xs text-text-muted hover:text-text-muted"
           >
             ← Use a different email
           </button>

@@ -45,14 +45,14 @@ export default async function ProgressPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-lg font-semibold">Progress</h1>
 
-      <section className="rounded-xl border border-zinc-800 p-4">
+      <section className="rounded-xl border border-border p-4">
         <h2 className="text-sm font-medium">Bodyweight</h2>
         <form action={logBodyweight} className="mt-3 flex flex-wrap gap-2">
           <input
             type="date"
             name="date"
             defaultValue={today()}
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
           <input
             type="number"
@@ -60,9 +60,9 @@ export default async function ProgressPage() {
             name="weight"
             required
             placeholder="Weight"
-            className="w-28 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+            className="w-28 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
-          <button className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-black">
+          <button className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg">
             Log
           </button>
         </form>
@@ -71,7 +71,7 @@ export default async function ProgressPage() {
           <ul className="mt-4 flex flex-col gap-1">
             {[...(bw ?? [])].reverse().map((b) => (
               <li key={b.date} className="flex items-center gap-3 text-xs">
-                <span className="w-20 text-zinc-500">{b.date.slice(5)}</span>
+                <span className="w-20 text-text-muted">{b.date.slice(5)}</span>
                 <span className="flex-1">
                   <span
                     className="inline-block h-2 rounded bg-emerald-500/60"
@@ -84,7 +84,7 @@ export default async function ProgressPage() {
                     }}
                   />
                 </span>
-                <span className="w-12 text-right text-zinc-300">{b.weight}</span>
+                <span className="w-12 text-right text-text-muted">{b.weight}</span>
               </li>
             ))}
           </ul>
@@ -94,16 +94,16 @@ export default async function ProgressPage() {
       <section>
         <h2 className="mb-2 text-sm font-medium">Best sets</h2>
         {prs.length === 0 ? (
-          <p className="text-sm text-zinc-500">Log some sets and your bests show up here.</p>
+          <p className="text-sm text-text-muted">Log some sets and your bests show up here.</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {prs.map(([name, v]) => (
               <li
                 key={name}
-                className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
               >
                 <span>{name}</span>
-                <span className="text-zinc-300">
+                <span className="text-text-muted">
                   {v.weight} × {v.reps}
                 </span>
               </li>
