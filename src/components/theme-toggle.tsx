@@ -19,7 +19,7 @@ export function ThemeToggle() {
     }, []);
 
     return (
-        <div className='inline-flex rounded-lg border border-border p-0.5'>
+        <div className='inline-flex self-start rounded-lg border border-border p-0.5'>
             {OPTIONS.map(o => {
                 const active = mounted && theme === o.value;
                 return (
