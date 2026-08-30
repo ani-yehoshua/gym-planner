@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { clearUpcomingCalendar, updateAccount } from "@/app/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SplitPicker, type SplitTemplate } from "@/components/split-picker";
+import { SubmitButton } from "@/components/submit-button";
 import { GOAL_LABEL, MUSCLE_LABEL } from "@/lib/labels";
 import type { Enums } from "@/lib/supabase/database.types";
 
@@ -215,9 +216,12 @@ export default async function AccountPage() {
           suggested exercises. Clear upcoming days first for a clean slate.
         </p>
         <form action={clearUpcomingCalendar}>
-          <button className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface">
+          <SubmitButton
+            pendingText="Clearing…"
+            className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface disabled:opacity-50"
+          >
             Clear upcoming planned days
-          </button>
+          </SubmitButton>
         </form>
         <SplitPicker templates={templates} />
       </section>

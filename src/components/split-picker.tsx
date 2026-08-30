@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { applyCustomSplit } from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
 import { CATEGORY_LABEL, DAY_CATEGORY_CHOICES } from "@/lib/labels";
 import { dowShort, parseISODate, toISODate, today } from "@/lib/date";
 import type { Enums } from "@/lib/supabase/database.types";
@@ -144,12 +145,13 @@ export function SplitPicker({ templates }: { templates: SplitTemplate[] }) {
         </div>
       </div>
 
-      <button
+      <SubmitButton
+        pendingText="Applying…"
         disabled={trainingDays === 0}
         className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-fg disabled:opacity-40"
       >
         Apply to calendar
-      </button>
+      </SubmitButton>
     </form>
   );
 }

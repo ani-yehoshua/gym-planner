@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { addDays } from "@/lib/date";
+import {
+  DEFAULT_SETS,
+  isCompound,
+  recommendedReps,
+  type Goal,
+} from "@/lib/targets";
 import type { Enums } from "@/lib/supabase/database.types";
 
 async function requireUser() {
@@ -199,7 +205,7 @@ async function materializeSplit(
             planned_day_id: day.id,
             exercise_id: e.exercise_id,
             sort: e.sort,
-            target_sets: e.sets,
+            target_sets: DEFAULT_SETS, // start everyone at 2; dial up toward the suggestion
             target_rep_min: e.rep_min,
             target_rep_max: e.rep_max,
             added_by: userId,
@@ -356,25 +362,82 @@ export async function deleteDay(dayId: string) {
 
 export async function addExerciseToDay(dayId: string, exerciseId: string) {
   const { supabase, user } = await requireUser();
+
   const { data: ex } = await supabase
     .from("exercises")
-    .select("default_sets, default_rep_min, default_rep_max")
+    .select("name, primary_muscles")
     .eq("id", exerciseId)
     .single();
+  const { data: constants } = await supabase
+    .from("user_constants")
+    .select("primary_goal")
+    .eq("user_id", user.id)
+    .maybeSingle();
   const { count } = await supabase
     .from("planned_day_exercises")
     .select("id", { count: "exact", head: true })
     .eq("planned_day_id", dayId);
 
-  await supabase.from("planned_day_exercises").insert({
-    planned_day_id: dayId,
-    exercise_id: exerciseId,
-    sort: count ?? 0,
-    target_sets: ex?.default_sets ?? 3,
-    target_rep_min: ex?.default_rep_min ?? 8,
-    target_rep_max: ex?.default_rep_max ?? 12,
-    added_by: user.id,
-  });
+  const compound = ex ? isCompound(ex) : false;
+  const [repMin, repMax] = recommendedReps(
+    (constants?.primary_goal as Goal) ?? null,
+    compound,
+  );
+
+  check(
+    await supabase.from("planned_day_exercises").insert({
+      planned_day_id: dayId,
+      exercise_id: exerciseId,
+      sort: count ?? 0,
+      target_sets: DEFAULT_SETS,
+      target_rep_min: repMin,
+      target_rep_max: repMax,
+      added_by: user.id,
+    }),
+    "add exercise",
+  );
+  revalidatePath(`/day/${dayId}`);
+}
+
+export async function updateDayExerciseTarget(input: {
+  pdeId: string;
+  dayId: string;
+  sets?: number;
+  repMin?: number | null;
+  repMax?: number | null;
+}) {
+  const { supabase } = await requireUser();
+  const patch: {
+    target_sets?: number;
+    target_rep_min?: number | null;
+    target_rep_max?: number | null;
+  } = {};
+  if (input.sets !== undefined) patch.target_sets = Math.max(1, Math.min(12, input.sets));
+  if (input.repMin !== undefined) patch.target_rep_min = input.repMin;
+  if (input.repMax !== undefined) patch.target_rep_max = input.repMax;
+  check(
+    await supabase.from("planned_day_exercises").update(patch).eq("id", input.pdeId),
+    "update target",
+  );
+  revalidatePath(`/day/${input.dayId}`);
+}
+
+export async function reorderDayExercise(pdeId: string, dayId: string, dir: -1 | 1) {
+  const { supabase } = await requireUser();
+  const { data: rows } = await supabase
+    .from("planned_day_exercises")
+    .select("id, sort")
+    .eq("planned_day_id", dayId)
+    .order("sort");
+  if (!rows) return;
+
+  const i = rows.findIndex((r) => r.id === pdeId);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= rows.length) return;
+
+  // swap sort values
+  await supabase.from("planned_day_exercises").update({ sort: rows[j].sort }).eq("id", rows[i].id);
+  await supabase.from("planned_day_exercises").update({ sort: rows[i].sort }).eq("id", rows[j].id);
   revalidatePath(`/day/${dayId}`);
 }
 

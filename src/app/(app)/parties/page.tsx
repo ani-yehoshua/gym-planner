@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createParty, joinParty } from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function PartiesPage({
   searchParams,
@@ -67,9 +68,12 @@ export default async function PartiesPage({
             <option value="invite_only">Invite only</option>
             <option value="open">Open (anyone with the code)</option>
           </select>
-          <button className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg">
+          <SubmitButton
+            pendingText="Creating…"
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50"
+          >
             Create
-          </button>
+          </SubmitButton>
         </form>
 
         <form
@@ -83,9 +87,12 @@ export default async function PartiesPage({
             placeholder="ABC123"
             className="rounded-lg border border-border bg-surface px-3 py-2 text-sm uppercase"
           />
-          <button className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface">
+          <SubmitButton
+            pendingText="Joining…"
+            className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface disabled:opacity-50"
+          >
             Join
-          </button>
+          </SubmitButton>
           {error === "join" && (
             <p className="text-xs text-rose-400">
               That code didn&apos;t work — check it and try again.

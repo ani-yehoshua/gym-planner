@@ -2,8 +2,16 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createPartyDay, leaveParty } from "@/app/actions";
+import { PartyInvite } from "@/components/party-invite";
+import { RealtimeRefresh } from "@/components/realtime-refresh";
+import { SubmitButton } from "@/components/submit-button";
 import { CATEGORY_LABEL, CATEGORY_STYLE, DAY_CATEGORY_CHOICES } from "@/lib/labels";
 import { formatLong, today } from "@/lib/date";
+
+const MEMBER_COLORS = [
+  "#f43f5e", "#3b82f6", "#22c55e", "#f59e0b",
+  "#a855f7", "#06b6d4", "#ec4899", "#84cc16",
+];
 
 export default async function PartyPage({
   params,
@@ -26,8 +34,9 @@ export default async function PartyPage({
 
   const { data: members } = await supabase
     .from("party_members")
-    .select("user_id, role, profiles(display_name)")
-    .eq("party_id", id);
+    .select("user_id, role, joined_at, profiles(display_name)")
+    .eq("party_id", id)
+    .order("joined_at");
 
   const { data: invites } = await supabase
     .from("party_invites")
@@ -49,6 +58,13 @@ export default async function PartyPage({
 
   return (
     <div className="flex flex-col gap-6">
+      <RealtimeRefresh
+        channel={`party:${id}`}
+        tables={[
+          { table: "party_members", filter: `party_id=eq.${id}` },
+          { table: "planned_days", filter: `party_id=eq.${id}` },
+        ]}
+      />
       <Link href="/parties" className="text-sm text-text-muted hover:text-text">
         ← Parties
       </Link>
@@ -60,27 +76,23 @@ export default async function PartyPage({
         </p>
       </div>
 
-      {invites?.[0] && (
-        <div className="rounded-xl border border-border p-4">
-          <div className="text-xs uppercase text-text-muted">Invite code</div>
-          <div className="mt-1 font-mono text-2xl tracking-widest">{invites[0].code}</div>
-          <p className="mt-1 text-xs text-text-muted">
-            Share this code — others join from the Parties tab.
-          </p>
-        </div>
-      )}
+      {invites?.[0] && <PartyInvite code={invites[0].code} partyName={party.name} />}
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-text-muted">
           Members ({members?.length ?? 0})
         </h2>
         <ul className="flex flex-col gap-1">
-          {(members ?? []).map((m) => (
+          {(members ?? []).map((m, i) => (
             <li
               key={m.user_id}
               className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
             >
-              <span>
+              <span className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ background: MEMBER_COLORS[i % MEMBER_COLORS.length] }}
+                />
                 {m.profiles?.display_name || "Member"}
                 {m.user_id === user.id && <span className="text-text-muted"> (you)</span>}
               </span>
@@ -112,9 +124,12 @@ export default async function PartyPage({
               </option>
             ))}
           </select>
-          <button className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg">
+          <SubmitButton
+            pendingText="Opening…"
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50"
+          >
             Open day
-          </button>
+          </SubmitButton>
         </div>
       </form>
 

@@ -4,6 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { formatLong } from "@/lib/date";
 import DayEditor from "./DayEditor";
 
+// stable per-member accent colors
+const MEMBER_COLORS = [
+  "#f43f5e", "#3b82f6", "#22c55e", "#f59e0b",
+  "#a855f7", "#06b6d4", "#ec4899", "#84cc16",
+];
+
 export default async function DayPage({
   params,
 }: {
@@ -19,7 +25,7 @@ export default async function DayPage({
   const { data: day } = await supabase
     .from("planned_days")
     .select(
-      "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url))",
+      "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -34,17 +40,25 @@ export default async function DayPage({
         .in("planned_day_exercise_id", pdeIds)
     : { data: [] };
 
-  let members: { user_id: string; display_name: string | null }[] = [];
+  let members: { user_id: string; display_name: string | null; color: string }[] = [];
   if (day.party_id) {
     const { data: m } = await supabase
       .from("party_members")
-      .select("user_id, profiles(display_name)")
-      .eq("party_id", day.party_id);
-    members = (m ?? []).map((x) => ({
+      .select("user_id, joined_at, profiles(display_name)")
+      .eq("party_id", day.party_id)
+      .order("joined_at");
+    members = (m ?? []).map((x, i) => ({
       user_id: x.user_id,
       display_name: x.profiles?.display_name ?? null,
+      color: MEMBER_COLORS[i % MEMBER_COLORS.length],
     }));
   }
+
+  const { data: constants } = await supabase
+    .from("user_constants")
+    .select("primary_goal, experience")
+    .eq("user_id", user.id)
+    .maybeSingle();
 
   const { data: catalog } = await supabase
     .from("exercises")
@@ -64,6 +78,7 @@ export default async function DayPage({
             <Link href={`/parties/${day.party_id}`} className="underline">
               {day.parties?.name ?? "party"}
             </Link>
+            {" · "}your sets log to your own profile
           </p>
         )}
       </div>
@@ -77,9 +92,10 @@ export default async function DayPage({
             .sort((a, b) => a.sort - b.sort)
             .map((p) => ({
               id: p.id,
-              targetSets: p.target_sets ?? 3,
+              targetSets: p.target_sets ?? 2,
               targetRepMin: p.target_rep_min,
               targetRepMax: p.target_rep_max,
+              addedBy: p.added_by,
               exercise: p.exercises,
             })),
         }}
@@ -87,6 +103,8 @@ export default async function DayPage({
         members={members}
         logs={logs ?? []}
         catalog={catalog ?? []}
+        goal={constants?.primary_goal ?? null}
+        experience={constants?.experience ?? null}
       />
     </div>
   );
