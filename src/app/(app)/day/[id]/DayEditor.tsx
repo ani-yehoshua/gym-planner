@@ -379,31 +379,38 @@ export default function DayEditor({
 
               <div className="mt-2 flex gap-4 text-xs text-text-muted">
                 <span>
-                  Top set <span className="text-text">{mine.top || "—"}</span>
+                  Your top set <span className="text-text">{mine.top || "—"}</span>
                 </span>
                 <span>
-                  Volume <span className="text-text">{mine.volume || "—"}</span>
+                  Your volume <span className="text-text">{mine.volume || "—"}</span>
                 </span>
               </div>
 
-              {day.partyId && others.length > 0 && (
-                <div className="mt-2 border-t border-border pt-2 text-xs text-text-muted">
-                  {others.map((m) => {
-                    const o = otherStats(ex.id, m.user_id);
-                    return (
-                      <div key={m.user_id} className="flex items-center gap-2">
-                        <span
-                          className="inline-block h-2 w-2 rounded-full"
-                          style={{ background: m.color }}
-                        />
-                        <span className="text-text">{m.display_name || "Member"}</span>
-                        <span>top {o.top || "—"}</span>
-                        <span>vol {o.volume || "—"}</span>
+              {day.partyId &&
+                (() => {
+                  const logged = others
+                    .map((m) => ({ m, o: otherStats(ex.id, m.user_id) }))
+                    .filter(({ o }) => o.top > 0 || o.volume > 0);
+                  if (logged.length === 0) return null;
+                  return (
+                    <div className="mt-2 border-t border-border pt-2 text-xs text-text-muted">
+                      <div className="mb-1 uppercase tracking-wide text-[10px]">
+                        Party — sets logged on this exercise
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      {logged.map(({ m, o }) => (
+                        <div key={m.user_id} className="flex items-center gap-2">
+                          <span
+                            className="inline-block h-2 w-2 rounded-full"
+                            style={{ background: m.color }}
+                          />
+                          <span className="text-text">{m.display_name || "Member"}</span>
+                          <span>top {o.top || "—"}</span>
+                          <span>vol {o.volume || "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
             </li>
           );
         })}
