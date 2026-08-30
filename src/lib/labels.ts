@@ -7,6 +7,10 @@ export const CATEGORY_LABEL: Record<Enums<"muscle_category">, string> = {
   upper: "Upper",
   lower: "Lower",
   full_body: "Full Body",
+  chest: "Chest",
+  back: "Back",
+  shoulders: "Shoulders",
+  arms: "Arms",
   core: "Core",
   cardio: "Cardio",
   custom: "Custom",
@@ -20,11 +24,20 @@ export const CATEGORY_ORDER: Enums<"muscle_category">[] = [
   "upper",
   "lower",
   "full_body",
+  "chest",
+  "back",
+  "shoulders",
+  "arms",
   "core",
   "cardio",
   "custom",
   "rest",
 ];
+
+// categories offered when planning / editing a day (everything except "custom")
+export const DAY_CATEGORY_CHOICES: Enums<"muscle_category">[] = CATEGORY_ORDER.filter(
+  (c) => c !== "custom",
+);
 
 // tailwind classes per category — used for chips / day headers (theme-aware)
 export const CATEGORY_STYLE: Record<Enums<"muscle_category">, string> = {
@@ -34,6 +47,10 @@ export const CATEGORY_STYLE: Record<Enums<"muscle_category">, string> = {
   upper: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30",
   lower: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
   full_body: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30",
+  chest: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
+  back: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
+  shoulders: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30",
+  arms: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30",
   core: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30",
   cardio: "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30",
   custom: "bg-surface-2 text-text-muted border-border",
@@ -42,17 +59,26 @@ export const CATEGORY_STYLE: Record<Enums<"muscle_category">, string> = {
 
 // Which exercise categories belong on a day of a given category.
 // Upper/Lower/Full-Body days draw from the push/pull/legs pools.
+const ALL_CATS: Enums<"muscle_category">[] = [
+  "push", "pull", "legs", "upper", "lower", "full_body",
+  "chest", "back", "shoulders", "arms", "core", "cardio", "custom",
+];
+
 export const DAY_ACCEPTS: Record<Enums<"muscle_category">, Enums<"muscle_category">[]> = {
-  push: ["push"],
-  pull: ["pull"],
-  legs: ["legs"],
-  upper: ["push", "pull", "upper", "core"],
+  push: ["push", "chest", "shoulders"],
+  pull: ["pull", "back"],
+  legs: ["legs", "lower"],
+  upper: ["push", "pull", "upper", "chest", "back", "shoulders", "arms", "core"],
   lower: ["legs", "lower", "core"],
-  full_body: ["push", "pull", "legs", "upper", "lower", "full_body", "core"],
+  full_body: ALL_CATS,
+  chest: ["chest", "push"],
+  back: ["back", "pull"],
+  shoulders: ["shoulders", "push"],
+  arms: ["arms", "push", "pull"],
   core: ["core"],
   cardio: ["cardio"],
-  custom: ["push", "pull", "legs", "upper", "lower", "full_body", "core", "cardio", "custom"],
-  rest: ["push", "pull", "legs", "upper", "lower", "full_body", "core", "cardio", "custom"],
+  custom: ALL_CATS,
+  rest: ALL_CATS,
 };
 
 export function dayAcceptsExercise(

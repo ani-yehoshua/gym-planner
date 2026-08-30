@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { applyTemplate, clearUpcomingCalendar, updateAccount } from "@/app/actions";
+import { clearUpcomingCalendar, updateAccount } from "@/app/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SplitPicker, type SplitTemplate } from "@/components/split-picker";
 import { GOAL_LABEL, MUSCLE_LABEL } from "@/lib/labels";
-import { today } from "@/lib/date";
 import type { Enums } from "@/lib/supabase/database.types";
 
 const EXPERIENCE: [Enums<"experience_level">, string][] = [
@@ -44,12 +44,20 @@ export default async function AccountPage() {
     .eq("user_id", user.id)
     .single();
 
-  const { data: templates } = await supabase
+  const { data: rawTemplates } = await supabase
     .from("schedule_templates")
-    .select("id, name, description")
+    .select("id, name, description, template_days(position, category)")
     .eq("is_global", true)
     .neq("name", "Blank")
     .order("name");
+
+  const templates: SplitTemplate[] = (rawTemplates ?? []).map((t) => {
+    const slots: SplitTemplate["slots"] = Array(7).fill("rest");
+    for (const d of t.template_days) {
+      if (d.position >= 0 && d.position < 7) slots[d.position] = d.category;
+    }
+    return { id: t.id, name: t.name, description: t.description, slots };
+  });
 
   const focus = c?.focus_muscles ?? [];
 
@@ -199,42 +207,19 @@ export default async function AccountPage() {
         </button>
       </form>
 
-      {/* schedule template */}
+      {/* schedule / split */}
       <section className="flex flex-col gap-3 border-t border-border pt-6">
-        <span className={label}>Apply a schedule</span>
+        <span className={label}>Schedule</span>
         <p className="text-xs text-text-muted">
-          Fills your calendar with a split&apos;s days and suggested exercises. Clear
-          upcoming days first if you want a clean slate.
+          Pick a split, reorder or swap any day, then apply it to your calendar with
+          suggested exercises. Clear upcoming days first for a clean slate.
         </p>
         <form action={clearUpcomingCalendar}>
           <button className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface">
             Clear upcoming planned days
           </button>
         </form>
-        <form action={applyTemplate} className="flex flex-col gap-2">
-          <select name="template_id" required className={input}>
-            <option value="">Choose a split…</option>
-            {(templates ?? []).map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-2">
-            <input type="date" name="from_date" defaultValue={today()} className={input} />
-            <input
-              type="number"
-              name="weeks"
-              min={1}
-              max={16}
-              defaultValue={8}
-              className={`${input} w-20`}
-            />
-          </div>
-          <button className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-fg">
-            Apply to calendar
-          </button>
-        </form>
+        <SplitPicker templates={templates} />
       </section>
 
       <form action="/auth/signout" method="post" className="border-t border-border pt-6">

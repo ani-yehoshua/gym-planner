@@ -501,25 +501,28 @@ export type Database = {
           category: Database["public"]["Enums"]["muscle_category"]
           id: string
           label: string | null
+          position: number
           sort: number
           template_id: string
-          weekday: number
+          weekday: number | null
         }
         Insert: {
           category: Database["public"]["Enums"]["muscle_category"]
           id?: string
           label?: string | null
+          position?: number
           sort?: number
           template_id: string
-          weekday: number
+          weekday?: number | null
         }
         Update: {
           category?: Database["public"]["Enums"]["muscle_category"]
           id?: string
           label?: string | null
+          position?: number
           sort?: number
           template_id?: string
-          weekday?: number
+          weekday?: number | null
         }
         Relationships: [
           {
@@ -601,6 +604,10 @@ export type Database = {
         | "cardio"
         | "custom"
         | "rest"
+        | "chest"
+        | "back"
+        | "shoulders"
+        | "arms"
       muscle_group:
         | "chest"
         | "back"

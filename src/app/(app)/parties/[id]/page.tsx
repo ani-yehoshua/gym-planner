@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createPartyDay, leaveParty } from "@/app/actions";
-import { CATEGORY_LABEL, CATEGORY_ORDER, CATEGORY_STYLE } from "@/lib/labels";
+import { CATEGORY_LABEL, CATEGORY_STYLE, DAY_CATEGORY_CHOICES } from "@/lib/labels";
 import { formatLong, today } from "@/lib/date";
 
 export default async function PartyPage({
@@ -106,7 +106,7 @@ export default async function PartyPage({
             className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           >
             <option value="">Category…</option>
-            {CATEGORY_ORDER.filter((c) => c !== "rest").map((c) => (
+            {DAY_CATEGORY_CHOICES.filter((c) => c !== "rest").map((c) => (
               <option key={c} value={c}>
                 {CATEGORY_LABEL[c]}
               </option>

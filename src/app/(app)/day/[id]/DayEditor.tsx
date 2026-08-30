@@ -10,8 +10,8 @@ import {
 } from "@/app/actions";
 import {
   CATEGORY_LABEL,
-  CATEGORY_ORDER,
   CATEGORY_STYLE,
+  DAY_CATEGORY_CHOICES,
   MUSCLE_LABEL,
   dayAcceptsExercise,
 } from "@/lib/labels";
@@ -157,7 +157,7 @@ export default function DayEditor({
     <div className="flex flex-col gap-5">
       {/* category */}
       <div className="flex flex-wrap gap-1.5">
-        {CATEGORY_ORDER.filter((c) => c !== "rest").map((c) => (
+        {DAY_CATEGORY_CHOICES.filter((c) => c !== "rest").map((c) => (
           <button
             key={c}
             onClick={() => start(() => setDayCategory(day.id, c))}

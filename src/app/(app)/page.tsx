@@ -11,7 +11,7 @@ import {
   today,
   weekDates,
 } from "@/lib/date";
-import { CATEGORY_LABEL, CATEGORY_ORDER, CATEGORY_STYLE } from "@/lib/labels";
+import { CATEGORY_LABEL, CATEGORY_STYLE, DAY_CATEGORY_CHOICES } from "@/lib/labels";
 
 export default async function CalendarPage({
   searchParams,
@@ -90,7 +90,7 @@ export default async function CalendarPage({
                         className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm"
                       >
                         <option value="">Plan a day…</option>
-                        {CATEGORY_ORDER.filter((c) => c !== "rest").map((c) => (
+                        {DAY_CATEGORY_CHOICES.filter((c) => c !== "rest").map((c) => (
                           <option key={c} value={c}>
                             {CATEGORY_LABEL[c]}
                           </option>

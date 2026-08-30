@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { addDays, startOfWeek } from "@/lib/date";
+import { addDays } from "@/lib/date";
 import type { Enums } from "@/lib/supabase/database.types";
 
 async function requireUser() {
@@ -70,7 +70,14 @@ export async function saveOnboarding(formData: FormData) {
 
   const templateId = String(formData.get("template_id") || "");
   if (templateId && templateId !== "none") {
-    await applyTemplateInternal(supabase, user.id, templateId);
+    const t = await loadTemplate(supabase, templateId);
+    if (t) {
+      await materializeSplit(supabase, user.id, {
+        slots: t.slots,
+        exercisesByCategory: t.exercisesByCategory,
+        weeks: t.defaultWeeks,
+      });
+    }
   }
 
   redirect("/");
@@ -137,65 +144,139 @@ export async function clearUpcomingCalendar() {
 }
 
 // ---------------------------------------------------------------------------
-// templates
+// templates / splits
 // ---------------------------------------------------------------------------
-async function applyTemplateInternal(
+type Cat = Enums<"muscle_category">;
+type ExRow = {
+  exercise_id: string;
+  sort: number;
+  sets: number | null;
+  rep_min: number | null;
+  rep_max: number | null;
+};
+
+const LABEL: Partial<Record<Cat, string>> = { full_body: "Full Body", rest: "Rest" };
+const catLabel = (c: Cat) =>
+  LABEL[c] ?? c.charAt(0).toUpperCase() + c.slice(1);
+
+/** Write `weeks` copies of a 7-slot pattern onto the user's calendar. */
+async function materializeSplit(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  templateId: string,
-  fromDate?: string,
-  weeksOverride?: number,
+  opts: {
+    slots: (Cat | null)[]; // index = position 0..6, null / "rest" = off day
+    exercisesByCategory: Map<Cat, ExRow[]>;
+    fromDate?: string;
+    weeks: number;
+  },
 ) {
-  const { data: tmpl } = await supabase
-    .from("schedule_templates")
-    .select("id, default_weeks, template_days(weekday, category, label, template_day_exercises(exercise_id, sort, sets, rep_min, rep_max))")
-    .eq("id", templateId)
-    .single();
-  if (!tmpl) return;
+  // slot 0 lands exactly on the chosen start date; the pattern repeats every 7 days
+  const start = opts.fromDate ?? new Date().toISOString().slice(0, 10);
 
-  const weeks = weeksOverride ?? tmpl.default_weeks;
-  const start = startOfWeek(fromDate ?? new Date().toISOString().slice(0, 10));
-
-  for (let w = 0; w < weeks; w++) {
-    for (const td of tmpl.template_days) {
-      // weekday: 0 = Sunday, matching the Sunday-start calendar week
-      const date = addDays(start, w * 7 + td.weekday);
+  for (let w = 0; w < opts.weeks; w++) {
+    for (let pos = 0; pos < opts.slots.length; pos++) {
+      const cat = opts.slots[pos];
+      if (!cat || cat === "rest") continue;
+      const date = addDays(start, w * 7 + pos);
 
       const { data: day } = await supabase
         .from("planned_days")
         .insert({
           owner_user: userId,
           date,
-          category: td.category,
-          label: td.label,
+          category: cat,
+          label: catLabel(cat),
           created_by: userId,
         })
         .select("id")
         .single();
       if (!day) continue;
 
-      const rows = td.template_day_exercises
-        .sort((a, b) => a.sort - b.sort)
-        .map((e) => ({
-          planned_day_id: day.id,
-          exercise_id: e.exercise_id,
-          sort: e.sort,
-          target_sets: e.sets,
-          target_rep_min: e.rep_min,
-          target_rep_max: e.rep_max,
-          added_by: userId,
-        }));
-      if (rows.length) await supabase.from("planned_day_exercises").insert(rows);
+      const exs = opts.exercisesByCategory.get(cat) ?? [];
+      if (exs.length) {
+        await supabase.from("planned_day_exercises").insert(
+          exs.map((e) => ({
+            planned_day_id: day.id,
+            exercise_id: e.exercise_id,
+            sort: e.sort,
+            target_sets: e.sets,
+            target_rep_min: e.rep_min,
+            target_rep_max: e.rep_max,
+            added_by: userId,
+          })),
+        );
+      }
     }
   }
+}
+
+/** Load a template's slot pattern + its exercise list keyed by category. */
+async function loadTemplate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  templateId: string,
+) {
+  const { data: tmpl } = await supabase
+    .from("schedule_templates")
+    .select(
+      "default_weeks, template_days(position, category, template_day_exercises(exercise_id, sort, sets, rep_min, rep_max))",
+    )
+    .eq("id", templateId)
+    .single();
+  if (!tmpl) return null;
+
+  const slots: (Cat | null)[] = Array(7).fill(null);
+  const exercisesByCategory = new Map<Cat, ExRow[]>();
+  for (const td of tmpl.template_days) {
+    if (td.position >= 0 && td.position < 7) slots[td.position] = td.category;
+    if (!exercisesByCategory.has(td.category)) {
+      exercisesByCategory.set(
+        td.category,
+        [...td.template_day_exercises].sort((a, b) => a.sort - b.sort),
+      );
+    }
+  }
+  return { slots, exercisesByCategory, defaultWeeks: tmpl.default_weeks };
 }
 
 export async function applyTemplate(formData: FormData) {
   const { supabase, user } = await requireUser();
   const templateId = String(formData.get("template_id"));
-  const fromDate = String(formData.get("from_date") || "") || undefined;
-  const weeks = formData.get("weeks") ? Number(formData.get("weeks")) : undefined;
-  await applyTemplateInternal(supabase, user.id, templateId, fromDate, weeks);
+  const t = await loadTemplate(supabase, templateId);
+  if (!t) redirect("/account");
+
+  await materializeSplit(supabase, user.id, {
+    slots: t.slots,
+    exercisesByCategory: t.exercisesByCategory,
+    fromDate: String(formData.get("from_date") || "") || undefined,
+    weeks: formData.get("weeks") ? Number(formData.get("weeks")) : t.defaultWeeks,
+  });
+  revalidatePath("/");
+  redirect("/");
+}
+
+/** Apply a reordered / edited 7-slot split. `source_template_id` (optional)
+ *  supplies the exercise lists per category. */
+export async function applyCustomSplit(formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const slots = Array.from({ length: 7 }, (_, i) => {
+    const v = String(formData.get(`slot_${i}`) || "rest");
+    return v === "rest" ? null : (v as Cat);
+  });
+
+  let exercisesByCategory = new Map<Cat, ExRow[]>();
+  const sourceId = String(formData.get("source_template_id") || "");
+  if (sourceId) {
+    const t = await loadTemplate(supabase, sourceId);
+    if (t) exercisesByCategory = t.exercisesByCategory;
+  }
+
+  await materializeSplit(supabase, user.id, {
+    slots,
+    exercisesByCategory,
+    fromDate: String(formData.get("from_date") || "") || undefined,
+    weeks: formData.get("weeks") ? Number(formData.get("weeks")) : 8,
+  });
   revalidatePath("/");
   redirect("/");
 }
