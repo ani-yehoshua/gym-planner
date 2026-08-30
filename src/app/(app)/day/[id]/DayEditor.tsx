@@ -247,20 +247,6 @@ export default function DayEditor({
                     {ex.exercise.name}
                     <span className="text-xs text-text-muted">{isOpen ? "▴" : "▾"}</span>
                   </div>
-                  {day.partyId && (
-                    <div className="mt-0.5 flex items-center gap-1.5 text-xs">
-                      <span
-                        className="inline-block h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: adder?.color ?? "var(--text-muted)" }}
-                      />
-                      <span className="text-text-muted">
-                        Added by{" "}
-                        <span className="text-text">
-                          {addedByMe ? "you" : (adder?.display_name ?? "someone")}
-                        </span>
-                      </span>
-                    </div>
-                  )}
                   <div className="text-xs text-text-muted">
                     {ex.exercise.primary_muscles.map((m) => MUSCLE_LABEL[m]).join(", ")}
                   </div>
@@ -380,13 +366,25 @@ export default function DayEditor({
                 })}
               </div>
 
-              <div className="mt-2 flex gap-4 text-xs text-text-muted">
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
                 <span>
                   Your top set <span className="text-text">{mine.top || "—"}</span>
                 </span>
                 <span>
                   Your volume <span className="text-text">{mine.volume || "—"}</span>
                 </span>
+                {day.partyId && (
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: adder?.color ?? "var(--text-muted)" }}
+                    />
+                    Added by{" "}
+                    <span className="text-text">
+                      {addedByMe ? "you" : (adder?.display_name ?? "someone")}
+                    </span>
+                  </span>
+                )}
               </div>
 
               {day.partyId &&
