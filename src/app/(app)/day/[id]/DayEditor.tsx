@@ -244,20 +244,23 @@ export default function DayEditor({
                   className="flex-1 text-left"
                 >
                   <div className="flex items-center gap-2 font-medium">
-                    {day.partyId && (
-                      <span
-                        className="inline-block h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: adder?.color ?? "var(--text-muted)" }}
-                        title={
-                          addedByMe
-                            ? "Added by you"
-                            : `Added by ${adder?.display_name ?? "someone"}`
-                        }
-                      />
-                    )}
                     {ex.exercise.name}
                     <span className="text-xs text-text-muted">{isOpen ? "▴" : "▾"}</span>
                   </div>
+                  {day.partyId && (
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs">
+                      <span
+                        className="inline-block h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: adder?.color ?? "var(--text-muted)" }}
+                      />
+                      <span className="text-text-muted">
+                        Added by{" "}
+                        <span className="text-text">
+                          {addedByMe ? "you" : (adder?.display_name ?? "someone")}
+                        </span>
+                      </span>
+                    </div>
+                  )}
                   <div className="text-xs text-text-muted">
                     {ex.exercise.primary_muscles.map((m) => MUSCLE_LABEL[m]).join(", ")}
                   </div>
