@@ -54,6 +54,7 @@ type Member = { user_id: string; display_name: string | null; color: string };
 export default function DayEditor({
     day,
     currentUserId,
+    canManageAll,
     members,
     logs,
     catalog,
@@ -67,6 +68,7 @@ export default function DayEditor({
         exercises: DayEx[];
     };
     currentUserId: string;
+    canManageAll: boolean;
     members: Member[];
     logs: LogRow[];
     catalog: CatalogItem[];
@@ -400,18 +402,20 @@ export default function DayEditor({
                                             ↓
                                         </button>
                                     </div>
-                                    <button
-                                        onClick={() =>
-                                            start(() =>
-                                                removeDayExercise(
-                                                    ex.id,
-                                                    day.id,
-                                                ),
-                                            )
-                                        }
-                                        className='text-xs text-text-muted hover:text-rose-400'>
-                                        Remove
-                                    </button>
+                                    {(canManageAll || addedByMe) && (
+                                        <button
+                                            onClick={() =>
+                                                start(() =>
+                                                    removeDayExercise(
+                                                        ex.id,
+                                                        day.id,
+                                                    ),
+                                                )
+                                            }
+                                            className='text-xs text-text-muted hover:text-rose-400'>
+                                            Remove
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 

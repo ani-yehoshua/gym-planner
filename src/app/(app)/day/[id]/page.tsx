@@ -41,10 +41,11 @@ export default async function DayPage({
     : { data: [] };
 
   let members: { user_id: string; display_name: string | null; color: string }[] = [];
+  let isPartyOwner = false;
   if (day.party_id) {
     const { data: m } = await supabase
       .from("party_members")
-      .select("user_id, joined_at, profiles(display_name)")
+      .select("user_id, role, joined_at, profiles(display_name)")
       .eq("party_id", day.party_id)
       .order("joined_at");
     members = (m ?? []).map((x, i) => ({
@@ -52,7 +53,12 @@ export default async function DayPage({
       display_name: x.profiles?.display_name ?? null,
       color: MEMBER_COLORS[i % MEMBER_COLORS.length],
     }));
+    isPartyOwner = (m ?? []).some(
+      (x) => x.user_id === user.id && x.role === "owner",
+    );
   }
+  // personal days: you own everything; party days: only the owner manages all
+  const canManageAll = !day.party_id || isPartyOwner;
 
   const { data: constants } = await supabase
     .from("user_constants")
@@ -100,6 +106,7 @@ export default async function DayPage({
             })),
         }}
         currentUserId={user.id}
+        canManageAll={canManageAll}
         members={members}
         logs={logs ?? []}
         catalog={catalog ?? []}
