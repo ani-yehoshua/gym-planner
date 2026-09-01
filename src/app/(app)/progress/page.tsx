@@ -108,7 +108,8 @@ export default async function ProgressPage() {
     .filter((d) => d.exercisesDone > 0)
     .slice(0, 60);
 
-  // group history into Sun–Sat weeks (already sorted newest-first)
+  // group history into Sun–Sat weeks: weeks newest-first, days within a week
+  // in chronological (ascending) order
   const weeks: { start: string; days: typeof history }[] = [];
   for (const d of history) {
     const ws = startOfWeek(d.date);
@@ -116,6 +117,7 @@ export default async function ProgressPage() {
     if (bucket) bucket.days.push(d);
     else weeks.push({ start: ws, days: [d] });
   }
+  for (const w of weeks) w.days.sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <div className="flex flex-col gap-6">
