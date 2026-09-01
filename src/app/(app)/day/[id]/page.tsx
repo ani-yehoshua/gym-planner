@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong } from "@/lib/date";
+import { DeleteDayButton } from "@/components/delete-day-button";
 import DayEditor from "./DayEditor";
 
 // stable per-member accent colors
@@ -40,6 +41,13 @@ export default async function DayPage({
         .in("planned_day_exercise_id", pdeIds)
     : { data: [] };
 
+  const { data: notes } = pdeIds.length
+    ? await supabase
+        .from("day_exercise_notes")
+        .select("planned_day_exercise_id, user_id, note")
+        .in("planned_day_exercise_id", pdeIds)
+    : { data: [] };
+
   let members: { user_id: string; display_name: string | null; color: string }[] = [];
   let isPartyOwner = false;
   if (day.party_id) {
@@ -71,11 +79,16 @@ export default async function DayPage({
     .select("id, name, category, primary_muscles, secondary_muscles, howto_text, media_url")
     .order("name");
 
+  const backHref = day.party_id ? `/parties/${day.party_id}` : "/";
+
   return (
     <div className="flex flex-col gap-4">
-      <Link href="/" className="text-sm text-text-muted hover:text-text">
-        ← Calendar
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href={backHref} className="text-sm text-text-muted hover:text-text">
+          ← {day.party_id ? "Party" : "Calendar"}
+        </Link>
+        {canManageAll && <DeleteDayButton dayId={day.id} />}
+      </div>
       <div>
         <h1 className="text-lg font-semibold">{formatLong(day.date)}</h1>
         {day.party_id && (
@@ -109,6 +122,7 @@ export default async function DayPage({
         canManageAll={canManageAll}
         members={members}
         logs={logs ?? []}
+        notes={notes ?? []}
         catalog={catalog ?? []}
         goal={constants?.primary_goal ?? null}
         experience={constants?.experience ?? null}

@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logBodyweight } from "@/app/actions";
-import { today } from "@/lib/date";
+import { formatLong, today } from "@/lib/date";
+import { CATEGORY_LABEL, CATEGORY_STYLE } from "@/lib/labels";
 
 export default async function ProgressPage() {
   const supabase = await createClient();
@@ -40,6 +42,64 @@ export default async function ProgressPage() {
 
   const bwMax = Math.max(1, ...(bw ?? []).map((b) => b.weight));
   const bwMin = Math.min(bwMax, ...(bw ?? []).map((b) => b.weight));
+
+  // ---- history: past days where you logged something ----------------------
+  const { data: pastDays } = await supabase
+    .from("planned_days")
+    .select(
+      "id, date, category, party_id, parties(name), planned_day_exercises(id, exercises(name))",
+    )
+    .lte("date", today())
+    .order("date", { ascending: false })
+    .limit(60);
+
+  const pastPdeIds = (pastDays ?? []).flatMap((d) =>
+    d.planned_day_exercises.map((p) => p.id),
+  );
+  const { data: pastLogs } = pastPdeIds.length
+    ? await supabase
+        .from("set_logs")
+        .select("planned_day_exercise_id, weight, reps")
+        .eq("user_id", user.id)
+        .in("planned_day_exercise_id", pastPdeIds)
+    : { data: [] };
+
+  const logsByPde = new Map<string, { weight: number | null; reps: number | null }[]>();
+  for (const l of pastLogs ?? []) {
+    const arr = logsByPde.get(l.planned_day_exercise_id) ?? [];
+    arr.push(l);
+    logsByPde.set(l.planned_day_exercise_id, arr);
+  }
+
+  const history = (pastDays ?? [])
+    .map((d) => {
+      let volume = 0;
+      let topWeight = 0;
+      let topName = "";
+      const exercisesDone = new Set<string>();
+      for (const pde of d.planned_day_exercises) {
+        for (const l of logsByPde.get(pde.id) ?? []) {
+          if (l.weight == null || l.reps == null) continue;
+          exercisesDone.add(pde.id);
+          volume += l.weight * l.reps;
+          if (l.weight > topWeight) {
+            topWeight = l.weight;
+            topName = pde.exercises?.name ?? "";
+          }
+        }
+      }
+      return {
+        id: d.id,
+        date: d.date,
+        category: d.category,
+        partyName: d.party_id ? (d.parties?.name ?? "Party") : null,
+        volume,
+        exercisesDone: exercisesDone.size,
+        top: topWeight ? `${topName} ${topWeight}` : null,
+      };
+    })
+    .filter((d) => d.exercisesDone > 0)
+    .slice(0, 30);
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,6 +145,49 @@ export default async function ProgressPage() {
                   />
                 </span>
                 <span className="w-12 text-right text-text-muted">{b.weight}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-medium">History</h2>
+        {history.length === 0 ? (
+          <p className="text-sm text-text-muted">
+            Completed days show up here once you&apos;ve logged sets on them.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {history.map((d) => (
+              <li key={d.id}>
+                <Link
+                  href={`/day/${d.id}`}
+                  className="flex flex-col gap-1 rounded-lg border border-border px-3 py-2 hover:bg-surface"
+                >
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      {formatLong(d.date)}
+                      {d.category && (
+                        <span
+                          className={`rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}
+                        >
+                          {CATEGORY_LABEL[d.category]}
+                        </span>
+                      )}
+                      {d.partyName && (
+                        <span className="text-xs text-text-muted">· {d.partyName}</span>
+                      )}
+                    </span>
+                    <span className="text-xs text-text-muted">
+                      vol <span className="text-text">{d.volume}</span>
+                    </span>
+                  </div>
+                  <div className="text-xs text-text-muted">
+                    {d.exercisesDone} exercise{d.exercisesDone === 1 ? "" : "s"}
+                    {d.top && <> · top {d.top}</>}
+                  </div>
+                </Link>
               </li>
             ))}
           </ul>

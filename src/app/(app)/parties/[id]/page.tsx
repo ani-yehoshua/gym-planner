@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createPartyDay, leaveParty } from "@/app/actions";
+import { createPartyDay, leaveParty, renameParty } from "@/app/actions";
 import { PartyInvite } from "@/components/party-invite";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SubmitButton } from "@/components/submit-button";
@@ -70,8 +70,25 @@ export default async function PartyPage({
       </Link>
 
       <div>
-        <h1 className="text-lg font-semibold">{party.name}</h1>
-        <p className="text-sm text-text-muted">
+        {isOwner ? (
+          <form action={renameParty} className="flex items-center gap-2">
+            <input type="hidden" name="party_id" value={id} />
+            <input
+              name="name"
+              defaultValue={party.name}
+              className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-lg font-semibold hover:border-border focus:border-border focus:bg-surface focus:outline-none"
+            />
+            <SubmitButton
+              pendingText="…"
+              className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-text-muted hover:text-text disabled:opacity-50"
+            >
+              Rename
+            </SubmitButton>
+          </form>
+        ) : (
+          <h1 className="text-lg font-semibold">{party.name}</h1>
+        )}
+        <p className="mt-0.5 text-sm text-text-muted">
           {party.invite_type === "open" ? "Open party" : "Invite only"}
         </p>
       </div>

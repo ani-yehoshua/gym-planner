@@ -1,7 +1,10 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createExercise } from "@/app/actions";
 import { CATEGORY_LABEL, CATEGORY_ORDER, MUSCLE_LABEL } from "@/lib/labels";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
+import { ExercisePrefForm } from "@/components/exercise-pref-form";
+import { recommendedReps, isCompound, type Goal } from "@/lib/targets";
 import type { Enums } from "@/lib/supabase/database.types";
 
 const MUSCLES: Enums<"muscle_group">[] = [
@@ -11,6 +14,11 @@ const MUSCLES: Enums<"muscle_group">[] = [
 
 export default async function ExercisesPage() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
   const { data: exercises } = await supabase
     .from("exercises")
     .select(
@@ -18,6 +26,19 @@ export default async function ExercisesPage() {
     )
     .order("category")
     .order("name");
+
+  const { data: prefRows } = await supabase
+    .from("user_exercise_prefs")
+    .select("exercise_id, default_sets, default_rep_min, default_rep_max")
+    .eq("user_id", user.id);
+  const prefs = new Map((prefRows ?? []).map((p) => [p.exercise_id, p]));
+
+  const { data: constants } = await supabase
+    .from("user_constants")
+    .select("primary_goal")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const goal = (constants?.primary_goal as Goal) ?? null;
 
   const grouped = new Map<Enums<"muscle_category">, NonNullable<typeof exercises>>();
   for (const e of exercises ?? []) {
@@ -99,6 +120,16 @@ export default async function ExercisesPage() {
                   </summary>
                   <div className="border-t border-border px-3 py-3">
                     <ExerciseDetailBody ex={e} />
+                    {(() => {
+                      const [rMin, rMax] = recommendedReps(goal, isCompound(e));
+                      return (
+                        <ExercisePrefForm
+                          exerciseId={e.id}
+                          pref={prefs.get(e.id) ?? null}
+                          fallback={{ sets: 2, repMin: rMin, repMax: rMax }}
+                        />
+                      );
+                    })()}
                   </div>
                 </details>
               </li>

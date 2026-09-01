@@ -179,6 +179,13 @@ async function materializeSplit(
   // slot 0 lands exactly on the chosen start date; the pattern repeats every 7 days
   const start = opts.fromDate ?? new Date().toISOString().slice(0, 10);
 
+  // the user's saved per-exercise defaults override the template's numbers
+  const { data: prefRows } = await supabase
+    .from("user_exercise_prefs")
+    .select("exercise_id, default_sets, default_rep_min, default_rep_max")
+    .eq("user_id", userId);
+  const prefs = new Map((prefRows ?? []).map((p) => [p.exercise_id, p]));
+
   for (let w = 0; w < opts.weeks; w++) {
     for (let pos = 0; pos < opts.slots.length; pos++) {
       const cat = opts.slots[pos];
@@ -201,15 +208,18 @@ async function materializeSplit(
       const exs = opts.exercisesByCategory.get(cat) ?? [];
       if (exs.length) {
         await supabase.from("planned_day_exercises").insert(
-          exs.map((e) => ({
-            planned_day_id: day.id,
-            exercise_id: e.exercise_id,
-            sort: e.sort,
-            target_sets: DEFAULT_SETS, // start everyone at 2; dial up toward the suggestion
-            target_rep_min: e.rep_min,
-            target_rep_max: e.rep_max,
-            added_by: userId,
-          })),
+          exs.map((e) => {
+            const pref = prefs.get(e.exercise_id);
+            return {
+              planned_day_id: day.id,
+              exercise_id: e.exercise_id,
+              sort: e.sort,
+              target_sets: pref?.default_sets ?? DEFAULT_SETS,
+              target_rep_min: pref?.default_rep_min ?? e.rep_min,
+              target_rep_max: pref?.default_rep_max ?? e.rep_max,
+              added_by: userId,
+            };
+          }),
         );
       }
     }
@@ -356,30 +366,36 @@ export async function setDayCategory(dayId: string, category: Enums<"muscle_cate
 
 export async function deleteDay(dayId: string) {
   const { supabase } = await requireUser();
+  const { data: day } = await supabase
+    .from("planned_days")
+    .select("party_id")
+    .eq("id", dayId)
+    .maybeSingle();
   await supabase.from("planned_days").delete().eq("id", dayId);
-  redirect("/");
+  redirect(day?.party_id ? `/parties/${day.party_id}` : "/");
 }
 
 export async function addExerciseToDay(dayId: string, exerciseId: string) {
   const { supabase, user } = await requireUser();
 
-  const { data: ex } = await supabase
-    .from("exercises")
-    .select("name, primary_muscles")
-    .eq("id", exerciseId)
-    .single();
-  const { data: constants } = await supabase
-    .from("user_constants")
-    .select("primary_goal")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const { count } = await supabase
-    .from("planned_day_exercises")
-    .select("id", { count: "exact", head: true })
-    .eq("planned_day_id", dayId);
+  const [{ data: ex }, { data: pref }, { data: constants }, { count }] =
+    await Promise.all([
+      supabase.from("exercises").select("name, primary_muscles").eq("id", exerciseId).single(),
+      supabase
+        .from("user_exercise_prefs")
+        .select("default_sets, default_rep_min, default_rep_max")
+        .eq("user_id", user.id)
+        .eq("exercise_id", exerciseId)
+        .maybeSingle(),
+      supabase.from("user_constants").select("primary_goal").eq("user_id", user.id).maybeSingle(),
+      supabase
+        .from("planned_day_exercises")
+        .select("id", { count: "exact", head: true })
+        .eq("planned_day_id", dayId),
+    ]);
 
   const compound = ex ? isCompound(ex) : false;
-  const [repMin, repMax] = recommendedReps(
+  const [recMin, recMax] = recommendedReps(
     (constants?.primary_goal as Goal) ?? null,
     compound,
   );
@@ -389,14 +405,80 @@ export async function addExerciseToDay(dayId: string, exerciseId: string) {
       planned_day_id: dayId,
       exercise_id: exerciseId,
       sort: count ?? 0,
-      target_sets: DEFAULT_SETS,
-      target_rep_min: repMin,
-      target_rep_max: repMax,
+      target_sets: pref?.default_sets ?? DEFAULT_SETS,
+      target_rep_min: pref?.default_rep_min ?? recMin,
+      target_rep_max: pref?.default_rep_max ?? recMax,
       added_by: user.id,
     }),
     "add exercise",
   );
   revalidatePath(`/day/${dayId}`);
+}
+
+// ---------------------------------------------------------------------------
+// per-exercise notes on a day
+// ---------------------------------------------------------------------------
+export async function saveExerciseNote(input: {
+  pdeId: string;
+  dayId: string;
+  note: string;
+}) {
+  const { supabase, user } = await requireUser();
+  const note = input.note.trim();
+  if (note === "") {
+    await supabase
+      .from("day_exercise_notes")
+      .delete()
+      .eq("planned_day_exercise_id", input.pdeId)
+      .eq("user_id", user.id);
+  } else {
+    check(
+      await supabase.from("day_exercise_notes").upsert(
+        { planned_day_exercise_id: input.pdeId, user_id: user.id, note },
+        { onConflict: "planned_day_exercise_id,user_id" },
+      ),
+      "save note",
+    );
+  }
+  revalidatePath(`/day/${input.dayId}`);
+}
+
+// ---------------------------------------------------------------------------
+// per-user exercise defaults (Exercises tab)
+// ---------------------------------------------------------------------------
+export async function setExercisePref(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const exerciseId = String(formData.get("exercise_id"));
+  const n = (k: string) => {
+    const v = formData.get(k);
+    return v === null || v === "" ? null : Math.max(1, Math.min(20, Number(v)));
+  };
+  const sets = n("default_sets");
+  const repMin = n("default_rep_min");
+  const repMax = n("default_rep_max");
+
+  if (sets === null && repMin === null && repMax === null) {
+    await supabase
+      .from("user_exercise_prefs")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("exercise_id", exerciseId);
+  } else {
+    check(
+      await supabase.from("user_exercise_prefs").upsert(
+        {
+          user_id: user.id,
+          exercise_id: exerciseId,
+          default_sets: sets,
+          default_rep_min: repMin,
+          default_rep_max: repMax,
+        },
+        { onConflict: "user_id,exercise_id" },
+      ),
+      "save exercise default",
+    );
+  }
+  revalidatePath("/exercises");
 }
 
 export async function updateDayExerciseTarget(input: {
@@ -566,4 +648,16 @@ export async function leaveParty(partyId: string) {
   const { supabase, user } = await requireUser();
   await supabase.from("party_members").delete().eq("party_id", partyId).eq("user_id", user.id);
   redirect("/parties");
+}
+
+export async function renameParty(formData: FormData) {
+  const { supabase } = await requireUser();
+  const partyId = String(formData.get("party_id"));
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return;
+  check(
+    await supabase.from("parties").update({ name }).eq("id", partyId),
+    "rename party",
+  );
+  revalidatePath(`/parties/${partyId}`);
 }

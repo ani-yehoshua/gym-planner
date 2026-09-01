@@ -44,6 +44,27 @@ export type Database = {
           },
         ]
       }
+      day_exercise_notes: {
+        Row: {
+          note: string
+          planned_day_exercise_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          note?: string
+          planned_day_exercise_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          note?: string
+          planned_day_exercise_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       exercises: {
         Row: {
           category: Database["public"]["Enums"]["muscle_category"]
@@ -583,6 +604,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_exercise_prefs: {
+        Row: {
+          default_rep_max: number | null
+          default_rep_min: number | null
+          default_sets: number | null
+          exercise_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          default_rep_max?: number | null
+          default_rep_min?: number | null
+          default_sets?: number | null
+          exercise_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          default_rep_max?: number | null
+          default_rep_min?: number | null
+          default_sets?: number | null
+          exercise_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: { [_ in never]: never }

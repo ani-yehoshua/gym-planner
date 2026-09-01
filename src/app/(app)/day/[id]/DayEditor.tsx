@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
     addExerciseToDay,
-    deleteDay,
     logSet,
     removeDayExercise,
     reorderDayExercise,
+    saveExerciseNote,
     setDayCategory,
     updateDayExerciseTarget,
 } from "@/app/actions";
@@ -50,6 +50,25 @@ type LogRow = {
     volume: number | null;
 };
 type Member = { user_id: string; display_name: string | null; color: string };
+type NoteRow = {
+    planned_day_exercise_id: string;
+    user_id: string;
+    note: string;
+};
+
+const TrashIcon = () => (
+    <svg
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+        className='h-3.5 w-3.5'>
+        <path d='M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6' />
+        <path d='M10 11v6M14 11v6' />
+    </svg>
+);
 
 export default function DayEditor({
     day,
@@ -57,6 +76,7 @@ export default function DayEditor({
     canManageAll,
     members,
     logs,
+    notes,
     catalog,
     goal,
     experience,
@@ -71,6 +91,7 @@ export default function DayEditor({
     canManageAll: boolean;
     members: Member[];
     logs: LogRow[];
+    notes: NoteRow[];
     catalog: CatalogItem[];
     goal: string | null;
     experience: Enums<"experience_level"> | null;
@@ -116,6 +137,11 @@ export default function DayEditor({
                 { event: "*", schema: "public", table: "set_logs" },
                 () => router.refresh(),
             )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "day_exercise_notes" },
+                () => router.refresh(),
+            )
             .subscribe();
         return () => {
             supabase.removeChannel(channel);
@@ -123,6 +149,20 @@ export default function DayEditor({
     }, [day.id, day.partyId, router]);
 
     const memberById = new Map(members.map(m => [m.user_id, m]));
+
+    const myNote = (pdeId: string) =>
+        notes.find(
+            n =>
+                n.planned_day_exercise_id === pdeId &&
+                n.user_id === currentUserId,
+        )?.note ?? "";
+    const otherNotes = (pdeId: string) =>
+        notes.filter(
+            n =>
+                n.planned_day_exercise_id === pdeId &&
+                n.user_id !== currentUserId &&
+                n.note.trim() !== "",
+        );
 
     function cell(pdeId: string, setNo: number) {
         return values.get(`${pdeId}:${setNo}`) ?? { weight: "", reps: "" };
@@ -245,7 +285,7 @@ export default function DayEditor({
     const inputCls =
         "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm outline-none focus:border-text-muted";
     const stepBtn =
-        "h-7 w-7 rounded-md border border-border text-sm leading-none disabled:opacity-30";
+        "inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-sm leading-none disabled:opacity-30";
 
     return (
         <div className='flex flex-col gap-5'>
@@ -369,41 +409,42 @@ export default function DayEditor({
                                         </div>
                                     )}
                                 </button>
-                                <div className='flex flex-col items-end gap-1'>
-                                    <div className='flex gap-1'>
-                                        <button
-                                            onClick={() =>
-                                                start(() =>
-                                                    reorderDayExercise(
-                                                        ex.id,
-                                                        day.id,
-                                                        -1,
-                                                    ),
-                                                )
-                                            }
-                                            disabled={idx === 0}
-                                            className={stepBtn}>
-                                            ↑
-                                        </button>
-                                        <button
-                                            onClick={() =>
-                                                start(() =>
-                                                    reorderDayExercise(
-                                                        ex.id,
-                                                        day.id,
-                                                        1,
-                                                    ),
-                                                )
-                                            }
-                                            disabled={
-                                                idx === day.exercises.length - 1
-                                            }
-                                            className={stepBtn}>
-                                            ↓
-                                        </button>
-                                    </div>
+                                <div className='flex shrink-0 gap-1'>
+                                    <button
+                                        aria-label='Move up'
+                                        onClick={() =>
+                                            start(() =>
+                                                reorderDayExercise(
+                                                    ex.id,
+                                                    day.id,
+                                                    -1,
+                                                ),
+                                            )
+                                        }
+                                        disabled={idx === 0}
+                                        className={stepBtn}>
+                                        ↑
+                                    </button>
+                                    <button
+                                        aria-label='Move down'
+                                        onClick={() =>
+                                            start(() =>
+                                                reorderDayExercise(
+                                                    ex.id,
+                                                    day.id,
+                                                    1,
+                                                ),
+                                            )
+                                        }
+                                        disabled={
+                                            idx === day.exercises.length - 1
+                                        }
+                                        className={stepBtn}>
+                                        ↓
+                                    </button>
                                     {(canManageAll || addedByMe) && (
                                         <button
+                                            aria-label='Remove exercise'
                                             onClick={() =>
                                                 start(() =>
                                                     removeDayExercise(
@@ -412,8 +453,8 @@ export default function DayEditor({
                                                     ),
                                                 )
                                             }
-                                            className='text-xs text-text-muted hover:text-rose-400'>
-                                            Remove
+                                            className={`${stepBtn} text-text-muted hover:border-rose-400 hover:text-rose-400`}>
+                                            <TrashIcon />
                                         </button>
                                     )}
                                 </div>
@@ -564,6 +605,47 @@ export default function DayEditor({
                                 </span>
                             </div>
 
+                            {/* notes */}
+                            <textarea
+                                key={`note-${ex.id}`}
+                                defaultValue={myNote(ex.id)}
+                                placeholder='Notes — how it felt, what to change next time…'
+                                rows={2}
+                                onBlur={e =>
+                                    start(() =>
+                                        saveExerciseNote({
+                                            pdeId: ex.id,
+                                            dayId: day.id,
+                                            note: e.target.value,
+                                        }),
+                                    )
+                                }
+                                className='mt-2 w-full resize-y rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-text-muted'
+                            />
+                            {otherNotes(ex.id).map(n => {
+                                const who = memberById.get(n.user_id);
+                                return (
+                                    <div
+                                        key={n.user_id}
+                                        className='mt-1 flex gap-1.5 text-xs text-text-muted'>
+                                        <span
+                                            className='mt-1 inline-block h-2 w-2 shrink-0 rounded-full'
+                                            style={{
+                                                background:
+                                                    who?.color ??
+                                                    "var(--text-muted)",
+                                            }}
+                                        />
+                                        <span>
+                                            <span className='text-text'>
+                                                {who?.display_name || "Member"}:
+                                            </span>{" "}
+                                            {n.note}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+
                             {day.partyId && (
                                 <div className='mt-1 flex items-center gap-1.5 text-xs text-text-muted'>
                                     <span
@@ -710,15 +792,6 @@ export default function DayEditor({
                     + Add exercise
                 </button>
             )}
-
-            <button
-                onClick={() => {
-                    if (confirm("Delete this day?"))
-                        start(() => deleteDay(day.id));
-                }}
-                className='self-start text-xs text-text-muted hover:text-rose-400'>
-                Delete day
-            </button>
 
             {pending && (
                 <span className='fixed bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-surface-2 px-3 py-1 text-xs text-text-muted'>
