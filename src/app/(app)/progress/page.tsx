@@ -2,7 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logBodyweight } from "@/app/actions";
-import { formatLong, today } from "@/lib/date";
+import {
+  addDays,
+  dowShort,
+  dayOfMonth,
+  formatRangeNumeric,
+  startOfWeek,
+  today,
+} from "@/lib/date";
 import { CATEGORY_LABEL, CATEGORY_STYLE } from "@/lib/labels";
 
 export default async function ProgressPage() {
@@ -99,7 +106,16 @@ export default async function ProgressPage() {
       };
     })
     .filter((d) => d.exercisesDone > 0)
-    .slice(0, 30);
+    .slice(0, 60);
+
+  // group history into Sun–Sat weeks (already sorted newest-first)
+  const weeks: { start: string; days: typeof history }[] = [];
+  for (const d of history) {
+    const ws = startOfWeek(d.date);
+    const bucket = weeks.find((w) => w.start === ws);
+    if (bucket) bucket.days.push(d);
+    else weeks.push({ start: ws, days: [d] });
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -153,44 +169,66 @@ export default async function ProgressPage() {
 
       <section>
         <h2 className="mb-2 text-sm font-medium">History</h2>
-        {history.length === 0 ? (
+        {weeks.length === 0 ? (
           <p className="text-sm text-text-muted">
             Completed days show up here once you&apos;ve logged sets on them.
           </p>
         ) : (
-          <ul className="flex flex-col gap-1">
-            {history.map((d) => (
-              <li key={d.id}>
-                <Link
-                  href={`/day/${d.id}`}
-                  className="flex flex-col gap-1 rounded-lg border border-border px-3 py-2 hover:bg-surface"
+          <div className="max-h-96 overflow-y-auto rounded-xl border border-border">
+            {weeks.map((w, wi) => {
+              const end = addDays(w.start, 6);
+              return (
+                <details
+                  key={w.start}
+                  open={wi === 0}
+                  className={wi > 0 ? "border-t border-border" : ""}
                 >
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2">
-                      {formatLong(d.date)}
-                      {d.category && (
-                        <span
-                          className={`rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}
-                        >
-                          {CATEGORY_LABEL[d.category]}
-                        </span>
-                      )}
-                      {d.partyName && (
-                        <span className="text-xs text-text-muted">· {d.partyName}</span>
-                      )}
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm">
+                    <span className="font-medium">
+                      {formatRangeNumeric(w.start, end)}
                     </span>
                     <span className="text-xs text-text-muted">
-                      vol <span className="text-text">{d.volume}</span>
+                      {w.days.length} day{w.days.length === 1 ? "" : "s"} ▾
                     </span>
-                  </div>
-                  <div className="text-xs text-text-muted">
-                    {d.exercisesDone} exercise{d.exercisesDone === 1 ? "" : "s"}
-                    {d.top && <> · top {d.top}</>}
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  </summary>
+                  <ul className="flex flex-col gap-1 border-t border-border p-2">
+                    {w.days.map((d) => (
+                      <li key={d.id}>
+                        <Link
+                          href={`/day/${d.id}`}
+                          className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface"
+                        >
+                          <span className="w-9 shrink-0 text-center">
+                            <span className="block text-[10px] uppercase text-text-muted">
+                              {dowShort(d.date)}
+                            </span>
+                            <span className="block font-semibold leading-none">
+                              {dayOfMonth(d.date)}
+                            </span>
+                          </span>
+                          {d.category && (
+                            <span
+                              className={`rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}
+                            >
+                              {CATEGORY_LABEL[d.category]}
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1 truncate text-xs text-text-muted">
+                            {d.exercisesDone} ex
+                            {d.top && <> · top {d.top}</>}
+                            {d.partyName && <> · {d.partyName}</>}
+                          </span>
+                          <span className="shrink-0 text-xs text-text-muted">
+                            vol <span className="text-text">{d.volume}</span>
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              );
+            })}
+          </div>
         )}
       </section>
 

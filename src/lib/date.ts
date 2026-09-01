@@ -62,3 +62,10 @@ export function formatRange(startS: string, endS: string): string {
       : `${MON[b.getMonth()]} ${b.getDate()}`;
   return `${left} – ${right}`;
 }
+
+// "8/23 – 8/29"
+export function formatRangeNumeric(startS: string, endS: string): string {
+  const a = parseISODate(startS);
+  const b = parseISODate(endS);
+  return `${a.getMonth() + 1}/${a.getDate()} – ${b.getMonth() + 1}/${b.getDate()}`;
+}
