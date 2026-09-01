@@ -16,6 +16,12 @@ import { isAdmin } from "@/lib/admin";
 import type { Enums } from "@/lib/supabase/database.types";
 
 const inp = "rounded-lg border border-border bg-surface px-3 py-2 text-sm";
+const archiveBtn =
+  "rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-500/20 disabled:opacity-50 dark:text-amber-300";
+const deleteBtn =
+  "rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-500/20 disabled:opacity-50 dark:text-rose-300";
+const neutralBtn =
+  "rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface disabled:opacity-50";
 
 export default async function ExercisesPage() {
   const supabase = await createClient();
@@ -181,23 +187,17 @@ export default async function ExercisesPage() {
                       );
                     })()}
                     {admin && (
-                      <div className="mt-3 flex gap-3 border-t border-border pt-3">
+                      <div className="mt-3 flex gap-2 border-t border-border pt-3">
                         <form action={setExerciseArchived}>
                           <input type="hidden" name="exercise_id" value={e.id} />
                           <input type="hidden" name="archived" value="true" />
-                          <SubmitButton
-                            pendingText="…"
-                            className="text-xs text-text-muted hover:text-text disabled:opacity-50"
-                          >
+                          <SubmitButton pendingText="…" className={archiveBtn}>
                             Archive
                           </SubmitButton>
                         </form>
                         <form action={deleteExercise}>
                           <input type="hidden" name="exercise_id" value={e.id} />
-                          <SubmitButton
-                            pendingText="…"
-                            className="text-xs text-text-muted hover:text-rose-400 disabled:opacity-50"
-                          >
+                          <SubmitButton pendingText="…" className={deleteBtn}>
                             Delete
                           </SubmitButton>
                         </form>
@@ -228,23 +228,17 @@ export default async function ExercisesPage() {
                     {CATEGORY_LABEL[e.category]}
                   </span>
                 </span>
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                   <form action={setExerciseArchived}>
                     <input type="hidden" name="exercise_id" value={e.id} />
                     <input type="hidden" name="archived" value="false" />
-                    <SubmitButton
-                      pendingText="…"
-                      className="text-xs text-text-muted hover:text-text disabled:opacity-50"
-                    >
+                    <SubmitButton pendingText="…" className={neutralBtn}>
                       Unarchive
                     </SubmitButton>
                   </form>
                   <form action={deleteExercise}>
                     <input type="hidden" name="exercise_id" value={e.id} />
-                    <SubmitButton
-                      pendingText="…"
-                      className="text-xs text-text-muted hover:text-rose-400 disabled:opacity-50"
-                    >
+                    <SubmitButton pendingText="…" className={deleteBtn}>
                       Delete
                     </SubmitButton>
                   </form>
