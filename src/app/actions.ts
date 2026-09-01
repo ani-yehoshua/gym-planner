@@ -10,6 +10,7 @@ import {
   recommendedReps,
   type Goal,
 } from "@/lib/targets";
+import { isAdmin, notifyExerciseRequest } from "@/lib/admin";
 import type { Enums } from "@/lib/supabase/database.types";
 
 async function requireUser() {
@@ -302,6 +303,8 @@ export async function applyCustomSplit(formData: FormData) {
 // ---------------------------------------------------------------------------
 export async function createExercise(formData: FormData) {
   const { supabase, user } = await requireUser();
+  if (!(await isAdmin(supabase))) throw new Error("Admins only");
+
   const name = String(formData.get("name") || "").trim();
   const category = String(formData.get("category")) as Enums<"muscle_category">;
   const primary = formData.getAll("primary_muscles").map(String) as Enums<"muscle_group">[];
@@ -314,10 +317,44 @@ export async function createExercise(formData: FormData) {
       howto_text: String(formData.get("howto_text") || "") || null,
       media_url: String(formData.get("media_url") || "") || null,
       created_by: user.id,
-      is_public: false,
+      is_public: true,
     }),
     "create exercise",
   );
+
+  const requestId = String(formData.get("request_id") || "");
+  if (requestId) {
+    await supabase
+      .from("exercise_requests")
+      .update({ status: "done" })
+      .eq("id", requestId);
+  }
+  revalidatePath("/exercises");
+}
+
+export async function requestExercise(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const name = String(formData.get("name") || "").trim();
+  const note = String(formData.get("note") || "").trim() || null;
+  if (!name) return;
+
+  check(
+    await supabase
+      .from("exercise_requests")
+      .insert({ user_id: user.id, name, note }),
+    "submit request",
+  );
+  await notifyExerciseRequest({ name, note, fromEmail: user.email ?? null });
+  revalidatePath("/exercises");
+}
+
+export async function dismissExerciseRequest(formData: FormData) {
+  const { supabase } = await requireUser();
+  if (!(await isAdmin(supabase))) throw new Error("Admins only");
+  await supabase
+    .from("exercise_requests")
+    .update({ status: "dismissed" })
+    .eq("id", String(formData.get("request_id")));
   revalidatePath("/exercises");
 }
 

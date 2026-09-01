@@ -44,6 +44,39 @@ export type Database = {
           },
         ]
       }
+      admins: {
+        Row: { user_id: string; created_at: string }
+        Insert: { user_id: string; created_at?: string }
+        Update: { user_id?: string; created_at?: string }
+        Relationships: []
+      }
+      exercise_requests: {
+        Row: {
+          id: string
+          user_id: string | null
+          name: string
+          note: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          name: string
+          note?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          name?: string
+          note?: string | null
+          status?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       day_exercise_notes: {
         Row: {
           note: string
@@ -635,6 +668,7 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      is_admin: { Args: Record<string, never>; Returns: boolean }
       is_party_member: { Args: { p_party: string }; Returns: boolean }
       is_party_owner: { Args: { p_party: string }; Returns: boolean }
       join_party_with_code: { Args: { p_code: string }; Returns: string }
