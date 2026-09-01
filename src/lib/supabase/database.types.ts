@@ -100,6 +100,7 @@ export type Database = {
       }
       exercises: {
         Row: {
+          archived_at: string | null
           category: Database["public"]["Enums"]["muscle_category"]
           created_at: string
           created_by: string | null
@@ -115,6 +116,7 @@ export type Database = {
           secondary_muscles: Database["public"]["Enums"]["muscle_group"][]
         }
         Insert: {
+          archived_at?: string | null
           category: Database["public"]["Enums"]["muscle_category"]
           created_at?: string
           created_by?: string | null
@@ -130,6 +132,7 @@ export type Database = {
           secondary_muscles?: Database["public"]["Enums"]["muscle_group"][]
         }
         Update: {
+          archived_at?: string | null
           category?: Database["public"]["Enums"]["muscle_category"]
           created_at?: string
           created_by?: string | null

@@ -77,6 +77,7 @@ export default async function DayPage({
   const { data: catalog } = await supabase
     .from("exercises")
     .select("id, name, category, primary_muscles, secondary_muscles, howto_text, media_url")
+    .is("archived_at", null)
     .order("name");
 
   const backHref = day.party_id ? `/parties/${day.party_id}` : "/";

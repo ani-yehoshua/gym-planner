@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { dismissExerciseRequest, requestExercise } from "@/app/actions";
+import {
+  deleteExercise,
+  dismissExerciseRequest,
+  requestExercise,
+  setExerciseArchived,
+} from "@/app/actions";
 import { CATEGORY_LABEL, CATEGORY_ORDER, MUSCLE_LABEL } from "@/lib/labels";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
 import { ExercisePrefForm } from "@/components/exercise-pref-form";
@@ -21,13 +26,16 @@ export default async function ExercisesPage() {
 
   const admin = await isAdmin(supabase);
 
-  const { data: exercises } = await supabase
+  const { data: allExercises } = await supabase
     .from("exercises")
     .select(
-      "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, created_by",
+      "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, created_by, archived_at",
     )
     .order("category")
     .order("name");
+
+  const exercises = (allExercises ?? []).filter((e) => !e.archived_at);
+  const archived = admin ? (allExercises ?? []).filter((e) => e.archived_at) : [];
 
   const { data: prefRows } = await supabase
     .from("user_exercise_prefs")
@@ -48,8 +56,9 @@ export default async function ExercisesPage() {
     .eq("status", "open")
     .order("created_at", { ascending: false });
 
-  const grouped = new Map<Enums<"muscle_category">, NonNullable<typeof exercises>>();
-  for (const e of exercises ?? []) {
+  type Ex = (typeof exercises)[number];
+  const grouped = new Map<Enums<"muscle_category">, Ex[]>();
+  for (const e of exercises) {
     const arr = grouped.get(e.category) ?? [];
     arr.push(e);
     grouped.set(e.category, arr);
@@ -171,6 +180,29 @@ export default async function ExercisesPage() {
                         />
                       );
                     })()}
+                    {admin && (
+                      <div className="mt-3 flex gap-3 border-t border-border pt-3">
+                        <form action={setExerciseArchived}>
+                          <input type="hidden" name="exercise_id" value={e.id} />
+                          <input type="hidden" name="archived" value="true" />
+                          <SubmitButton
+                            pendingText="…"
+                            className="text-xs text-text-muted hover:text-text disabled:opacity-50"
+                          >
+                            Archive
+                          </SubmitButton>
+                        </form>
+                        <form action={deleteExercise}>
+                          <input type="hidden" name="exercise_id" value={e.id} />
+                          <SubmitButton
+                            pendingText="…"
+                            className="text-xs text-text-muted hover:text-rose-400 disabled:opacity-50"
+                          >
+                            Delete
+                          </SubmitButton>
+                        </form>
+                      </div>
+                    )}
                   </div>
                 </details>
               </li>
@@ -178,6 +210,50 @@ export default async function ExercisesPage() {
           </ul>
         </div>
       ))}
+
+      {admin && archived.length > 0 && (
+        <details className="rounded-xl border border-border p-3">
+          <summary className="cursor-pointer text-sm font-medium">
+            Archived ({archived.length})
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1">
+            {archived.map((e) => (
+              <li
+                key={e.id}
+                className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                <span className="text-text-muted">
+                  {e.name}
+                  <span className="ml-2 text-xs">
+                    {CATEGORY_LABEL[e.category]}
+                  </span>
+                </span>
+                <div className="flex gap-3">
+                  <form action={setExerciseArchived}>
+                    <input type="hidden" name="exercise_id" value={e.id} />
+                    <input type="hidden" name="archived" value="false" />
+                    <SubmitButton
+                      pendingText="…"
+                      className="text-xs text-text-muted hover:text-text disabled:opacity-50"
+                    >
+                      Unarchive
+                    </SubmitButton>
+                  </form>
+                  <form action={deleteExercise}>
+                    <input type="hidden" name="exercise_id" value={e.id} />
+                    <SubmitButton
+                      pendingText="…"
+                      className="text-xs text-text-muted hover:text-rose-400 disabled:opacity-50"
+                    >
+                      Delete
+                    </SubmitButton>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

@@ -358,6 +358,39 @@ export async function dismissExerciseRequest(formData: FormData) {
   revalidatePath("/exercises");
 }
 
+export async function setExerciseArchived(formData: FormData) {
+  const { supabase } = await requireUser();
+  if (!(await isAdmin(supabase))) throw new Error("Admins only");
+  const id = String(formData.get("exercise_id"));
+  const archived = String(formData.get("archived")) === "true";
+  check(
+    await supabase
+      .from("exercises")
+      .update({ archived_at: archived ? new Date().toISOString() : null })
+      .eq("id", id),
+    "archive exercise",
+  );
+  revalidatePath("/exercises");
+}
+
+export async function deleteExercise(formData: FormData) {
+  const { supabase } = await requireUser();
+  if (!(await isAdmin(supabase))) throw new Error("Admins only");
+  const id = String(formData.get("exercise_id"));
+
+  const { count } = await supabase
+    .from("planned_day_exercises")
+    .select("id", { count: "exact", head: true })
+    .eq("exercise_id", id);
+  if ((count ?? 0) > 0) {
+    throw new Error(
+      "This exercise is on someone's planned day — archive it instead of deleting.",
+    );
+  }
+  check(await supabase.from("exercises").delete().eq("id", id), "delete exercise");
+  revalidatePath("/exercises");
+}
+
 // ---------------------------------------------------------------------------
 // planned days
 // ---------------------------------------------------------------------------
