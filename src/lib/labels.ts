@@ -89,7 +89,7 @@ export function dayAcceptsExercise(
   return DAY_ACCEPTS[dayCategory].includes(exerciseCategory);
 }
 
-export const MUSCLE_LABEL: Record<Enums<"muscle_group">, string> = {
+export const MUSCLE_LABEL: Record<string, string> = {
   chest: "Chest",
   back: "Back",
   lats: "Lats",
@@ -113,6 +113,28 @@ export const MUSCLE_LABEL: Record<Enums<"muscle_group">, string> = {
   full_body: "Full Body",
   other: "Other",
 };
+
+// muscle targets are free-form text now — fall back to title-casing anything unknown
+export function muscleLabel(m: string): string {
+  return (
+    MUSCLE_LABEL[m] ??
+    m
+      .split(/[_\s]+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ")
+  );
+}
+
+export function muscleList(ms: string[]): string {
+  return ms.map(muscleLabel).join(", ");
+}
+
+// common muscle targets offered as quick-pick / autocomplete when editing an exercise
+export const COMMON_MUSCLES: string[] = [
+  "chest", "back", "lats", "traps", "front_delts", "side_delts", "rear_delts",
+  "shoulders", "biceps", "triceps", "forearms", "quads", "hamstrings", "glutes",
+  "calves", "adductors", "abs", "lower_back",
+];
 
 export const GOAL_LABEL: Record<string, string> = {
   build_muscle: "Build muscle",

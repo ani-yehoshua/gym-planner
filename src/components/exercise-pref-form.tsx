@@ -7,10 +7,11 @@ export type ExercisePref = {
   default_sets: number | null;
   default_rep_min: number | null;
   default_rep_max: number | null;
+  default_weight: number | null;
 };
 
 const box =
-  "w-12 rounded-md border border-border bg-surface px-1 py-1 text-center text-sm outline-none focus:border-text-muted";
+  "w-14 rounded-md border border-border bg-surface px-1 py-1 text-center text-sm outline-none focus:border-text-muted";
 
 export function ExercisePrefForm({
   exerciseId,
@@ -24,12 +25,12 @@ export function ExercisePrefForm({
   return (
     <form
       action={setExercisePref}
-      className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3"
+      className="mt-3 flex flex-wrap items-end gap-3 border-t border-border pt-3"
     >
       <input type="hidden" name="exercise_id" value={exerciseId} />
       <div className="flex flex-col gap-1">
-        <span className="text-[11px] uppercase text-text-muted">Your default</span>
-        <div className="flex items-center gap-1.5 text-sm">
+        <span className="text-[11px] uppercase text-text-muted">Your defaults</span>
+        <div className="flex flex-wrap items-center gap-1.5 text-sm">
           <input
             name="default_sets"
             inputMode="numeric"
@@ -53,7 +54,15 @@ export function ExercisePrefForm({
             placeholder={String(fallback.repMax ?? "")}
             className={box}
           />
-          <span className="text-text-muted">reps</span>
+          <span className="text-text-muted">reps @</span>
+          <input
+            name="default_weight"
+            inputMode="decimal"
+            defaultValue={pref?.default_weight ?? ""}
+            placeholder="wt"
+            className={box}
+          />
+          <span className="text-text-muted">current weight</span>
         </div>
       </div>
       <SubmitButton
@@ -63,8 +72,8 @@ export function ExercisePrefForm({
         Save
       </SubmitButton>
       <p className="w-full text-[11px] text-text-muted">
-        Used whenever this exercise is added to a day. Leave blank to fall back to
-        the goal-based suggestion.
+        Prefilled whenever this exercise is added to a day. Blank fields fall back
+        to the goal-based suggestion.
       </p>
     </form>
   );

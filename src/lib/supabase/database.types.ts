@@ -112,8 +112,8 @@ export type Database = {
           is_public: boolean
           media_url: string | null
           name: string
-          primary_muscles: Database["public"]["Enums"]["muscle_group"][]
-          secondary_muscles: Database["public"]["Enums"]["muscle_group"][]
+          primary_muscles: string[]
+          secondary_muscles: string[]
         }
         Insert: {
           archived_at?: string | null
@@ -128,8 +128,8 @@ export type Database = {
           is_public?: boolean
           media_url?: string | null
           name: string
-          primary_muscles?: Database["public"]["Enums"]["muscle_group"][]
-          secondary_muscles?: Database["public"]["Enums"]["muscle_group"][]
+          primary_muscles?: string[]
+          secondary_muscles?: string[]
         }
         Update: {
           archived_at?: string | null
@@ -144,8 +144,8 @@ export type Database = {
           is_public?: boolean
           media_url?: string | null
           name?: string
-          primary_muscles?: Database["public"]["Enums"]["muscle_group"][]
-          secondary_muscles?: Database["public"]["Enums"]["muscle_group"][]
+          primary_muscles?: string[]
+          secondary_muscles?: string[]
         }
         Relationships: [
           {
@@ -284,6 +284,7 @@ export type Database = {
           target_rep_max: number | null
           target_rep_min: number | null
           target_sets: number | null
+          target_weight: number | null
         }
         Insert: {
           added_by?: string | null
@@ -295,6 +296,7 @@ export type Database = {
           target_rep_max?: number | null
           target_rep_min?: number | null
           target_sets?: number | null
+          target_weight?: number | null
         }
         Update: {
           added_by?: string | null
@@ -306,6 +308,7 @@ export type Database = {
           target_rep_max?: number | null
           target_rep_min?: number | null
           target_sets?: number | null
+          target_weight?: number | null
         }
         Relationships: [
           {
@@ -646,6 +649,7 @@ export type Database = {
           default_rep_max: number | null
           default_rep_min: number | null
           default_sets: number | null
+          default_weight: number | null
           exercise_id: string
           updated_at: string
           user_id: string
@@ -654,6 +658,7 @@ export type Database = {
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
+          default_weight?: number | null
           exercise_id: string
           updated_at?: string
           user_id: string
@@ -662,6 +667,7 @@ export type Database = {
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
+          default_weight?: number | null
           exercise_id?: string
           updated_at?: string
           user_id?: string

@@ -183,7 +183,7 @@ async function materializeSplit(
   // the user's saved per-exercise defaults override the template's numbers
   const { data: prefRows } = await supabase
     .from("user_exercise_prefs")
-    .select("exercise_id, default_sets, default_rep_min, default_rep_max")
+    .select("exercise_id, default_sets, default_rep_min, default_rep_max, default_weight")
     .eq("user_id", userId);
   const prefs = new Map((prefRows ?? []).map((p) => [p.exercise_id, p]));
 
@@ -218,6 +218,7 @@ async function materializeSplit(
               target_sets: pref?.default_sets ?? DEFAULT_SETS,
               target_rep_min: pref?.default_rep_min ?? e.rep_min,
               target_rep_max: pref?.default_rep_max ?? e.rep_max,
+              target_weight: pref?.default_weight ?? null,
               added_by: userId,
             };
           }),
@@ -301,24 +302,35 @@ export async function applyCustomSplit(formData: FormData) {
 // ---------------------------------------------------------------------------
 // exercises
 // ---------------------------------------------------------------------------
+/** parse "chest, front delts, custom thing" -> ["chest","front_delts","custom thing"] */
+function parseMuscles(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase().replace(/\s+/g, "_"))
+    .filter(Boolean);
+}
+
+function exerciseFieldsFromForm(formData: FormData) {
+  return {
+    name: String(formData.get("name") || "").trim(),
+    category: String(formData.get("category")) as Enums<"muscle_category">,
+    primary_muscles: parseMuscles(String(formData.get("primary_muscles") || "")),
+    secondary_muscles: parseMuscles(String(formData.get("secondary_muscles") || "")),
+    howto_text: String(formData.get("howto_text") || "").trim() || null,
+    media_url: String(formData.get("media_url") || "").trim() || null,
+  };
+}
+
 export async function createExercise(formData: FormData) {
   const { supabase, user } = await requireUser();
   if (!(await isAdmin(supabase))) throw new Error("Admins only");
 
-  const name = String(formData.get("name") || "").trim();
-  const category = String(formData.get("category")) as Enums<"muscle_category">;
-  const primary = formData.getAll("primary_muscles").map(String) as Enums<"muscle_group">[];
-  if (!name || !category) return;
+  const fields = exerciseFieldsFromForm(formData);
+  if (!fields.name || !fields.category) return;
   check(
-    await supabase.from("exercises").insert({
-      name,
-      category,
-      primary_muscles: primary,
-      howto_text: String(formData.get("howto_text") || "") || null,
-      media_url: String(formData.get("media_url") || "") || null,
-      created_by: user.id,
-      is_public: true,
-    }),
+    await supabase
+      .from("exercises")
+      .insert({ ...fields, created_by: user.id, is_public: true }),
     "create exercise",
   );
 
@@ -329,6 +341,20 @@ export async function createExercise(formData: FormData) {
       .update({ status: "done" })
       .eq("id", requestId);
   }
+  revalidatePath("/exercises");
+}
+
+export async function updateExercise(formData: FormData) {
+  const { supabase } = await requireUser();
+  if (!(await isAdmin(supabase))) throw new Error("Admins only");
+
+  const id = String(formData.get("exercise_id"));
+  const fields = exerciseFieldsFromForm(formData);
+  if (!id || !fields.name || !fields.category) return;
+  check(
+    await supabase.from("exercises").update(fields).eq("id", id),
+    "update exercise",
+  );
   revalidatePath("/exercises");
 }
 
@@ -453,7 +479,7 @@ export async function addExerciseToDay(dayId: string, exerciseId: string) {
       supabase.from("exercises").select("name, primary_muscles").eq("id", exerciseId).single(),
       supabase
         .from("user_exercise_prefs")
-        .select("default_sets, default_rep_min, default_rep_max")
+        .select("default_sets, default_rep_min, default_rep_max, default_weight")
         .eq("user_id", user.id)
         .eq("exercise_id", exerciseId)
         .maybeSingle(),
@@ -478,6 +504,7 @@ export async function addExerciseToDay(dayId: string, exerciseId: string) {
       target_sets: pref?.default_sets ?? DEFAULT_SETS,
       target_rep_min: pref?.default_rep_min ?? recMin,
       target_rep_max: pref?.default_rep_max ?? recMax,
+      target_weight: pref?.default_weight ?? null,
       added_by: user.id,
     }),
     "add exercise",
@@ -526,8 +553,11 @@ export async function setExercisePref(formData: FormData) {
   const sets = n("default_sets");
   const repMin = n("default_rep_min");
   const repMax = n("default_rep_max");
+  const weightRaw = formData.get("default_weight");
+  const weight =
+    weightRaw === null || weightRaw === "" ? null : Math.max(0, Number(weightRaw));
 
-  if (sets === null && repMin === null && repMax === null) {
+  if (sets === null && repMin === null && repMax === null && weight === null) {
     await supabase
       .from("user_exercise_prefs")
       .delete()
@@ -542,6 +572,7 @@ export async function setExercisePref(formData: FormData) {
           default_sets: sets,
           default_rep_min: repMin,
           default_rep_max: repMax,
+          default_weight: weight,
         },
         { onConflict: "user_id,exercise_id" },
       ),
@@ -557,16 +588,19 @@ export async function updateDayExerciseTarget(input: {
   sets?: number;
   repMin?: number | null;
   repMax?: number | null;
+  weight?: number | null;
 }) {
   const { supabase } = await requireUser();
   const patch: {
     target_sets?: number;
     target_rep_min?: number | null;
     target_rep_max?: number | null;
+    target_weight?: number | null;
   } = {};
   if (input.sets !== undefined) patch.target_sets = Math.max(1, Math.min(12, input.sets));
   if (input.repMin !== undefined) patch.target_rep_min = input.repMin;
   if (input.repMax !== undefined) patch.target_rep_max = input.repMax;
+  if (input.weight !== undefined) patch.target_weight = input.weight;
   check(
     await supabase.from("planned_day_exercises").update(patch).eq("id", input.pdeId),
     "update target",

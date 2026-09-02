@@ -1,73 +1,130 @@
-import { createExercise } from "@/app/actions";
+import { createExercise, updateExercise } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
-import { CATEGORY_LABEL, CATEGORY_ORDER, MUSCLE_LABEL } from "@/lib/labels";
+import {
+  CATEGORY_LABEL,
+  CATEGORY_ORDER,
+  COMMON_MUSCLES,
+  muscleLabel,
+} from "@/lib/labels";
 import type { Enums } from "@/lib/supabase/database.types";
-
-const MUSCLES: Enums<"muscle_group">[] = [
-  "chest", "back", "lats", "shoulders", "side_delts", "biceps", "triceps",
-  "quads", "hamstrings", "glutes", "calves", "abs",
-];
 
 const inp = "rounded-lg border border-border bg-surface px-3 py-2 text-sm";
 
-/** Admin-only: add an exercise to the global catalog. */
+export type ExerciseFormValues = {
+  id: string;
+  name: string;
+  category: Enums<"muscle_category">;
+  primary_muscles: string[];
+  secondary_muscles: string[];
+  howto_text: string | null;
+  media_url: string | null;
+};
+
+const toInput = (ms: string[]) => ms.map(muscleLabel).join(", ");
+
+/** Admin-only: create or edit a catalog exercise. Pass `exercise` to edit. */
 export function ExerciseForm({
+  exercise,
   defaultName,
   requestId,
-  submitLabel = "Add exercise",
+  submitLabel,
 }: {
+  exercise?: ExerciseFormValues;
   defaultName?: string;
   requestId?: string;
   submitLabel?: string;
 }) {
+  const editing = !!exercise;
+  const action = editing ? updateExercise : createExercise;
+
   return (
-    <form action={createExercise} className="flex flex-col gap-3">
+    <form action={action} className="flex flex-col gap-3">
+      {editing && <input type="hidden" name="exercise_id" value={exercise.id} />}
       {requestId && <input type="hidden" name="request_id" value={requestId} />}
-      <input
-        name="name"
-        required
-        defaultValue={defaultName}
-        placeholder="Exercise name"
-        className={inp}
-      />
-      <select name="category" required className={inp} defaultValue="">
-        <option value="" disabled>
-          Category…
-        </option>
-        {CATEGORY_ORDER.filter((c) => c !== "rest").map((c) => (
-          <option key={c} value={c}>
-            {CATEGORY_LABEL[c]}
+
+      <label className="flex flex-col gap-1 text-xs text-text-muted">
+        Name
+        <input
+          name="name"
+          required
+          defaultValue={exercise?.name ?? defaultName}
+          placeholder="Exercise name"
+          className={inp}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1 text-xs text-text-muted">
+        Muscle group
+        <select
+          name="category"
+          required
+          className={inp}
+          defaultValue={exercise?.category ?? ""}
+        >
+          <option value="" disabled>
+            Choose…
           </option>
+          {CATEGORY_ORDER.filter((c) => c !== "rest").map((c) => (
+            <option key={c} value={c}>
+              {CATEGORY_LABEL[c]}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <datalist id="muscle-options">
+        {COMMON_MUSCLES.map((m) => (
+          <option key={m} value={muscleLabel(m)} />
         ))}
-      </select>
-      <div className="flex flex-wrap gap-2">
-        {MUSCLES.map((m) => (
-          <label
-            key={m}
-            className="cursor-pointer rounded-full border border-border px-3 py-1 text-xs has-[:checked]:border-text has-[:checked]:bg-surface-2"
-          >
-            <input type="checkbox" name="primary_muscles" value={m} className="sr-only" />
-            {MUSCLE_LABEL[m]}
-          </label>
-        ))}
-      </div>
-      <textarea
-        name="howto_text"
-        placeholder="How to do it (optional)"
-        rows={2}
-        className={inp}
-      />
-      <input
-        name="media_url"
-        type="url"
-        placeholder="Video URL — YouTube (optional)"
-        className={inp}
-      />
+      </datalist>
+
+      <label className="flex flex-col gap-1 text-xs text-text-muted">
+        Primary muscle targets (comma-separated — type any)
+        <input
+          name="primary_muscles"
+          list="muscle-options"
+          defaultValue={exercise ? toInput(exercise.primary_muscles) : ""}
+          placeholder="Chest, Front Delts"
+          className={inp}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1 text-xs text-text-muted">
+        Secondary muscle targets
+        <input
+          name="secondary_muscles"
+          list="muscle-options"
+          defaultValue={exercise ? toInput(exercise.secondary_muscles) : ""}
+          placeholder="Triceps, Traps"
+          className={inp}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1 text-xs text-text-muted">
+        How to do it
+        <textarea
+          name="howto_text"
+          defaultValue={exercise?.howto_text ?? ""}
+          rows={3}
+          className={inp}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1 text-xs text-text-muted">
+        Video URL (YouTube)
+        <input
+          name="media_url"
+          type="url"
+          defaultValue={exercise?.media_url ?? ""}
+          className={inp}
+        />
+      </label>
+
       <SubmitButton
         pendingText="Saving…"
         className="self-start rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50"
       >
-        {submitLabel}
+        {submitLabel ?? (editing ? "Save changes" : "Add exercise")}
       </SubmitButton>
     </form>
   );

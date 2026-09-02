@@ -15,7 +15,7 @@ import {
     CATEGORY_LABEL,
     CATEGORY_STYLE,
     DAY_CATEGORY_CHOICES,
-    MUSCLE_LABEL,
+    muscleList,
     dayAcceptsExercise,
 } from "@/lib/labels";
 import { isCompound, suggestedSets, type Goal } from "@/lib/targets";
@@ -28,8 +28,8 @@ type CatalogItem = {
     id: string;
     name: string;
     category: Cat;
-    primary_muscles: Enums<"muscle_group">[];
-    secondary_muscles: Enums<"muscle_group">[];
+    primary_muscles: string[];
+    secondary_muscles: string[];
     howto_text: string | null;
     media_url: string | null;
 };
@@ -38,6 +38,7 @@ type DayEx = {
     targetSets: number;
     targetRepMin: number | null;
     targetRepMax: number | null;
+    targetWeight: number | null;
     addedBy: string | null;
     exercise: CatalogItem;
 };
@@ -249,7 +250,12 @@ export default function DayEditor({
 
     function setTarget(
         pdeId: string,
-        patch: { sets?: number; repMin?: number; repMax?: number },
+        patch: {
+            sets?: number;
+            repMin?: number;
+            repMax?: number;
+            weight?: number | null;
+        },
     ) {
         start(() =>
             updateDayExerciseTarget({ pdeId, dayId: day.id, ...patch }),
@@ -390,9 +396,7 @@ export default function DayEditor({
                                         </span>
                                     </div>
                                     <div className='text-xs text-text-muted'>
-                                        {ex.exercise.primary_muscles
-                                            .map(m => MUSCLE_LABEL[m])
-                                            .join(", ")}
+                                        {muscleList(ex.exercise.primary_muscles)}
                                     </div>
                                     {mismatched && (
                                         <div className='mt-1 text-xs text-amber-600 dark:text-amber-400'>
@@ -536,6 +540,24 @@ export default function DayEditor({
                                         className='w-10 rounded-md border border-border bg-surface px-1 py-1 text-center'
                                     />
                                 </div>
+                                <div className='flex items-center gap-1.5'>
+                                    <span className='text-text-muted'>
+                                        Current weight
+                                    </span>
+                                    <input
+                                        key={`w-${ex.id}-${ex.targetWeight ?? ""}`}
+                                        inputMode='decimal'
+                                        defaultValue={ex.targetWeight ?? ""}
+                                        onBlur={e =>
+                                            setTarget(ex.id, {
+                                                weight: e.target.value
+                                                    ? Number(e.target.value)
+                                                    : null,
+                                            })
+                                        }
+                                        className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
+                                    />
+                                </div>
                             </div>
 
                             {/* set log grid */}
@@ -560,6 +582,12 @@ export default function DayEditor({
                                             <input
                                                 inputMode='decimal'
                                                 className={inputCls}
+                                                placeholder={
+                                                    s === 1 &&
+                                                    ex.targetWeight != null
+                                                        ? String(ex.targetWeight)
+                                                        : ""
+                                                }
                                                 value={c.weight}
                                                 onChange={e =>
                                                     update(
@@ -747,9 +775,7 @@ export default function DayEditor({
                                     className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2'>
                                     <span>{c.name}</span>
                                     <span className='text-xs text-text-muted'>
-                                        {c.primary_muscles
-                                            .map(m => MUSCLE_LABEL[m])
-                                            .join(", ")}
+                                        {muscleList(c.primary_muscles)}
                                     </span>
                                 </button>
                             </li>

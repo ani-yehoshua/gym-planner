@@ -6,7 +6,7 @@ import {
   requestExercise,
   setExerciseArchived,
 } from "@/app/actions";
-import { CATEGORY_LABEL, CATEGORY_ORDER, MUSCLE_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, CATEGORY_ORDER, muscleList } from "@/lib/labels";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
 import { ExercisePrefForm } from "@/components/exercise-pref-form";
 import { ExerciseForm } from "@/components/exercise-form";
@@ -45,7 +45,7 @@ export default async function ExercisesPage() {
 
   const { data: prefRows } = await supabase
     .from("user_exercise_prefs")
-    .select("exercise_id, default_sets, default_rep_min, default_rep_max")
+    .select("exercise_id, default_sets, default_rep_min, default_rep_max, default_weight")
     .eq("user_id", user.id);
   const prefs = new Map((prefRows ?? []).map((p) => [p.exercise_id, p]));
 
@@ -171,7 +171,7 @@ export default async function ExercisesPage() {
                   <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm">
                     <span>{e.name}</span>
                     <span className="text-xs text-text-muted group-open:hidden">
-                      {e.primary_muscles.map((m) => MUSCLE_LABEL[m]).join(", ")}
+                      {muscleList(e.primary_muscles)}
                     </span>
                   </summary>
                   <div className="border-t border-border px-3 py-3">
@@ -187,20 +187,30 @@ export default async function ExercisesPage() {
                       );
                     })()}
                     {admin && (
-                      <div className="mt-3 flex gap-2 border-t border-border pt-3">
-                        <form action={setExerciseArchived}>
-                          <input type="hidden" name="exercise_id" value={e.id} />
-                          <input type="hidden" name="archived" value="true" />
-                          <SubmitButton pendingText="…" className={archiveBtn}>
-                            Archive
-                          </SubmitButton>
-                        </form>
-                        <form action={deleteExercise}>
-                          <input type="hidden" name="exercise_id" value={e.id} />
-                          <SubmitButton pendingText="…" className={deleteBtn}>
-                            Delete
-                          </SubmitButton>
-                        </form>
+                      <div className="mt-3 border-t border-border pt-3">
+                        <details>
+                          <summary className="cursor-pointer text-xs font-medium text-text-muted">
+                            Edit exercise
+                          </summary>
+                          <div className="mt-3">
+                            <ExerciseForm exercise={e} />
+                          </div>
+                        </details>
+                        <div className="mt-3 flex gap-2">
+                          <form action={setExerciseArchived}>
+                            <input type="hidden" name="exercise_id" value={e.id} />
+                            <input type="hidden" name="archived" value="true" />
+                            <SubmitButton pendingText="…" className={archiveBtn}>
+                              Archive
+                            </SubmitButton>
+                          </form>
+                          <form action={deleteExercise}>
+                            <input type="hidden" name="exercise_id" value={e.id} />
+                            <SubmitButton pendingText="…" className={deleteBtn}>
+                              Delete
+                            </SubmitButton>
+                          </form>
+                        </div>
                       </div>
                     )}
                   </div>

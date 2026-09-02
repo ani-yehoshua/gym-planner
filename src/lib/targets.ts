@@ -14,7 +14,7 @@ const COMPOUND = new Set([
   "Bulgarian Split Squat", "Walking Lunge",
 ]);
 
-export function isCompound(ex: { name: string; primary_muscles: Enums<"muscle_group">[] }): boolean {
+export function isCompound(ex: { name: string; primary_muscles: string[] }): boolean {
   return COMPOUND.has(ex.name) || ex.primary_muscles.length >= 2;
 }
 

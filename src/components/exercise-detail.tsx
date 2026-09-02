@@ -1,12 +1,11 @@
 "use client";
 
-import { MUSCLE_LABEL } from "@/lib/labels";
-import type { Enums } from "@/lib/supabase/database.types";
+import { muscleLabel } from "@/lib/labels";
 
 export type ExerciseInfo = {
   name: string;
-  primary_muscles: Enums<"muscle_group">[];
-  secondary_muscles: Enums<"muscle_group">[];
+  primary_muscles: string[];
+  secondary_muscles: string[];
   howto_text: string | null;
   media_url: string | null;
 };
@@ -37,12 +36,12 @@ export function ExerciseDetailBody({ ex }: { ex: ExerciseInfo }) {
             key={m}
             className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-xs"
           >
-            {MUSCLE_LABEL[m]}
+            {muscleLabel(m)}
           </span>
         ))}
         {ex.secondary_muscles.map((m) => (
           <span key={m} className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">
-            {MUSCLE_LABEL[m]}
+            {muscleLabel(m)}
           </span>
         ))}
       </div>
