@@ -20,6 +20,7 @@ import {
 } from "@/lib/labels";
 import { isCompound, suggestedSets, type Goal } from "@/lib/targets";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
+import { PlateCalculator } from "@/components/plate-calculator";
 import { createClient } from "@/lib/supabase/client";
 import type { Enums } from "@/lib/supabase/database.types";
 
@@ -353,6 +354,8 @@ export default function DayEditor({
                     </button>
                 ))}
             </div>
+
+            <PlateCalculator />
 
             {/* exercises */}
             <ul className='flex flex-col gap-4'>
