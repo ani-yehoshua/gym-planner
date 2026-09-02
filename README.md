@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GymPlanner
 
-## Getting Started
+**GymPlanner** is a training planner and workout log. Plan your week on a
+calendar, pick exercises for each day, log every set, and track your lifts and
+bodyweight over time — solo, or in a shared party with training partners.
 
-First, run the development server:
+🔗 **[gym-planner-xi.vercel.app](https://gym-planner-xi.vercel.app)**
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Calendar** — a week-at-a-time planner. Assign a muscle group to any day
+  (Push, Pull, Legs, Upper, Lower, Chest, Back, Shoulders, Arms, Core, Cardio),
+  then build its exercise list from the catalog.
+- **Split presets** — PPL, PPL/UL, Upper/Lower, Bro Split, Full Body and more,
+  applied over a chosen number of weeks. Reorder or swap any day before applying.
+- **Set logging** — weight and reps per set, with auto top-set and volume, plus a
+  per-exercise notes field for how it felt.
+- **Goal-based targets** — recommended rep ranges and set counts from your goal
+  and training experience; save your own default sets, rep range, and current
+  working weight per exercise so days populate with the right numbers.
+- **Parties** — create a training group, invite by code / link / QR, and plan
+  shared days together. Everyone logs their own sets; per-member progress and
+  who-added-what are visible on the day.
+- **Plate calculator** — tap plates to add up a target weight without the math.
+- **Progress & history** — bodyweight chart, best sets, and a week-by-week
+  history of completed days.
+- **Admin catalog** — manage the global exercise catalog (add, edit, archive,
+  delete); other users submit "request an exercise" instead.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Next.js](https://nextjs.org) (App Router)
+- React · TypeScript · Tailwind CSS
+- Supabase (auth, Postgres, Row-Level Security, realtime)
+- Resend (transactional email)
+- Deployed on Vercel
