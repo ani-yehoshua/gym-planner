@@ -11,7 +11,8 @@ import {
     CATEGORY_STYLE,
     DAY_CATEGORY_CHOICES,
 } from "@/lib/labels";
-import { formatLong, today } from "@/lib/date";
+import { formatLong } from "@/lib/date";
+import { getUserToday } from "@/lib/user-today";
 
 const MEMBER_COLORS = [
     "#f43f5e",
@@ -36,6 +37,8 @@ export default async function PartyPage({
     } = await supabase.auth.getUser();
     if (!user) redirect("/login");
 
+    const todayISO = await getUserToday();
+
     const { data: party } = await supabase
         .from("parties")
         .select("id, name, invite_type, created_by")
@@ -59,7 +62,7 @@ export default async function PartyPage({
         .from("planned_days")
         .select("id, date, category, planned_day_exercises(id)")
         .eq("party_id", id)
-        .gte("date", today())
+        .gte("date", todayISO)
         .order("date")
         .limit(10);
 
@@ -179,7 +182,7 @@ export default async function PartyPage({
                         type='date'
                         name='date'
                         required
-                        defaultValue={today()}
+                        defaultValue={todayISO}
                         className='rounded-lg border border-border bg-surface px-3 py-2 text-sm'
                     />
                     <select

@@ -134,6 +134,24 @@ export async function updateAccount(formData: FormData) {
   revalidatePath("/account");
 }
 
+export async function updateTimezone(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const tz = String(formData.get("timezone") || "").trim();
+  if (!tz) return;
+  // sanity-check it's a real IANA zone
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+  } catch {
+    return;
+  }
+  check(
+    await supabase.from("profiles").update({ timezone: tz }).eq("id", user.id),
+    "update timezone",
+  );
+  revalidatePath("/account");
+  revalidatePath("/");
+}
+
 /** Delete every solo planned day from today forward (before re-applying a template). */
 export async function clearUpcomingCalendar() {
   const { supabase, user } = await requireUser();

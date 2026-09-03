@@ -8,9 +8,9 @@ import {
   dowShort,
   formatRange,
   startOfWeek,
-  today,
   weekDates,
 } from "@/lib/date";
+import { getUserToday } from "@/lib/user-today";
 import { CATEGORY_LABEL, CATEGORY_STYLE, DAY_CATEGORY_CHOICES } from "@/lib/labels";
 import { ChevronLeftIcon } from "@/components/icons";
 
@@ -49,9 +49,9 @@ export default async function CalendarPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const weekStart = startOfWeek(week ?? today());
+  const todayISO = await getUserToday();
+  const weekStart = startOfWeek(week ?? todayISO);
   const dates = weekDates(weekStart);
-  const todayISO = today();
 
   const { data: days } = await supabase
     .from("planned_days")

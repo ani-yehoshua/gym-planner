@@ -33,6 +33,17 @@ export function today(): string {
   return toISODate(new Date());
 }
 
+/** Current calendar date (YYYY-MM-DD) in a specific IANA timezone. Server code
+ *  runs in UTC on Vercel, so "today" must be resolved in the user's zone. */
+export function todayInTz(tz: string): string {
+  try {
+    // en-CA formats as YYYY-MM-DD
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+  } catch {
+    return today();
+  }
+}
+
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MON = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",

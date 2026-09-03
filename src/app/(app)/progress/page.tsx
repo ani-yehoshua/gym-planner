@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logBodyweight } from "@/app/actions";
-import { startOfWeek, today } from "@/lib/date";
+import { startOfWeek } from "@/lib/date";
+import { getUserToday } from "@/lib/user-today";
 import { HistoryList, type HistoryDay } from "@/components/history-list";
 
 export default async function ProgressPage() {
@@ -10,6 +11,8 @@ export default async function ProgressPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const todayISO = await getUserToday();
 
   const { data: bw } = await supabase
     .from("bodyweight_logs")
@@ -48,7 +51,7 @@ export default async function ProgressPage() {
     .select(
       "id, date, category, party_id, parties(name), planned_day_exercises(id, exercises(name))",
     )
-    .lte("date", today())
+    .lte("date", todayISO)
     .order("date", { ascending: false })
     .limit(60);
 
@@ -140,7 +143,7 @@ export default async function ProgressPage() {
           <input
             type="date"
             name="date"
-            defaultValue={today()}
+            defaultValue={todayISO}
             className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
           <input

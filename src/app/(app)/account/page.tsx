@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { clearUpcomingCalendar, updateAccount } from "@/app/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { TimezoneField } from "@/components/timezone-field";
 import { SplitPicker, type SplitTemplate } from "@/components/split-picker";
 import { SubmitButton } from "@/components/submit-button";
 import { GOAL_LABEL, MUSCLE_LABEL } from "@/lib/labels";
@@ -41,7 +42,7 @@ export default async function AccountPage() {
 
     const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name, units")
+        .select("display_name, units, timezone")
         .eq("id", user.id)
         .single();
 
@@ -78,6 +79,10 @@ export default async function AccountPage() {
             <section className={field}>
                 <span className={label}>Theme</span>
                 <ThemeToggle />
+            </section>
+
+            <section className={field}>
+                <TimezoneField current={profile?.timezone ?? "America/Chicago"} />
             </section>
 
             {/* profile + goals */}
