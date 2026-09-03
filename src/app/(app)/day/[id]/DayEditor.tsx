@@ -295,7 +295,7 @@ export default function DayEditor({
         "inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-sm leading-none disabled:opacity-30";
 
     return (
-        <div className='flex flex-col gap-5'>
+        <div className='flex flex-col gap-3'>
             {/* category */}
             <div className='flex flex-wrap gap-1.5'>
                 {DAY_CATEGORY_CHOICES.filter(c => c !== "rest").map(c => (
@@ -312,13 +312,9 @@ export default function DayEditor({
                 ))}
             </div>
 
-            <div className='sticky top-14 z-10'>
-                <PlateCalculator />
-            </div>
-
             {/* party progress */}
             {day.partyId && members.length > 1 && (
-                <details className='rounded-xl border border-border'>
+                <details className='sticky top-[6.5rem] z-10 rounded-xl border border-border bg-bg shadow-sm'>
                     <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium'>
                         <span>Party progress</span>
                         <span className='text-xs text-text-muted'>
@@ -358,6 +354,10 @@ export default function DayEditor({
                     </div>
                 </details>
             )}
+
+            <div className='sticky top-14 z-10'>
+                <PlateCalculator />
+            </div>
 
             {/* exercises */}
             <ul className='flex flex-col gap-4'>
@@ -401,7 +401,9 @@ export default function DayEditor({
                                         </span>
                                     </div>
                                     <div className='text-xs text-text-muted'>
-                                        {muscleList(ex.exercise.primary_muscles)}
+                                        {muscleList(
+                                            ex.exercise.primary_muscles,
+                                        )}
                                     </div>
                                     {mismatched && (
                                         <div className='mt-1 text-xs text-amber-600 dark:text-amber-400'>
@@ -590,7 +592,9 @@ export default function DayEditor({
                                                 placeholder={
                                                     s === 1 &&
                                                     ex.targetWeight != null
-                                                        ? String(ex.targetWeight)
+                                                        ? String(
+                                                              ex.targetWeight,
+                                                          )
                                                         : ""
                                                 }
                                                 value={c.weight}
@@ -693,7 +697,8 @@ export default function DayEditor({
                                     <span className='text-text'>
                                         {addedByMe
                                             ? "you"
-                                            : (adder?.display_name ?? "someone")}
+                                            : (adder?.display_name ??
+                                              "someone")}
                                     </span>
                                 </div>
                             )}
