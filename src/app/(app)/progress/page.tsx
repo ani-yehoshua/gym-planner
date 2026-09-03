@@ -49,7 +49,7 @@ export default async function ProgressPage() {
   const { data: pastDays } = await supabase
     .from("planned_days")
     .select(
-      "id, date, category, party_id, parties(name), planned_day_exercises(id, exercises(name))",
+      "id, date, category, party_id, parties(name), planned_day_exercises(id, sort, exercises(name))",
     )
     .lte("date", todayISO)
     .order("date", { ascending: false })
@@ -84,7 +84,9 @@ export default async function ProgressPage() {
       let topName = "";
       const exercises: HistoryDay["exercises"] = [];
 
-      for (const pde of d.planned_day_exercises) {
+      for (const pde of [...d.planned_day_exercises].sort(
+        (a, b) => a.sort - b.sort,
+      )) {
         const done = (logsByPde.get(pde.id) ?? []).filter(
           (l) => l.weight != null && l.reps != null,
         );
