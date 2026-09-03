@@ -296,9 +296,29 @@ export default function DayEditor({
 
     return (
         <div className='flex flex-col gap-5'>
+            {/* category */}
+            <div className='flex flex-wrap gap-1.5'>
+                {DAY_CATEGORY_CHOICES.filter(c => c !== "rest").map(c => (
+                    <button
+                        key={c}
+                        onClick={() => start(() => setDayCategory(day.id, c))}
+                        className={`rounded-md border px-2.5 py-1 text-xs ${
+                            day.category === c
+                                ? CATEGORY_STYLE[c]
+                                : "border-border text-text-muted hover:border-text-muted"
+                        }`}>
+                        {CATEGORY_LABEL[c]}
+                    </button>
+                ))}
+            </div>
+
+            <div className='sticky top-14 z-10'>
+                <PlateCalculator />
+            </div>
+
             {/* party progress */}
             {day.partyId && members.length > 1 && (
-                <details className='sticky top-14 z-10 rounded-xl border border-border bg-bg/95 backdrop-blur'>
+                <details className='rounded-xl border border-border'>
                     <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium'>
                         <span>Party progress</span>
                         <span className='text-xs text-text-muted'>
@@ -338,24 +358,6 @@ export default function DayEditor({
                     </div>
                 </details>
             )}
-
-            {/* category */}
-            <div className='flex flex-wrap gap-1.5'>
-                {DAY_CATEGORY_CHOICES.filter(c => c !== "rest").map(c => (
-                    <button
-                        key={c}
-                        onClick={() => start(() => setDayCategory(day.id, c))}
-                        className={`rounded-md border px-2.5 py-1 text-xs ${
-                            day.category === c
-                                ? CATEGORY_STYLE[c]
-                                : "border-border text-text-muted hover:border-text-muted"
-                        }`}>
-                        {CATEGORY_LABEL[c]}
-                    </button>
-                ))}
-            </div>
-
-            <PlateCalculator />
 
             {/* exercises */}
             <ul className='flex flex-col gap-4'>
@@ -823,7 +825,7 @@ export default function DayEditor({
             )}
 
             {pending && (
-                <span className='fixed bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-surface-2 px-3 py-1 text-xs text-text-muted'>
+                <span className='fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-text-muted shadow'>
                     Saving…
                 </span>
             )}

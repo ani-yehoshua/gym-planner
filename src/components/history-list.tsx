@@ -192,6 +192,64 @@ export function HistoryList({
                   </ul>
                 </div>
               ))}
+
+              {chosen.length >= 2 &&
+                (() => {
+                  const oldest = chosen[0];
+                  const newest = chosen[chosen.length - 1];
+                  const oldMap = new Map(oldest.exercises.map((e) => [e.name, e]));
+                  const rows = newest.exercises
+                    .filter((e) => oldMap.has(e.name))
+                    .map((nw) => {
+                      const od = oldMap.get(nw.name)!;
+                      return {
+                        name: nw.name,
+                        dTop: nw.top - od.top,
+                        dVol: nw.volume - od.volume,
+                      };
+                    });
+                  const totalDVol = newest.volume - oldest.volume;
+                  const sign = (n: number) =>
+                    `${n > 0 ? "+" : ""}${n.toLocaleString()}`;
+                  const tone = (n: number) =>
+                    n > 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : n < 0
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-text-muted";
+                  return (
+                    <div className="w-56 shrink-0 border-l border-border pl-3">
+                      <div className="mb-1 text-sm font-semibold">Change</div>
+                      <div className="mb-2 text-xs text-text-muted">
+                        {oldest.date.slice(5)} → {newest.date.slice(5)}
+                      </div>
+                      <div className={`mb-2 text-xs font-semibold ${tone(totalDVol)}`}>
+                        session volume {sign(totalDVol)}
+                      </div>
+                      <ul className="flex flex-col gap-2">
+                        {rows.length === 0 && (
+                          <li className="text-xs text-text-muted">
+                            No exercises in common.
+                          </li>
+                        )}
+                        {rows.map((r, i) => (
+                          <li
+                            key={i}
+                            className="rounded-lg border border-border p-2 text-xs"
+                          >
+                            <div className="font-medium">{r.name}</div>
+                            <div className={`mt-1 ${tone(r.dTop)}`}>
+                              top {sign(r.dTop)}
+                            </div>
+                            <div className={tone(r.dVol)}>
+                              vol {sign(r.dVol)}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
             </div>
           </div>
         </div>

@@ -198,13 +198,6 @@ async function materializeSplit(
   // slot 0 lands exactly on the chosen start date; the pattern repeats every 7 days
   const start = opts.fromDate ?? new Date().toISOString().slice(0, 10);
 
-  // the user's saved per-exercise defaults override the template's numbers
-  const { data: prefRows } = await supabase
-    .from("user_exercise_prefs")
-    .select("exercise_id, default_sets, default_rep_min, default_rep_max, default_weight")
-    .eq("user_id", userId);
-  const prefs = new Map((prefRows ?? []).map((p) => [p.exercise_id, p]));
-
   for (let w = 0; w < opts.weeks; w++) {
     for (let pos = 0; pos < opts.slots.length; pos++) {
       const cat = opts.slots[pos];
@@ -226,20 +219,19 @@ async function materializeSplit(
 
       const exs = opts.exercisesByCategory.get(cat) ?? [];
       if (exs.length) {
+        // seed = the template's numbers only; the user's own prefs are layered
+        // on at view time via effectiveTarget()
         await supabase.from("planned_day_exercises").insert(
-          exs.map((e) => {
-            const pref = prefs.get(e.exercise_id);
-            return {
-              planned_day_id: day.id,
-              exercise_id: e.exercise_id,
-              sort: e.sort,
-              target_sets: pref?.default_sets ?? DEFAULT_SETS,
-              target_rep_min: pref?.default_rep_min ?? e.rep_min,
-              target_rep_max: pref?.default_rep_max ?? e.rep_max,
-              target_weight: pref?.default_weight ?? null,
-              added_by: userId,
-            };
-          }),
+          exs.map((e) => ({
+            planned_day_id: day.id,
+            exercise_id: e.exercise_id,
+            sort: e.sort,
+            target_sets: e.sets ?? DEFAULT_SETS,
+            target_rep_min: e.rep_min,
+            target_rep_max: e.rep_max,
+            target_weight: null,
+            added_by: userId,
+          })),
         );
       }
     }
@@ -517,18 +509,19 @@ export async function addExerciseToDay(dayId: string, exerciseId: string) {
     compound,
   );
 
-  // seed on the shared row: adder's pref -> catalog default -> goal recommendation.
-  // each member's own numbers are layered on at view time (day_exercise_user_targets).
+  // shared row seed = GLOBAL defaults only (catalog default -> goal recommendation).
+  // never the adder's personal numbers — weight especially is per-person and each
+  // member's own values are layered on at view time via day_exercise_user_targets.
   const { data: created } = await supabase
     .from("planned_day_exercises")
     .insert({
       planned_day_id: dayId,
       exercise_id: exerciseId,
       sort: (maxRow?.sort ?? -1) + 1,
-      target_sets: pref?.default_sets ?? ex?.default_sets ?? DEFAULT_SETS,
-      target_rep_min: pref?.default_rep_min ?? ex?.default_rep_min ?? recMin,
-      target_rep_max: pref?.default_rep_max ?? ex?.default_rep_max ?? recMax,
-      target_weight: pref?.default_weight ?? null,
+      target_sets: ex?.default_sets ?? DEFAULT_SETS,
+      target_rep_min: ex?.default_rep_min ?? recMin,
+      target_rep_max: ex?.default_rep_max ?? recMax,
+      target_weight: null,
       added_by: user.id,
     })
     .select("id")

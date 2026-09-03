@@ -101,8 +101,9 @@ export default async function DayPage({
     .maybeSingle();
   const goal = (constants?.primary_goal as Goal) ?? null;
 
-  /** effective target for the current user:
-   *  my day target -> my catalog default -> the shared seed -> goal recommendation */
+  /** effective target for the current user. Sets/reps: my day edit -> my saved
+   *  default -> the shared (global) seed -> goal recommendation. Weight is
+   *  purely personal: my day edit -> my saved default -> nothing. */
   function effectiveTarget(p: PdeRow) {
     const t = targetByPde.get(p.id);
     const pref = prefByExercise.get(p.exercises.id);
@@ -114,8 +115,7 @@ export default async function DayPage({
         t?.target_rep_min ?? pref?.default_rep_min ?? p.target_rep_min ?? recMin,
       repMax:
         t?.target_rep_max ?? pref?.default_rep_max ?? p.target_rep_max ?? recMax,
-      weight:
-        t?.target_weight ?? pref?.default_weight ?? p.target_weight ?? null,
+      weight: t?.target_weight ?? pref?.default_weight ?? null,
     };
   }
 
