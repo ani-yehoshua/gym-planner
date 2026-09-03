@@ -177,30 +177,15 @@ export function HistoryList({
                         className="rounded-lg border border-border p-2 text-xs"
                       >
                         <div className="font-medium">{ex.name}</div>
-                        <div className="mt-1 flex flex-col gap-0.5">
-                          {ex.sets.map((s, si) => {
-                            const isTop = s.weight === ex.top;
-                            return (
-                              <div
-                                key={si}
-                                className={
-                                  isTop
-                                    ? "font-semibold text-text"
-                                    : "text-text-muted"
-                                }
-                              >
-                                {s.weight} × {s.reps}
-                                {isTop && (
-                                  <span className="ml-1 text-[10px] uppercase">
-                                    top
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
+                        <div className="mt-1 flex flex-col gap-0.5 text-text-muted">
+                          {ex.sets.map((s, si) => (
+                            <div key={si}>
+                              {s.weight} × {s.reps}
+                            </div>
+                          ))}
                         </div>
-                        <div className="mt-1 text-text-muted">
-                          vol {ex.volume}
+                        <div className="mt-1 font-semibold text-text">
+                          top {ex.top} · vol {ex.volume}
                         </div>
                       </li>
                     ))}
