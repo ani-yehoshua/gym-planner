@@ -25,7 +25,7 @@ export function PlateCalculator() {
     const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
     return (
-        <details className='rounded-xl border border-border'>
+        <details className='rounded-xl border border-border bg-bg shadow-sm'>
             <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm'>
                 <span className='font-medium'>Plate calculator</span>
                 <span className='text-xs text-text-muted'>
