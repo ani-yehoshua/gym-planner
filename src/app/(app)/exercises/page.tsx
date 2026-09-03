@@ -35,7 +35,7 @@ export default async function ExercisesPage() {
   const { data: allExercises } = await supabase
     .from("exercises")
     .select(
-      "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, created_by, archived_at",
+      "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, default_sets, default_rep_min, default_rep_max, created_by, archived_at",
     )
     .order("category")
     .order("name");
@@ -160,11 +160,17 @@ export default async function ExercisesPage() {
       )}
 
       {CATEGORY_ORDER.filter((c) => grouped.has(c)).map((c) => (
-        <div key={c}>
-          <h2 className="mb-2 text-sm font-semibold text-text-muted">
+        <details
+          key={c}
+          className="rounded-xl border border-border"
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold">
             {CATEGORY_LABEL[c]}
-          </h2>
-          <ul className="flex flex-col gap-1">
+            <span className="text-xs font-normal text-text-muted">
+              {grouped.get(c)!.length} ▾
+            </span>
+          </summary>
+          <ul className="flex flex-col gap-1 border-t border-border p-2">
             {grouped.get(c)!.map((e) => (
               <li key={e.id} className="rounded-lg border border-border">
                 <details className="group">
@@ -218,8 +224,17 @@ export default async function ExercisesPage() {
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       ))}
+
+      {admin && (
+        <a
+          href="/admin/splits"
+          className="rounded-xl border border-border px-3 py-2 text-sm font-medium hover:bg-surface"
+        >
+          Edit split presets →
+        </a>
+      )}
 
       {admin && archived.length > 0 && (
         <details className="rounded-xl border border-border p-3">

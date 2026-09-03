@@ -2,7 +2,9 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong } from "@/lib/date";
+import { isCompound, recommendedReps, type Goal } from "@/lib/targets";
 import { DeleteDayButton } from "@/components/delete-day-button";
+import { ChevronLeftIcon } from "@/components/icons";
 import DayEditor from "./DayEditor";
 
 // stable per-member accent colors
@@ -33,7 +35,9 @@ export default async function DayPage({
 
   if (!day) notFound();
 
-  const pdeIds = day.planned_day_exercises.map((p) => p.id);
+  const pdeRows = day.planned_day_exercises;
+  type PdeRow = (typeof pdeRows)[number];
+  const pdeIds = pdeRows.map((p) => p.id);
   const { data: logs } = pdeIds.length
     ? await supabase
         .from("set_logs")
@@ -47,6 +51,28 @@ export default async function DayPage({
         .select("planned_day_exercise_id, user_id, note")
         .in("planned_day_exercise_id", pdeIds)
     : { data: [] };
+
+  // my own per-exercise targets for this day + my saved catalog defaults
+  const { data: myTargets } = pdeIds.length
+    ? await supabase
+        .from("day_exercise_user_targets")
+        .select("planned_day_exercise_id, target_sets, target_rep_min, target_rep_max, target_weight")
+        .eq("user_id", user.id)
+        .in("planned_day_exercise_id", pdeIds)
+    : { data: [] };
+  const targetByPde = new Map(
+    (myTargets ?? []).map((t) => [t.planned_day_exercise_id, t]),
+  );
+
+  const exIds = [...new Set(pdeRows.map((p) => p.exercises.id))];
+  const { data: myPrefs } = exIds.length
+    ? await supabase
+        .from("user_exercise_prefs")
+        .select("exercise_id, default_sets, default_rep_min, default_rep_max, default_weight")
+        .eq("user_id", user.id)
+        .in("exercise_id", exIds)
+    : { data: [] };
+  const prefByExercise = new Map((myPrefs ?? []).map((p) => [p.exercise_id, p]));
 
   let members: { user_id: string; display_name: string | null; color: string }[] = [];
   let isPartyOwner = false;
@@ -73,6 +99,25 @@ export default async function DayPage({
     .select("primary_goal, experience")
     .eq("user_id", user.id)
     .maybeSingle();
+  const goal = (constants?.primary_goal as Goal) ?? null;
+
+  /** effective target for the current user:
+   *  my day target -> my catalog default -> the shared seed -> goal recommendation */
+  function effectiveTarget(p: PdeRow) {
+    const t = targetByPde.get(p.id);
+    const pref = prefByExercise.get(p.exercises.id);
+    const [recMin, recMax] = recommendedReps(goal, isCompound(p.exercises));
+    return {
+      sets:
+        t?.target_sets ?? pref?.default_sets ?? p.target_sets ?? 2,
+      repMin:
+        t?.target_rep_min ?? pref?.default_rep_min ?? p.target_rep_min ?? recMin,
+      repMax:
+        t?.target_rep_max ?? pref?.default_rep_max ?? p.target_rep_max ?? recMax,
+      weight:
+        t?.target_weight ?? pref?.default_weight ?? p.target_weight ?? null,
+    };
+  }
 
   const { data: catalog } = await supabase
     .from("exercises")
@@ -85,8 +130,12 @@ export default async function DayPage({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <Link href={backHref} className="text-sm text-text-muted hover:text-text">
-          ← {day.party_id ? "Party" : "Calendar"}
+        <Link
+          href={backHref}
+          className="flex items-center gap-1 text-sm text-text-muted hover:text-text"
+        >
+          <ChevronLeftIcon />
+          {day.party_id ? "Party" : "Calendar"}
         </Link>
         {canManageAll && <DeleteDayButton dayId={day.id} />}
       </div>
@@ -110,15 +159,18 @@ export default async function DayPage({
           partyId: day.party_id,
           exercises: [...day.planned_day_exercises]
             .sort((a, b) => a.sort - b.sort)
-            .map((p) => ({
-              id: p.id,
-              targetSets: p.target_sets ?? 2,
-              targetRepMin: p.target_rep_min,
-              targetRepMax: p.target_rep_max,
-              targetWeight: p.target_weight,
-              addedBy: p.added_by,
-              exercise: p.exercises,
-            })),
+            .map((p) => {
+              const e = effectiveTarget(p);
+              return {
+                id: p.id,
+                targetSets: e.sets,
+                targetRepMin: e.repMin,
+                targetRepMax: e.repMax,
+                targetWeight: e.weight,
+                addedBy: p.added_by,
+                exercise: p.exercises,
+              };
+            }),
         }}
         currentUserId={user.id}
         canManageAll={canManageAll}
@@ -126,7 +178,7 @@ export default async function DayPage({
         logs={logs ?? []}
         notes={notes ?? []}
         catalog={catalog ?? []}
-        goal={constants?.primary_goal ?? null}
+        goal={goal}
         experience={constants?.experience ?? null}
       />
     </div>

@@ -1,16 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logBodyweight } from "@/app/actions";
-import {
-  addDays,
-  dowShort,
-  dayOfMonth,
-  formatRangeNumeric,
-  startOfWeek,
-  today,
-} from "@/lib/date";
-import { CATEGORY_LABEL, CATEGORY_STYLE } from "@/lib/labels";
+import { startOfWeek, today } from "@/lib/date";
+import { HistoryList, type HistoryDay } from "@/components/history-list";
 
 export default async function ProgressPage() {
   const supabase = await createClient();
@@ -78,7 +70,7 @@ export default async function ProgressPage() {
     logsByPde.set(l.planned_day_exercise_id, arr);
   }
 
-  const history = (pastDays ?? [])
+  const history: HistoryDay[] = (pastDays ?? [])
     .map((d) => {
       let volume = 0;
       let topWeight = 0;
@@ -110,7 +102,7 @@ export default async function ProgressPage() {
 
   // group history into Sun–Sat weeks: weeks newest-first, days within a week
   // in chronological (ascending) order
-  const weeks: { start: string; days: typeof history }[] = [];
+  const weeks: { start: string; days: HistoryDay[] }[] = [];
   for (const d of history) {
     const ws = startOfWeek(d.date);
     const bucket = weeks.find((w) => w.start === ws);
@@ -171,66 +163,15 @@ export default async function ProgressPage() {
 
       <section>
         <h2 className="mb-2 text-sm font-medium">History</h2>
+        <p className="mb-2 text-xs text-text-muted">
+          Tick 2–4 days to compare them.
+        </p>
         {weeks.length === 0 ? (
           <p className="text-sm text-text-muted">
             Completed days show up here once you&apos;ve logged sets on them.
           </p>
         ) : (
-          <div className="max-h-96 overflow-y-auto rounded-xl border border-border">
-            {weeks.map((w, wi) => {
-              const end = addDays(w.start, 6);
-              return (
-                <details
-                  key={w.start}
-                  open={wi === 0}
-                  className={wi > 0 ? "border-t border-border" : ""}
-                >
-                  <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm">
-                    <span className="font-medium">
-                      {formatRangeNumeric(w.start, end)}
-                    </span>
-                    <span className="text-xs text-text-muted">
-                      {w.days.length} day{w.days.length === 1 ? "" : "s"} ▾
-                    </span>
-                  </summary>
-                  <ul className="flex flex-col gap-1 border-t border-border p-2">
-                    {w.days.map((d) => (
-                      <li key={d.id}>
-                        <Link
-                          href={`/day/${d.id}`}
-                          className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface"
-                        >
-                          <span className="w-9 shrink-0 text-center">
-                            <span className="block text-[10px] uppercase text-text-muted">
-                              {dowShort(d.date)}
-                            </span>
-                            <span className="block font-semibold leading-none">
-                              {dayOfMonth(d.date)}
-                            </span>
-                          </span>
-                          {d.category && (
-                            <span
-                              className={`rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}
-                            >
-                              {CATEGORY_LABEL[d.category]}
-                            </span>
-                          )}
-                          <span className="min-w-0 flex-1 truncate text-xs text-text-muted">
-                            {d.exercisesDone} ex
-                            {d.top && <> · top {d.top}</>}
-                            {d.partyName && <> · {d.partyName}</>}
-                          </span>
-                          <span className="shrink-0 text-xs text-text-muted">
-                            vol <span className="text-text">{d.volume}</span>
-                          </span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              );
-            })}
-          </div>
+          <HistoryList weeks={weeks} />
         )}
       </section>
 

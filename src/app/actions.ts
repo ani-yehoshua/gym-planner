@@ -311,6 +311,10 @@ function parseMuscles(raw: string): string[] {
 }
 
 function exerciseFieldsFromForm(formData: FormData) {
+  const numOrNull = (k: string) => {
+    const v = formData.get(k);
+    return v === null || v === "" ? null : Math.max(1, Math.min(20, Number(v)));
+  };
   return {
     name: String(formData.get("name") || "").trim(),
     category: String(formData.get("category")) as Enums<"muscle_category">,
@@ -318,6 +322,9 @@ function exerciseFieldsFromForm(formData: FormData) {
     secondary_muscles: parseMuscles(String(formData.get("secondary_muscles") || "")),
     howto_text: String(formData.get("howto_text") || "").trim() || null,
     media_url: String(formData.get("media_url") || "").trim() || null,
+    default_sets: numOrNull("default_sets"),
+    default_rep_min: numOrNull("default_rep_min"),
+    default_rep_max: numOrNull("default_rep_max"),
   };
 }
 
@@ -420,24 +427,13 @@ export async function deleteExercise(formData: FormData) {
 // ---------------------------------------------------------------------------
 // planned days
 // ---------------------------------------------------------------------------
-export async function openOrCreateDay(formData: FormData) {
+/** Always creates a new personal session on that date — a day can hold several
+ *  (e.g. a party session and a solo session, or a 2-a-day). */
+export async function createDay(formData: FormData) {
   const { supabase, user } = await requireUser();
   const date = String(formData.get("date"));
   const category = String(formData.get("category") || "") as Enums<"muscle_category"> | "";
-
-  const { data: existing } = await supabase
-    .from("planned_days")
-    .select("id")
-    .eq("owner_user", user.id)
-    .eq("date", date)
-    .maybeSingle();
-
-  if (existing) {
-    if (category) {
-      await supabase.from("planned_days").update({ category }).eq("id", existing.id);
-    }
-    redirect(`/day/${existing.id}`);
-  }
+  if (!date) redirect("/");
 
   const { data: created } = await supabase
     .from("planned_days")
@@ -474,9 +470,13 @@ export async function deleteDay(dayId: string) {
 export async function addExerciseToDay(dayId: string, exerciseId: string) {
   const { supabase, user } = await requireUser();
 
-  const [{ data: ex }, { data: pref }, { data: constants }, { count }] =
+  const [{ data: ex }, { data: pref }, { data: constants }, { data: maxRow }] =
     await Promise.all([
-      supabase.from("exercises").select("name, primary_muscles").eq("id", exerciseId).single(),
+      supabase
+        .from("exercises")
+        .select("name, primary_muscles, default_sets, default_rep_min, default_rep_max")
+        .eq("id", exerciseId)
+        .single(),
       supabase
         .from("user_exercise_prefs")
         .select("default_sets, default_rep_min, default_rep_max, default_weight")
@@ -486,8 +486,11 @@ export async function addExerciseToDay(dayId: string, exerciseId: string) {
       supabase.from("user_constants").select("primary_goal").eq("user_id", user.id).maybeSingle(),
       supabase
         .from("planned_day_exercises")
-        .select("id", { count: "exact", head: true })
-        .eq("planned_day_id", dayId),
+        .select("sort")
+        .eq("planned_day_id", dayId)
+        .order("sort", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
   const compound = ex ? isCompound(ex) : false;
@@ -496,19 +499,37 @@ export async function addExerciseToDay(dayId: string, exerciseId: string) {
     compound,
   );
 
-  check(
-    await supabase.from("planned_day_exercises").insert({
+  // seed on the shared row: adder's pref -> catalog default -> goal recommendation.
+  // each member's own numbers are layered on at view time (day_exercise_user_targets).
+  const { data: created } = await supabase
+    .from("planned_day_exercises")
+    .insert({
       planned_day_id: dayId,
       exercise_id: exerciseId,
-      sort: count ?? 0,
-      target_sets: pref?.default_sets ?? DEFAULT_SETS,
-      target_rep_min: pref?.default_rep_min ?? recMin,
-      target_rep_max: pref?.default_rep_max ?? recMax,
+      sort: (maxRow?.sort ?? -1) + 1,
+      target_sets: pref?.default_sets ?? ex?.default_sets ?? DEFAULT_SETS,
+      target_rep_min: pref?.default_rep_min ?? ex?.default_rep_min ?? recMin,
+      target_rep_max: pref?.default_rep_max ?? ex?.default_rep_max ?? recMax,
       target_weight: pref?.default_weight ?? null,
       added_by: user.id,
-    }),
-    "add exercise",
-  );
+    })
+    .select("id")
+    .single();
+
+  // give the adder their own target row immediately from their prefs
+  if (created && pref) {
+    await supabase.from("day_exercise_user_targets").upsert(
+      {
+        planned_day_exercise_id: created.id,
+        user_id: user.id,
+        target_sets: pref.default_sets,
+        target_rep_min: pref.default_rep_min,
+        target_rep_max: pref.default_rep_max,
+        target_weight: pref.default_weight,
+      },
+      { onConflict: "planned_day_exercise_id,user_id" },
+    );
+  }
   revalidatePath(`/day/${dayId}`);
 }
 
@@ -582,6 +603,8 @@ export async function setExercisePref(formData: FormData) {
   revalidatePath("/exercises");
 }
 
+/** Per-user targets. On any day (personal or party) these are yours alone and
+ *  never touch another member's numbers. */
 export async function updateDayExerciseTarget(input: {
   pdeId: string;
   dayId: string;
@@ -590,19 +613,33 @@ export async function updateDayExerciseTarget(input: {
   repMax?: number | null;
   weight?: number | null;
 }) {
-  const { supabase } = await requireUser();
-  const patch: {
-    target_sets?: number;
-    target_rep_min?: number | null;
-    target_rep_max?: number | null;
-    target_weight?: number | null;
-  } = {};
-  if (input.sets !== undefined) patch.target_sets = Math.max(1, Math.min(12, input.sets));
-  if (input.repMin !== undefined) patch.target_rep_min = input.repMin;
-  if (input.repMax !== undefined) patch.target_rep_max = input.repMax;
-  if (input.weight !== undefined) patch.target_weight = input.weight;
+  const { supabase, user } = await requireUser();
+
+  const { data: existing } = await supabase
+    .from("day_exercise_user_targets")
+    .select("target_sets, target_rep_min, target_rep_max, target_weight")
+    .eq("planned_day_exercise_id", input.pdeId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
   check(
-    await supabase.from("planned_day_exercises").update(patch).eq("id", input.pdeId),
+    await supabase.from("day_exercise_user_targets").upsert(
+      {
+        planned_day_exercise_id: input.pdeId,
+        user_id: user.id,
+        target_sets:
+          input.sets !== undefined
+            ? Math.max(1, Math.min(12, input.sets))
+            : (existing?.target_sets ?? null),
+        target_rep_min:
+          input.repMin !== undefined ? input.repMin : (existing?.target_rep_min ?? null),
+        target_rep_max:
+          input.repMax !== undefined ? input.repMax : (existing?.target_rep_max ?? null),
+        target_weight:
+          input.weight !== undefined ? input.weight : (existing?.target_weight ?? null),
+      },
+      { onConflict: "planned_day_exercise_id,user_id" },
+    ),
     "update target",
   );
   revalidatePath(`/day/${input.dayId}`);
@@ -612,18 +649,27 @@ export async function reorderDayExercise(pdeId: string, dayId: string, dir: -1 |
   const { supabase } = await requireUser();
   const { data: rows } = await supabase
     .from("planned_day_exercises")
-    .select("id, sort")
+    .select("id, sort, created_at")
     .eq("planned_day_id", dayId)
-    .order("sort");
+    .order("sort")
+    .order("created_at");
   if (!rows) return;
 
   const i = rows.findIndex((r) => r.id === pdeId);
   const j = i + dir;
   if (i < 0 || j < 0 || j >= rows.length) return;
 
-  // swap sort values
-  await supabase.from("planned_day_exercises").update({ sort: rows[j].sort }).eq("id", rows[i].id);
-  await supabase.from("planned_day_exercises").update({ sort: rows[i].sort }).eq("id", rows[j].id);
+  // move in the array, then rewrite every sort to its new 0..n-1 index so equal
+  // or gapped sort values can't make a swap a no-op
+  const [moved] = rows.splice(i, 1);
+  rows.splice(j, 0, moved);
+  await Promise.all(
+    rows.map((r, idx) =>
+      r.sort === idx
+        ? Promise.resolve()
+        : supabase.from("planned_day_exercises").update({ sort: idx }).eq("id", r.id),
+    ),
+  );
   revalidatePath(`/day/${dayId}`);
 }
 
@@ -728,17 +774,6 @@ export async function createPartyDay(formData: FormData) {
   const category = String(formData.get("category") || "") as Enums<"muscle_category"> | "";
   if (!partyId || !date) redirect("/parties");
 
-  const { data: existing } = await supabase
-    .from("planned_days")
-    .select("id")
-    .eq("party_id", partyId)
-    .eq("date", date)
-    .maybeSingle();
-  if (existing) {
-    if (category) await supabase.from("planned_days").update({ category }).eq("id", existing.id);
-    redirect(`/day/${existing.id}`);
-  }
-
   const { data: created } = await supabase
     .from("planned_days")
     .insert({ party_id: partyId, date, category: category || null, created_by: user.id })
@@ -764,4 +799,172 @@ export async function renameParty(formData: FormData) {
     "rename party",
   );
   revalidatePath(`/parties/${partyId}`);
+}
+
+// ---------------------------------------------------------------------------
+// admin: split preset editor
+// ---------------------------------------------------------------------------
+async function requireAdmin() {
+  const { supabase, user } = await requireUser();
+  if (!(await isAdmin(supabase))) throw new Error("Admins only");
+  return { supabase, user };
+}
+
+export async function createSplitTemplate(formData: FormData) {
+  const { supabase, user } = await requireAdmin();
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return;
+  const { data: t } = await supabase
+    .from("schedule_templates")
+    .insert({ name, is_global: true, created_by: user.id })
+    .select("id")
+    .single();
+  if (t) {
+    await supabase.from("template_days").insert(
+      Array.from({ length: 7 }, (_, i) => ({
+        template_id: t.id,
+        position: i,
+        weekday: i,
+        category: "rest" as Enums<"muscle_category">,
+        label: "Rest",
+      })),
+    );
+  }
+  revalidatePath("/admin/splits");
+}
+
+export async function updateSplitTemplate(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const id = String(formData.get("template_id"));
+  const name = String(formData.get("name") || "").trim();
+  const description = String(formData.get("description") || "").trim() || null;
+  const weeks = Number(formData.get("default_weeks")) || 8;
+  if (!id || !name) return;
+  check(
+    await supabase
+      .from("schedule_templates")
+      .update({ name, description, default_weeks: Math.max(1, Math.min(16, weeks)) })
+      .eq("id", id),
+    "update split",
+  );
+  revalidatePath("/admin/splits");
+}
+
+export async function deleteSplitTemplate(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  await supabase
+    .from("schedule_templates")
+    .delete()
+    .eq("id", String(formData.get("template_id")));
+  revalidatePath("/admin/splits");
+}
+
+const catLabelFor = (c: Enums<"muscle_category">) =>
+  c === "full_body" ? "Full Body" : c === "rest" ? "Rest" : c.charAt(0).toUpperCase() + c.slice(1);
+
+export async function saveSplitSlots(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const templateId = String(formData.get("template_id"));
+  if (!templateId) return;
+  const rows = Array.from({ length: 7 }, (_, i) => {
+    const cat = String(formData.get(`slot_${i}`) || "rest") as Enums<"muscle_category">;
+    return {
+      template_id: templateId,
+      position: i,
+      weekday: i,
+      category: cat,
+      label: catLabelFor(cat),
+    };
+  });
+  check(
+    await supabase
+      .from("template_days")
+      .upsert(rows, { onConflict: "template_id,position" }),
+    "save split pattern",
+  );
+  revalidatePath("/admin/splits");
+}
+
+export async function addSplitExercise(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const templateDayId = String(formData.get("template_day_id"));
+  const exerciseId = String(formData.get("exercise_id"));
+  if (!templateDayId || !exerciseId) return;
+  const { data: maxRow } = await supabase
+    .from("template_day_exercises")
+    .select("sort")
+    .eq("template_day_id", templateDayId)
+    .order("sort", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { data: ex } = await supabase
+    .from("exercises")
+    .select("default_sets, default_rep_min, default_rep_max")
+    .eq("id", exerciseId)
+    .single();
+  check(
+    await supabase.from("template_day_exercises").insert({
+      template_day_id: templateDayId,
+      exercise_id: exerciseId,
+      sort: (maxRow?.sort ?? -1) + 1,
+      sets: ex?.default_sets ?? 3,
+      rep_min: ex?.default_rep_min ?? 8,
+      rep_max: ex?.default_rep_max ?? 12,
+    }),
+    "add split exercise",
+  );
+  revalidatePath("/admin/splits");
+}
+
+export async function updateSplitExercise(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const id = String(formData.get("tde_id"));
+  const n = (k: string) => {
+    const v = formData.get(k);
+    return v === null || v === "" ? null : Math.max(1, Math.min(20, Number(v)));
+  };
+  check(
+    await supabase
+      .from("template_day_exercises")
+      .update({ sets: n("sets"), rep_min: n("rep_min"), rep_max: n("rep_max") })
+      .eq("id", id),
+    "update split exercise",
+  );
+  revalidatePath("/admin/splits");
+}
+
+export async function removeSplitExercise(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  await supabase
+    .from("template_day_exercises")
+    .delete()
+    .eq("id", String(formData.get("tde_id")));
+  revalidatePath("/admin/splits");
+}
+
+export async function reorderSplitExercise(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const tdeId = String(formData.get("tde_id"));
+  const templateDayId = String(formData.get("template_day_id"));
+  const dir = Number(formData.get("dir")) as -1 | 1;
+  const { data: rows } = await supabase
+    .from("template_day_exercises")
+    .select("id, sort")
+    .eq("template_day_id", templateDayId)
+    .order("sort")
+    .order("id");
+  if (!rows) return;
+  const i = rows.findIndex((r) => r.id === tdeId);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= rows.length) return;
+  const [moved] = rows.splice(i, 1);
+  rows.splice(j, 0, moved);
+  await Promise.all(
+    rows.map((r, idx) =>
+      r.sort === idx
+        ? Promise.resolve()
+        : supabase.from("template_day_exercises").update({ sort: idx }).eq("id", r.id),
+    ),
+  );
+  revalidatePath("/admin/splits");
 }

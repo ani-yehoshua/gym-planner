@@ -98,6 +98,36 @@ export type Database = {
         }
         Relationships: []
       }
+      day_exercise_user_targets: {
+        Row: {
+          planned_day_exercise_id: string
+          target_rep_max: number | null
+          target_rep_min: number | null
+          target_sets: number | null
+          target_weight: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          planned_day_exercise_id: string
+          target_rep_max?: number | null
+          target_rep_min?: number | null
+          target_sets?: number | null
+          target_weight?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          planned_day_exercise_id?: string
+          target_rep_max?: number | null
+          target_rep_min?: number | null
+          target_sets?: number | null
+          target_weight?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       exercises: {
         Row: {
           archived_at: string | null

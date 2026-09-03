@@ -2,13 +2,15 @@ import { createExercise, updateExercise } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import {
   CATEGORY_LABEL,
-  CATEGORY_ORDER,
+  DAY_CATEGORY_CHOICES,
   COMMON_MUSCLES,
   muscleLabel,
 } from "@/lib/labels";
 import type { Enums } from "@/lib/supabase/database.types";
 
 const inp = "rounded-lg border border-border bg-surface px-3 py-2 text-sm";
+const smallInp =
+  "w-16 rounded-md border border-border bg-surface px-2 py-1 text-center text-sm";
 
 export type ExerciseFormValues = {
   id: string;
@@ -18,6 +20,9 @@ export type ExerciseFormValues = {
   secondary_muscles: string[];
   howto_text: string | null;
   media_url: string | null;
+  default_sets: number | null;
+  default_rep_min: number | null;
+  default_rep_max: number | null;
 };
 
 const toInput = (ms: string[]) => ms.map(muscleLabel).join(", ");
@@ -64,7 +69,7 @@ export function ExerciseForm({
           <option value="" disabled>
             Choose…
           </option>
-          {CATEGORY_ORDER.filter((c) => c !== "rest").map((c) => (
+          {DAY_CATEGORY_CHOICES.filter((c) => c !== "rest").map((c) => (
             <option key={c} value={c}>
               {CATEGORY_LABEL[c]}
             </option>
@@ -99,6 +104,36 @@ export function ExerciseForm({
           className={inp}
         />
       </label>
+
+      <div className="flex flex-col gap-1 text-xs text-text-muted">
+        Default sets &amp; rep range (used everywhere this exercise is added)
+        <div className="flex items-center gap-1.5 text-sm">
+          <input
+            name="default_sets"
+            inputMode="numeric"
+            defaultValue={exercise?.default_sets ?? ""}
+            placeholder="3"
+            className={smallInp}
+          />
+          <span>sets ×</span>
+          <input
+            name="default_rep_min"
+            inputMode="numeric"
+            defaultValue={exercise?.default_rep_min ?? ""}
+            placeholder="8"
+            className={smallInp}
+          />
+          <span>–</span>
+          <input
+            name="default_rep_max"
+            inputMode="numeric"
+            defaultValue={exercise?.default_rep_max ?? ""}
+            placeholder="12"
+            className={smallInp}
+          />
+          <span>reps</span>
+        </div>
+      </div>
 
       <label className="flex flex-col gap-1 text-xs text-text-muted">
         How to do it
