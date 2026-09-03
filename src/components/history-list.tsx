@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { addDays, dayOfMonth, dowShort, formatLong, formatRangeNumeric } from "@/lib/date";
 import { CATEGORY_LABEL, CATEGORY_STYLE } from "@/lib/labels";
@@ -30,7 +30,11 @@ export function HistoryList({
   const [selected, setSelected] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const byId = new Map(weeks.flatMap((w) => w.days).map((d) => [d.id, d]));
-  const chosen = selected.map((id) => byId.get(id)!).filter(Boolean);
+  // oldest day first, left-to-right
+  const chosen = selected
+    .map((id) => byId.get(id)!)
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   function toggle(id: string) {
     setSelected((prev) =>
@@ -38,9 +42,19 @@ export function HistoryList({
     );
   }
 
+  // lock background scroll while the compare modal is up
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   return (
     <>
-      <div className="max-h-96 overflow-y-auto rounded-xl border border-border">
+      <div className="max-h-96 overflow-y-auto overflow-x-hidden rounded-xl border border-border">
         {weeks.map((w, wi) => (
           <details
             key={w.start}
@@ -67,7 +81,7 @@ export function HistoryList({
                   />
                   <Link
                     href={`/day/${d.id}`}
-                    className="flex flex-1 items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface"
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface"
                   >
                     <span className="w-9 shrink-0 text-center">
                       <span className="block text-[10px] uppercase text-text-muted">
@@ -79,7 +93,7 @@ export function HistoryList({
                     </span>
                     {d.category && (
                       <span
-                        className={`rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}
+                        className={`shrink-0 rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}
                       >
                         {CATEGORY_LABEL[d.category]}
                       </span>
@@ -120,11 +134,11 @@ export function HistoryList({
 
       {open && chosen.length >= 2 && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 sm:items-center"
+          className="fixed inset-0 z-50 flex touch-none items-end justify-center overscroll-contain bg-black/50 p-2 sm:items-center"
           onClick={() => setOpen(false)}
         >
           <div
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-2xl border border-border bg-bg"
+            className="flex max-h-[85vh] w-full max-w-3xl touch-auto flex-col overflow-hidden overscroll-contain rounded-2xl border border-border bg-bg"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -139,7 +153,7 @@ export function HistoryList({
               </button>
             </div>
 
-            <div className="flex gap-3 overflow-x-auto p-4">
+            <div className="flex gap-3 overflow-auto overscroll-contain p-4">
               {chosen.map((d) => (
                 <div key={d.id} className="w-56 shrink-0">
                   <div className="mb-1 text-sm font-semibold">
@@ -163,13 +177,30 @@ export function HistoryList({
                         className="rounded-lg border border-border p-2 text-xs"
                       >
                         <div className="font-medium">{ex.name}</div>
-                        <div className="mt-0.5 text-text-muted">
-                          {ex.sets
-                            .map((s) => `${s.weight}×${s.reps}`)
-                            .join(", ")}
+                        <div className="mt-1 flex flex-col gap-0.5">
+                          {ex.sets.map((s, si) => {
+                            const isTop = s.weight === ex.top;
+                            return (
+                              <div
+                                key={si}
+                                className={
+                                  isTop
+                                    ? "font-semibold text-text"
+                                    : "text-text-muted"
+                                }
+                              >
+                                {s.weight} × {s.reps}
+                                {isTop && (
+                                  <span className="ml-1 text-[10px] uppercase">
+                                    top
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="mt-0.5 text-text-muted">
-                          top {ex.top} · vol {ex.volume}
+                        <div className="mt-1 text-text-muted">
+                          vol {ex.volume}
                         </div>
                       </li>
                     ))}
