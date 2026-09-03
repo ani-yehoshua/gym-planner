@@ -312,50 +312,50 @@ export default function DayEditor({
                 ))}
             </div>
 
-            {/* party progress */}
-            {day.partyId && members.length > 1 && (
-                <details className='sticky top-[6.5rem] z-10 rounded-xl border border-border bg-bg shadow-sm'>
-                    <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium'>
-                        <span>Party progress</span>
-                        <span className='text-xs text-text-muted'>
-                            {members.length} members ▾
-                        </span>
-                    </summary>
-                    <div className='flex flex-col gap-2 border-t border-border p-3'>
-                        {members.map(m => {
-                            const t = memberDayTotals(m.user_id);
-                            return (
-                                <div
-                                    key={m.user_id}
-                                    className='flex items-center justify-between text-sm'>
-                                    <span className='flex items-center gap-2'>
-                                        <span
-                                            className='inline-block h-2.5 w-2.5 rounded-full'
-                                            style={{ background: m.color }}
-                                        />
-                                        {m.display_name || "Member"}
-                                        {m.user_id === currentUserId && (
-                                            <span className='text-text-muted'>
-                                                {" "}
-                                                (you)
-                                            </span>
-                                        )}
-                                    </span>
-                                    <span className='text-xs text-text-muted'>
-                                        {t.exercisesLogged}/
-                                        {day.exercises.length} done · vol{" "}
-                                        <span className='text-text'>
-                                            {t.volume || "—"}
+            <div className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
+                {/* party progress */}
+                {day.partyId && members.length > 1 && (
+                    <details className='rounded-xl border border-border'>
+                        <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium'>
+                            <span>Party progress</span>
+                            <span className='text-xs text-text-muted'>
+                                {members.length} members ▾
+                            </span>
+                        </summary>
+                        <div className='flex flex-col gap-2 border-t border-border p-3'>
+                            {members.map(m => {
+                                const t = memberDayTotals(m.user_id);
+                                return (
+                                    <div
+                                        key={m.user_id}
+                                        className='flex items-center justify-between text-sm'>
+                                        <span className='flex items-center gap-2'>
+                                            <span
+                                                className='inline-block h-2.5 w-2.5 rounded-full'
+                                                style={{ background: m.color }}
+                                            />
+                                            {m.display_name || "Member"}
+                                            {m.user_id === currentUserId && (
+                                                <span className='text-text-muted'>
+                                                    {" "}
+                                                    (you)
+                                                </span>
+                                            )}
                                         </span>
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </details>
-            )}
-
-            <div className='sticky top-14 z-10'>
+                                        <span className='text-xs text-text-muted'>
+                                            {t.exercisesLogged}/
+                                            {day.exercises.length} done · vol{" "}
+                                            <span className='text-text'>
+                                                {t.volume || "—"}
+                                            </span>
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </details>
+                )}
+                {/* weight calculator */}
                 <PlateCalculator />
             </div>
 
