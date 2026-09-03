@@ -23,7 +23,7 @@ function AddSessionForm({ date, compact }: { date: string; compact?: boolean }) 
         defaultValue=""
         className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm"
       >
-        <option value="">{compact ? "Add another session…" : "Plan a day…"}</option>
+        <option value="">{compact ? "Add another session…" : "Plan session…"}</option>
         {DAY_CATEGORY_CHOICES.filter((c) => c !== "rest").map((c) => (
           <option key={c} value={c}>
             {CATEGORY_LABEL[c]}

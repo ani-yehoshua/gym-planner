@@ -58,12 +58,16 @@ export default async function ProgressPage() {
   const { data: pastLogs } = pastPdeIds.length
     ? await supabase
         .from("set_logs")
-        .select("planned_day_exercise_id, weight, reps")
+        .select("planned_day_exercise_id, set_no, weight, reps")
         .eq("user_id", user.id)
         .in("planned_day_exercise_id", pastPdeIds)
+        .order("set_no")
     : { data: [] };
 
-  const logsByPde = new Map<string, { weight: number | null; reps: number | null }[]>();
+  const logsByPde = new Map<
+    string,
+    { set_no: number; weight: number | null; reps: number | null }[]
+  >();
   for (const l of pastLogs ?? []) {
     const arr = logsByPde.get(l.planned_day_exercise_id) ?? [];
     arr.push(l);
@@ -75,26 +79,41 @@ export default async function ProgressPage() {
       let volume = 0;
       let topWeight = 0;
       let topName = "";
-      const exercisesDone = new Set<string>();
+      const exercises: HistoryDay["exercises"] = [];
+
       for (const pde of d.planned_day_exercises) {
-        for (const l of logsByPde.get(pde.id) ?? []) {
-          if (l.weight == null || l.reps == null) continue;
-          exercisesDone.add(pde.id);
-          volume += l.weight * l.reps;
-          if (l.weight > topWeight) {
-            topWeight = l.weight;
-            topName = pde.exercises?.name ?? "";
-          }
+        const done = (logsByPde.get(pde.id) ?? []).filter(
+          (l) => l.weight != null && l.reps != null,
+        );
+        if (done.length === 0) continue;
+        let exVol = 0;
+        let exTop = 0;
+        for (const l of done) {
+          exVol += l.weight! * l.reps!;
+          if (l.weight! > exTop) exTop = l.weight!;
         }
+        volume += exVol;
+        if (exTop > topWeight) {
+          topWeight = exTop;
+          topName = pde.exercises?.name ?? "";
+        }
+        exercises.push({
+          name: pde.exercises?.name ?? "?",
+          sets: done.map((l) => ({ weight: l.weight!, reps: l.reps! })),
+          volume: exVol,
+          top: exTop,
+        });
       }
+
       return {
         id: d.id,
         date: d.date,
         category: d.category,
         partyName: d.party_id ? (d.parties?.name ?? "Party") : null,
         volume,
-        exercisesDone: exercisesDone.size,
+        exercisesDone: exercises.length,
         top: topWeight ? `${topName} ${topWeight}` : null,
+        exercises,
       };
     })
     .filter((d) => d.exercisesDone > 0)

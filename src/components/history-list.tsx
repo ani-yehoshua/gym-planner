@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { addDays, dayOfMonth, dowShort, formatRangeNumeric } from "@/lib/date";
+import { addDays, dayOfMonth, dowShort, formatLong, formatRangeNumeric } from "@/lib/date";
 import { CATEGORY_LABEL, CATEGORY_STYLE } from "@/lib/labels";
 import type { Enums } from "@/lib/supabase/database.types";
 
@@ -14,6 +14,12 @@ export type HistoryDay = {
   volume: number;
   exercisesDone: number;
   top: string | null;
+  exercises: {
+    name: string;
+    sets: { weight: number; reps: number }[];
+    volume: number;
+    top: number;
+  }[];
 };
 
 export function HistoryList({
@@ -22,14 +28,13 @@ export function HistoryList({
   weeks: { start: string; days: HistoryDay[] }[];
 }) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
   const byId = new Map(weeks.flatMap((w) => w.days).map((d) => [d.id, d]));
   const chosen = selected.map((id) => byId.get(id)!).filter(Boolean);
 
   function toggle(id: string) {
     setSelected((prev) =>
-      prev.includes(id)
-        ? prev.filter((x) => x !== id)
-        : [...prev, id].slice(-4),
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id].slice(-4),
     );
   }
 
@@ -58,7 +63,7 @@ export function HistoryList({
                     checked={selected.includes(d.id)}
                     onChange={() => toggle(d.id)}
                     className="h-4 w-4 shrink-0 accent-[currentColor]"
-                    aria-label="Compare this day"
+                    aria-label="Select to compare"
                   />
                   <Link
                     href={`/day/${d.id}`}
@@ -95,44 +100,84 @@ export function HistoryList({
         ))}
       </div>
 
-      {chosen.length >= 2 && (
-        <div className="mt-3 overflow-x-auto rounded-xl border border-border p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-medium">Comparing {chosen.length} days</span>
-            <button
-              onClick={() => setSelected([])}
-              className="text-xs text-text-muted hover:text-text"
-            >
-              Clear
-            </button>
-          </div>
-          <table className="w-full text-left text-sm">
-            <tbody>
-              <tr className="text-xs uppercase text-text-muted">
-                <th className="py-1 pr-3 font-medium">Day</th>
-                {chosen.map((d) => (
-                  <th key={d.id} className="px-2 py-1 font-medium">
-                    {d.date.slice(5)}
-                  </th>
-                ))}
-              </tr>
-              {[
-                ["Category", (d: HistoryDay) => (d.category ? CATEGORY_LABEL[d.category] : "—")],
-                ["Exercises", (d: HistoryDay) => String(d.exercisesDone)],
-                ["Volume", (d: HistoryDay) => String(d.volume)],
-                ["Top", (d: HistoryDay) => d.top ?? "—"],
-              ].map(([label, get]) => (
-                <tr key={label as string} className="border-t border-border">
-                  <td className="py-1.5 pr-3 text-text-muted">{label as string}</td>
-                  {chosen.map((d) => (
-                    <td key={d.id} className="px-2 py-1.5">
-                      {(get as (d: HistoryDay) => string)(d)}
-                    </td>
-                  ))}
-                </tr>
+      {selected.length > 0 && (
+        <div className="mt-2 flex items-center gap-3 text-xs">
+          <button
+            onClick={() => setOpen(true)}
+            disabled={selected.length < 2}
+            className="rounded-lg bg-primary px-3 py-1.5 font-medium text-primary-fg disabled:opacity-40"
+          >
+            Compare {selected.length}
+          </button>
+          <button
+            onClick={() => setSelected([])}
+            className="text-text-muted hover:text-text"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
+      {open && chosen.length >= 2 && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 sm:items-center"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-2xl border border-border bg-bg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <span className="text-sm font-semibold">
+                Comparing {chosen.length} days
+              </span>
+              <button
+                onClick={() => setOpen(false)}
+                className="text-sm text-text-muted hover:text-text"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="flex gap-3 overflow-x-auto p-4">
+              {chosen.map((d) => (
+                <div key={d.id} className="w-56 shrink-0">
+                  <div className="mb-1 text-sm font-semibold">
+                    {formatLong(d.date)}
+                  </div>
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-text-muted">
+                    {d.category && (
+                      <span
+                        className={`rounded-md border px-1.5 py-0.5 ${CATEGORY_STYLE[d.category]}`}
+                      >
+                        {CATEGORY_LABEL[d.category]}
+                      </span>
+                    )}
+                    <span>vol {d.volume}</span>
+                    {d.partyName && <span>· {d.partyName}</span>}
+                  </div>
+                  <ul className="flex flex-col gap-2">
+                    {d.exercises.map((ex, i) => (
+                      <li
+                        key={i}
+                        className="rounded-lg border border-border p-2 text-xs"
+                      >
+                        <div className="font-medium">{ex.name}</div>
+                        <div className="mt-0.5 text-text-muted">
+                          {ex.sets
+                            .map((s) => `${s.weight}×${s.reps}`)
+                            .join(", ")}
+                        </div>
+                        <div className="mt-0.5 text-text-muted">
+                          top {ex.top} · vol {ex.volume}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
       )}
     </>

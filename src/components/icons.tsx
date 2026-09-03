@@ -19,7 +19,7 @@ export const CalendarIcon = ({ className }: P) => (
 
 export const DumbbellIcon = ({ className }: P) => (
   <svg {...svg(className)}>
-    <path d="M6.5 6.5 17.5 17.5M4 8l-1 1a1.5 1.5 0 0 0 0 2l1 1M20 8l1 1a1.5 1.5 0 0 1 0 2l-1 1M8 4 6 6M18 20l-2-2M6 6 4 8M20 16l-2 2" />
+    <path d="M3 9v6M6.5 7.5v9M17.5 7.5v9M21 9v6M6.5 12h11" />
   </svg>
 );
 
