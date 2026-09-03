@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong } from "@/lib/date";
 import { isCompound, recommendedReps, type Goal } from "@/lib/targets";
-import { DeleteDayButton } from "@/components/delete-day-button";
+import { DeleteDayButton } from "@/components/danger-button";
 import { ChevronLeftIcon } from "@/components/icons";
 import DayEditor from "./DayEditor";
 

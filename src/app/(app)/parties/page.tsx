@@ -18,7 +18,7 @@ export default async function PartiesPage({
 
     const { data: memberships } = await supabase
         .from("party_members")
-        .select("role, parties(id, name, invite_type)")
+        .select("role, parties(id, name)")
         .eq("user_id", user.id);
 
     return (
@@ -36,14 +36,9 @@ export default async function PartiesPage({
                         placeholder='Party name'
                         className='rounded-lg border border-border bg-surface px-3 py-2 text-sm'
                     />
-                    <select
-                        name='invite_type'
-                        className='rounded-lg border border-border bg-surface px-3 py-2 text-sm'>
-                        <option value='invite_only'>Invite only</option>
-                        <option value='open'>
-                            Open (anyone with the code)
-                        </option>
-                    </select>
+                    <p className='text-xs text-text-muted'>
+                        You&apos;ll get a code to share so others can join.
+                    </p>
                     <SubmitButton
                         pendingText='Creating…'
                         className='rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50'>
@@ -87,10 +82,7 @@ export default async function PartiesPage({
                                     {m.parties.name}
                                 </span>
                                 <span className='text-xs text-text-muted'>
-                                    {m.role === "owner" ? "Owner" : "Member"} ·{" "}
-                                    {m.parties.invite_type === "open"
-                                        ? "Open"
-                                        : "Invite only"}
+                                    {m.role === "owner" ? "Owner" : "Member"}
                                 </span>
                             </Link>
                         </li>

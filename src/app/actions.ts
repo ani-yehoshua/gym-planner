@@ -751,11 +751,10 @@ function randomCode() {
 export async function createParty(formData: FormData) {
   const { supabase, user } = await requireUser();
   const name = String(formData.get("name") || "").trim() || "My Party";
-  const inviteType = (String(formData.get("invite_type")) as Enums<"party_invite_type">) || "invite_only";
 
   const { data: party } = await supabase
     .from("parties")
-    .insert({ name, invite_type: inviteType, created_by: user.id })
+    .insert({ name, created_by: user.id })
     .select("id")
     .single();
   if (!party) redirect("/parties");
@@ -792,6 +791,16 @@ export async function createPartyDay(formData: FormData) {
     .single();
   if (created) redirect(`/day/${created.id}`);
   redirect(`/parties/${partyId}`);
+}
+
+export async function deleteParty(partyId: string) {
+  const { supabase } = await requireUser();
+  // RLS party_delete = is_party_owner; cascades to members/invites/party days
+  check(
+    await supabase.from("parties").delete().eq("id", partyId),
+    "delete party",
+  );
+  redirect("/parties");
 }
 
 export async function leaveParty(partyId: string) {

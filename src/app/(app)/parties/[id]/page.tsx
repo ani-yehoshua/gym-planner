@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createPartyDay, leaveParty, renameParty } from "@/app/actions";
+import { createPartyDay, renameParty } from "@/app/actions";
 import { PartyInvite } from "@/components/party-invite";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SubmitButton } from "@/components/submit-button";
+import { DeletePartyButton, LeavePartyButton } from "@/components/danger-button";
 import { ChevronLeftIcon } from "@/components/icons";
 import {
     CATEGORY_LABEL,
@@ -41,7 +42,7 @@ export default async function PartyPage({
 
     const { data: party } = await supabase
         .from("parties")
-        .select("id, name, invite_type, created_by")
+        .select("id, name, created_by")
         .eq("id", id)
         .maybeSingle();
     if (!party) notFound();
@@ -70,8 +71,6 @@ export default async function PartyPage({
         m => m.user_id === user.id && m.role === "owner",
     );
 
-    const leave = leaveParty.bind(null, id);
-
     return (
         <div className='flex flex-col gap-6'>
             <RealtimeRefresh
@@ -81,12 +80,19 @@ export default async function PartyPage({
                     { table: "planned_days", filter: `party_id=eq.${id}` },
                 ]}
             />
-            <Link
-                href='/parties'
-                className='flex items-center gap-1 text-sm text-text-muted hover:text-text'>
-                <ChevronLeftIcon />
-                Parties
-            </Link>
+            <div className='flex items-center justify-between'>
+                <Link
+                    href='/parties'
+                    className='flex items-center gap-1 text-sm text-text-muted hover:text-text'>
+                    <ChevronLeftIcon />
+                    Parties
+                </Link>
+                {isOwner ? (
+                    <DeletePartyButton partyId={id} />
+                ) : (
+                    <LeavePartyButton partyId={id} />
+                )}
+            </div>
 
             <div>
                 {isOwner ? (
@@ -117,11 +123,6 @@ export default async function PartyPage({
                 ) : (
                     <h1 className='text-lg font-semibold'>{party.name}</h1>
                 )}
-                <p className='mt-0.5 text-sm text-text-muted'>
-                    {party.invite_type === "open"
-                        ? "Open party"
-                        : "Invite only"}
-                </p>
             </div>
 
             {invites?.[0] && (
@@ -238,13 +239,6 @@ export default async function PartyPage({
                 </div>
             )}
 
-            {!isOwner && (
-                <form action={leave}>
-                    <button className='text-xs text-text-muted hover:text-rose-400'>
-                        Leave party
-                    </button>
-                </form>
-            )}
         </div>
     );
 }
