@@ -23,7 +23,11 @@ import { isCompound, suggestedSets, type Goal } from "@/lib/targets";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
 import { PlateCalculator } from "@/components/plate-calculator";
 import { createClient } from "@/lib/supabase/client";
-import { getActiveSession, setActiveSession } from "@/lib/active-session";
+import {
+    clearActiveSession,
+    getActiveSession,
+    setActiveSession,
+} from "@/lib/active-session";
 import type { Enums } from "@/lib/supabase/database.types";
 
 type Cat = Enums<"muscle_category">;
@@ -123,9 +127,27 @@ export default function DayEditor({
     const [showAdd, setShowAdd] = useState(day.exercises.length === 0);
 
     // ---- "return to session": remember this day + last exercise in view ------
+    // Only a live, unfinished workout counts as a "session" to resume: today's
+    // day, with at least one exercise, that isn't fully logged yet.
     const itemRefs = useRef(new Map<string, HTMLLIElement>());
 
+    function exerciseDone(ex: DayEx) {
+        for (let s = 1; s <= ex.targetSets; s++) {
+            const c = values.get(`${ex.id}:${s}`);
+            if (!c || c.weight === "" || c.reps === "") return false;
+        }
+        return true;
+    }
+    const dayComplete =
+        day.exercises.length > 0 && day.exercises.every(exerciseDone);
+    const sessionEligible = day.exercises.length > 0 && !dayComplete;
+
     useEffect(() => {
+        if (dayComplete) clearActiveSession(day.id);
+    }, [dayComplete, day.id]);
+
+    useEffect(() => {
+        if (!sessionEligible) return;
         const s = getActiveSession();
         const startExerciseId = s?.dayId === day.id ? s.exerciseId : null;
         setActiveSession(day.id, day.date, day.category, startExerciseId);
@@ -137,9 +159,10 @@ export default function DayEditor({
                 );
             }
         }
-    }, [day.id, day.date, day.category]);
+    }, [day.id, day.date, day.category, sessionEligible]);
 
     useEffect(() => {
+        if (!sessionEligible) return;
         if (typeof IntersectionObserver === "undefined") return;
         const observer = new IntersectionObserver(
             entries => {
@@ -157,7 +180,7 @@ export default function DayEditor({
         );
         for (const el of itemRefs.current.values()) observer.observe(el);
         return () => observer.disconnect();
-    }, [day.id, day.date, day.category, day.exercises]);
+    }, [day.id, day.date, day.category, day.exercises, sessionEligible]);
 
     // ---- realtime: refresh when a party-mate changes this day ----------------
     useEffect(() => {
