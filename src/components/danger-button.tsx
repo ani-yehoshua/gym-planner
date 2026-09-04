@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { deleteDay, deleteParty, leaveParty } from "@/app/actions";
 import { ExitIcon, TrashIcon } from "@/components/icons";
+import { clearActiveSession } from "@/lib/active-session";
 
 const cls =
   "flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-500/20 disabled:opacity-50 dark:text-rose-300";
@@ -14,6 +15,7 @@ export function DeleteDayButton({ dayId }: { dayId: string }) {
       disabled={pending}
       onClick={() => {
         if (confirm("Delete this day and everything logged on it?")) {
+          clearActiveSession(dayId);
           start(() => deleteDay(dayId));
         }
       }}

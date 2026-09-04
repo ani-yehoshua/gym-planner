@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
     addExerciseToDay,
@@ -22,6 +22,7 @@ import { isCompound, suggestedSets, type Goal } from "@/lib/targets";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
 import { PlateCalculator } from "@/components/plate-calculator";
 import { createClient } from "@/lib/supabase/client";
+import { getActiveSession, setActiveSession } from "@/lib/active-session";
 import type { Enums } from "@/lib/supabase/database.types";
 
 type Cat = Enums<"muscle_category">;
@@ -118,6 +119,42 @@ export default function DayEditor({
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [query, setQuery] = useState("");
     const [showAdd, setShowAdd] = useState(day.exercises.length === 0);
+
+    // ---- "return to session": remember this day + last exercise in view ------
+    const itemRefs = useRef(new Map<string, HTMLLIElement>());
+
+    useEffect(() => {
+        const s = getActiveSession();
+        const startExerciseId = s?.dayId === day.id ? s.exerciseId : null;
+        setActiveSession(day.id, startExerciseId);
+        if (startExerciseId) {
+            const el = itemRefs.current.get(startExerciseId);
+            if (el) {
+                requestAnimationFrame(() =>
+                    el.scrollIntoView({ block: "start" }),
+                );
+            }
+        }
+    }, [day.id]);
+
+    useEffect(() => {
+        if (typeof IntersectionObserver === "undefined") return;
+        const observer = new IntersectionObserver(
+            entries => {
+                const visible = entries
+                    .filter(e => e.isIntersecting)
+                    .sort(
+                        (a, b) =>
+                            a.boundingClientRect.top - b.boundingClientRect.top,
+                    );
+                const id = visible[0]?.target.getAttribute("data-ex-id");
+                if (id) setActiveSession(day.id, id);
+            },
+            { rootMargin: "-15% 0px -70% 0px", threshold: 0 },
+        );
+        for (const el of itemRefs.current.values()) observer.observe(el);
+        return () => observer.disconnect();
+    }, [day.id, day.exercises]);
 
     // ---- realtime: refresh when a party-mate changes this day ----------------
     useEffect(() => {
@@ -283,12 +320,12 @@ export default function DayEditor({
     const matches = catalog.filter(c =>
         c.name.toLowerCase().includes(query.toLowerCase()),
     );
-    const accepted = matches
-        .filter(c => dayAcceptsExercise(day.category, c.category))
-        .slice(0, 40);
-    const offCategory = matches
-        .filter(c => !dayAcceptsExercise(day.category, c.category))
-        .slice(0, 12);
+    const accepted = matches.filter(c =>
+        dayAcceptsExercise(day.category, c.category),
+    );
+    const offCategory = matches.filter(
+        c => !dayAcceptsExercise(day.category, c.category),
+    );
 
     const inputCls =
         "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm outline-none focus:border-text-muted";
@@ -385,6 +422,11 @@ export default function DayEditor({
                     return (
                         <li
                             key={ex.id}
+                            ref={el => {
+                                if (el) itemRefs.current.set(ex.id, el);
+                                else itemRefs.current.delete(ex.id);
+                            }}
+                            data-ex-id={ex.id}
                             className='rounded-xl border border-border p-3'>
                             <div className='flex items-start justify-between gap-2'>
                                 <button
