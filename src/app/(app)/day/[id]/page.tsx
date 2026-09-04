@@ -28,7 +28,7 @@ export default async function DayPage({
   const { data: day } = await supabase
     .from("planned_days")
     .select(
-      "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url))",
+      "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -38,67 +38,79 @@ export default async function DayPage({
   const pdeRows = day.planned_day_exercises;
   type PdeRow = (typeof pdeRows)[number];
   const pdeIds = pdeRows.map((p) => p.id);
-  const { data: logs } = pdeIds.length
-    ? await supabase
-        .from("set_logs")
-        .select("planned_day_exercise_id, user_id, set_no, weight, reps, volume")
-        .in("planned_day_exercise_id", pdeIds)
-    : { data: [] };
+  const exIds = [...new Set(pdeRows.map((p) => p.exercises.id))];
 
-  const { data: notes } = pdeIds.length
-    ? await supabase
-        .from("day_exercise_notes")
-        .select("planned_day_exercise_id, user_id, note")
-        .in("planned_day_exercise_id", pdeIds)
-    : { data: [] };
+  const [
+    { data: logs },
+    { data: notes },
+    { data: myTargets },
+    { data: myPrefs },
+    { data: m },
+    { data: constants },
+    { data: catalog },
+  ] = await Promise.all([
+    pdeIds.length
+      ? supabase
+          .from("set_logs")
+          .select("planned_day_exercise_id, user_id, set_no, weight, reps, volume")
+          .in("planned_day_exercise_id", pdeIds)
+      : Promise.resolve({ data: [] }),
+    pdeIds.length
+      ? supabase
+          .from("day_exercise_notes")
+          .select("planned_day_exercise_id, user_id, note")
+          .in("planned_day_exercise_id", pdeIds)
+      : Promise.resolve({ data: [] }),
+    // my own per-exercise targets for this day + my saved catalog defaults
+    pdeIds.length
+      ? supabase
+          .from("day_exercise_user_targets")
+          .select("planned_day_exercise_id, target_sets, target_rep_min, target_rep_max, target_weight")
+          .eq("user_id", user.id)
+          .in("planned_day_exercise_id", pdeIds)
+      : Promise.resolve({ data: [] }),
+    exIds.length
+      ? supabase
+          .from("user_exercise_prefs")
+          .select("exercise_id, default_sets, default_rep_min, default_rep_max, default_weight")
+          .eq("user_id", user.id)
+          .in("exercise_id", exIds)
+      : Promise.resolve({ data: [] }),
+    day.party_id
+      ? supabase
+          .from("party_members")
+          .select("user_id, role, joined_at, profiles(display_name)")
+          .eq("party_id", day.party_id)
+          .order("joined_at")
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("user_constants")
+      .select("primary_goal, experience")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("exercises")
+      .select("id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based")
+      .is("archived_at", null)
+      .order("name"),
+  ]);
 
-  // my own per-exercise targets for this day + my saved catalog defaults
-  const { data: myTargets } = pdeIds.length
-    ? await supabase
-        .from("day_exercise_user_targets")
-        .select("planned_day_exercise_id, target_sets, target_rep_min, target_rep_max, target_weight")
-        .eq("user_id", user.id)
-        .in("planned_day_exercise_id", pdeIds)
-    : { data: [] };
   const targetByPde = new Map(
     (myTargets ?? []).map((t) => [t.planned_day_exercise_id, t]),
   );
-
-  const exIds = [...new Set(pdeRows.map((p) => p.exercises.id))];
-  const { data: myPrefs } = exIds.length
-    ? await supabase
-        .from("user_exercise_prefs")
-        .select("exercise_id, default_sets, default_rep_min, default_rep_max, default_weight")
-        .eq("user_id", user.id)
-        .in("exercise_id", exIds)
-    : { data: [] };
   const prefByExercise = new Map((myPrefs ?? []).map((p) => [p.exercise_id, p]));
 
-  let members: { user_id: string; display_name: string | null; color: string }[] = [];
-  let isPartyOwner = false;
-  if (day.party_id) {
-    const { data: m } = await supabase
-      .from("party_members")
-      .select("user_id, role, joined_at, profiles(display_name)")
-      .eq("party_id", day.party_id)
-      .order("joined_at");
-    members = (m ?? []).map((x, i) => ({
-      user_id: x.user_id,
-      display_name: x.profiles?.display_name ?? null,
-      color: MEMBER_COLORS[i % MEMBER_COLORS.length],
-    }));
-    isPartyOwner = (m ?? []).some(
-      (x) => x.user_id === user.id && x.role === "owner",
-    );
-  }
+  const members = (m ?? []).map((x, i) => ({
+    user_id: x.user_id,
+    display_name: x.profiles?.display_name ?? null,
+    color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+  }));
+  const isPartyOwner = (m ?? []).some(
+    (x) => x.user_id === user.id && x.role === "owner",
+  );
   // personal days: you own everything; party days: only the owner manages all
   const canManageAll = !day.party_id || isPartyOwner;
 
-  const { data: constants } = await supabase
-    .from("user_constants")
-    .select("primary_goal, experience")
-    .eq("user_id", user.id)
-    .maybeSingle();
   const goal = (constants?.primary_goal as Goal) ?? null;
 
   /** effective target for the current user. Sets/reps: my day edit -> my saved
@@ -118,12 +130,6 @@ export default async function DayPage({
       weight: t?.target_weight ?? pref?.default_weight ?? null,
     };
   }
-
-  const { data: catalog } = await supabase
-    .from("exercises")
-    .select("id, name, category, primary_muscles, secondary_muscles, howto_text, media_url")
-    .is("archived_at", null)
-    .order("name");
 
   const backHref = day.party_id ? `/parties/${day.party_id}` : "/";
 
@@ -168,7 +174,7 @@ export default async function DayPage({
                 targetRepMax: e.repMax,
                 targetWeight: e.weight,
                 addedBy: p.added_by,
-                exercise: p.exercises,
+                exercise: { ...p.exercises, timeBased: p.exercises.time_based },
               };
             }),
         }}
@@ -177,7 +183,7 @@ export default async function DayPage({
         members={members}
         logs={logs ?? []}
         notes={notes ?? []}
-        catalog={catalog ?? []}
+        catalog={(catalog ?? []).map((c) => ({ ...c, timeBased: c.time_based }))}
         goal={goal}
         experience={constants?.experience ?? null}
       />

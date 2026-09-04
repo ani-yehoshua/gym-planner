@@ -144,6 +144,7 @@ export type Database = {
           name: string
           primary_muscles: string[]
           secondary_muscles: string[]
+          time_based: boolean
         }
         Insert: {
           archived_at?: string | null
@@ -160,6 +161,7 @@ export type Database = {
           name: string
           primary_muscles?: string[]
           secondary_muscles?: string[]
+          time_based?: boolean
         }
         Update: {
           archived_at?: string | null
@@ -176,6 +178,7 @@ export type Database = {
           name?: string
           primary_muscles?: string[]
           secondary_muscles?: string[]
+          time_based?: boolean
         }
         Relationships: [
           {

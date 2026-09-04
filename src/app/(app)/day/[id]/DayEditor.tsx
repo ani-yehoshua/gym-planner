@@ -33,6 +33,7 @@ type CatalogItem = {
     secondary_muscles: string[];
     howto_text: string | null;
     media_url: string | null;
+    timeBased: boolean;
 };
 type DayEx = {
     id: string;
@@ -519,7 +520,9 @@ export default function DayEditor({
                                 </div>
                                 <div className='flex items-center gap-1.5'>
                                     <span className='text-text-muted'>
-                                        Reps
+                                        {ex.exercise.timeBased
+                                            ? "Sec"
+                                            : "Reps"}
                                     </span>
                                     <input
                                         inputMode='numeric'
@@ -572,7 +575,11 @@ export default function DayEditor({
                                 <div className='grid grid-cols-[1.5rem_1fr_1fr] items-center gap-2 text-[11px] uppercase text-text-muted'>
                                     <span>Set</span>
                                     <span className='text-center'>Weight</span>
-                                    <span className='text-center'>Reps</span>
+                                    <span className='text-center'>
+                                        {ex.exercise.timeBased
+                                            ? "Sec"
+                                            : "Reps"}
+                                    </span>
                                 </div>
                                 {Array.from(
                                     { length: rows },

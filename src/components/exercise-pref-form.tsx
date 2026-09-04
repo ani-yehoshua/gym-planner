@@ -17,10 +17,12 @@ export function ExercisePrefForm({
   exerciseId,
   pref,
   fallback,
+  timeBased,
 }: {
   exerciseId: string;
   pref: ExercisePref | null;
   fallback: { sets: number | null; repMin: number | null; repMax: number | null };
+  timeBased?: boolean;
 }) {
   return (
     <form
@@ -54,7 +56,7 @@ export function ExercisePrefForm({
             placeholder={String(fallback.repMax ?? "")}
             className={box}
           />
-          <span className="text-text-muted">reps @</span>
+          <span className="text-text-muted">{timeBased ? "sec @" : "reps @"}</span>
           <input
             name="default_weight"
             inputMode="decimal"

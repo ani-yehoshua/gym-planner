@@ -32,39 +32,44 @@ export default async function ExercisesPage() {
 
     const admin = await isAdmin(supabase);
 
-    const { data: allExercises } = await supabase
-        .from("exercises")
-        .select(
-            "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, default_sets, default_rep_min, default_rep_max, created_by, archived_at",
-        )
-        .order("category")
-        .order("name");
+    const [
+        { data: allExercises },
+        { data: prefRows },
+        { data: constants },
+        { data: requests },
+    ] = await Promise.all([
+        supabase
+            .from("exercises")
+            .select(
+                "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, default_sets, default_rep_min, default_rep_max, time_based, created_by, archived_at",
+            )
+            .order("category")
+            .order("name"),
+        supabase
+            .from("user_exercise_prefs")
+            .select(
+                "exercise_id, default_sets, default_rep_min, default_rep_max, default_weight",
+            )
+            .eq("user_id", user.id),
+        supabase
+            .from("user_constants")
+            .select("primary_goal")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+        supabase
+            .from("exercise_requests")
+            .select("id, name, note, status, created_at")
+            .eq("status", "open")
+            .order("created_at", { ascending: false }),
+    ]);
 
     const exercises = (allExercises ?? []).filter(e => !e.archived_at);
     const archived = admin
         ? (allExercises ?? []).filter(e => e.archived_at)
         : [];
 
-    const { data: prefRows } = await supabase
-        .from("user_exercise_prefs")
-        .select(
-            "exercise_id, default_sets, default_rep_min, default_rep_max, default_weight",
-        )
-        .eq("user_id", user.id);
     const prefs = new Map((prefRows ?? []).map(p => [p.exercise_id, p]));
-
-    const { data: constants } = await supabase
-        .from("user_constants")
-        .select("primary_goal")
-        .eq("user_id", user.id)
-        .maybeSingle();
     const goal = (constants?.primary_goal as Goal) ?? null;
-
-    const { data: requests } = await supabase
-        .from("exercise_requests")
-        .select("id, name, note, status, created_at")
-        .eq("status", "open")
-        .order("created_at", { ascending: false });
 
     type Ex = (typeof exercises)[number];
     const grouped = new Map<Enums<"muscle_category">, Ex[]>();
@@ -236,7 +241,10 @@ export default async function ExercisesPage() {
                 </details>
             )}
 
-            {CATEGORY_ORDER.filter(c => grouped.has(c)).map(c => (
+            {[...CATEGORY_ORDER]
+                .filter(c => grouped.has(c))
+                .sort((a, b) => CATEGORY_LABEL[a].localeCompare(CATEGORY_LABEL[b]))
+                .map(c => (
                 <details
                     key={c}
                     className='rounded-xl border border-border'>
@@ -277,6 +285,7 @@ export default async function ExercisesPage() {
                                                         repMin: rMin,
                                                         repMax: rMax,
                                                     }}
+                                                    timeBased={e.time_based}
                                                 />
                                             );
                                         })()}

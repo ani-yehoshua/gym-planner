@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { createExercise, updateExercise } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import {
@@ -23,6 +26,7 @@ export type ExerciseFormValues = {
   default_sets: number | null;
   default_rep_min: number | null;
   default_rep_max: number | null;
+  time_based: boolean;
 };
 
 const toInput = (ms: string[]) => ms.map(muscleLabel).join(", ");
@@ -41,6 +45,7 @@ export function ExerciseForm({
 }) {
   const editing = !!exercise;
   const action = editing ? updateExercise : createExercise;
+  const [timeBased, setTimeBased] = useState(exercise?.time_based ?? false);
 
   return (
     <form action={action} className="flex flex-col gap-3">
@@ -105,8 +110,20 @@ export function ExerciseForm({
         />
       </label>
 
+      <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm has-[:checked]:border-text has-[:checked]:bg-surface-2">
+        <input
+          type="checkbox"
+          name="time_based"
+          value="true"
+          checked={timeBased}
+          onChange={(e) => setTimeBased(e.target.checked)}
+        />
+        Time-based (holds / cardio — sets of a duration, not reps)
+      </label>
+
       <div className="flex flex-col gap-1 text-xs text-text-muted">
-        Default sets &amp; rep range (used everywhere this exercise is added)
+        Default sets &amp; {timeBased ? "time range" : "rep range"} (used
+        everywhere this exercise is added)
         <div className="flex items-center gap-1.5 text-sm">
           <input
             name="default_sets"
@@ -120,7 +137,7 @@ export function ExerciseForm({
             name="default_rep_min"
             inputMode="numeric"
             defaultValue={exercise?.default_rep_min ?? ""}
-            placeholder="8"
+            placeholder={timeBased ? "20" : "8"}
             className={smallInp}
           />
           <span>–</span>
@@ -128,10 +145,10 @@ export function ExerciseForm({
             name="default_rep_max"
             inputMode="numeric"
             defaultValue={exercise?.default_rep_max ?? ""}
-            placeholder="12"
+            placeholder={timeBased ? "45" : "12"}
             className={smallInp}
           />
-          <span>reps</span>
+          <span>{timeBased ? "sec" : "reps"}</span>
         </div>
       </div>
 

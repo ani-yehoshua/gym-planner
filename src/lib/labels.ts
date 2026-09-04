@@ -57,28 +57,28 @@ export const CATEGORY_STYLE: Record<Enums<"muscle_category">, string> = {
   rest: "bg-surface-2 text-text-muted border-border",
 };
 
-// Which exercise categories belong on a day of a given category.
-// Upper/Lower/Full-Body days draw from the push/pull/legs pools.
-const ALL_CATS: Enums<"muscle_category">[] = [
-  "push", "pull", "legs", "upper", "lower", "full_body",
-  "chest", "back", "shoulders", "arms", "core", "cardio", "custom",
+// Every exercise now carries one of these 7 body-part categories — push/pull/
+// upper/lower/full_body/custom/rest are day-only types with no exercises of
+// their own, so they draw from this pool instead.
+const BODY_PART_CATS: Enums<"muscle_category">[] = [
+  "chest", "back", "shoulders", "arms", "legs", "core", "cardio",
 ];
 
 export const DAY_ACCEPTS: Record<Enums<"muscle_category">, Enums<"muscle_category">[]> = {
-  push: ["push", "chest", "shoulders"],
-  pull: ["pull", "back"],
-  legs: ["legs", "lower"],
-  upper: ["push", "pull", "upper", "chest", "back", "shoulders", "arms", "core"],
-  lower: ["legs", "lower", "core"],
-  full_body: ALL_CATS,
-  chest: ["chest", "push"],
-  back: ["back", "pull"],
-  shoulders: ["shoulders", "push"],
-  arms: ["arms", "push", "pull"],
+  push: ["chest", "shoulders", "arms"],
+  pull: ["back", "arms"],
+  legs: ["legs"],
+  upper: ["chest", "back", "shoulders", "arms", "core"],
+  lower: ["legs"],
+  full_body: BODY_PART_CATS,
+  chest: ["chest"],
+  back: ["back"],
+  shoulders: ["shoulders"],
+  arms: ["arms"],
   core: ["core"],
   cardio: ["cardio"],
-  custom: ALL_CATS,
-  rest: ALL_CATS,
+  custom: BODY_PART_CATS,
+  rest: BODY_PART_CATS,
 };
 
 export function dayAcceptsExercise(

@@ -40,32 +40,32 @@ export default async function PartyPage({
 
     const todayISO = await getUserToday();
 
-    const { data: party } = await supabase
-        .from("parties")
-        .select("id, name, created_by")
-        .eq("id", id)
-        .maybeSingle();
+    const [{ data: party }, { data: members }, { data: invites }, { data: days }] =
+        await Promise.all([
+            supabase
+                .from("parties")
+                .select("id, name, created_by")
+                .eq("id", id)
+                .maybeSingle(),
+            supabase
+                .from("party_members")
+                .select("user_id, role, joined_at, profiles(display_name)")
+                .eq("party_id", id)
+                .order("joined_at"),
+            supabase
+                .from("party_invites")
+                .select("code")
+                .eq("party_id", id)
+                .limit(1),
+            supabase
+                .from("planned_days")
+                .select("id, date, category, planned_day_exercises(id)")
+                .eq("party_id", id)
+                .gte("date", todayISO)
+                .order("date")
+                .limit(10),
+        ]);
     if (!party) notFound();
-
-    const { data: members } = await supabase
-        .from("party_members")
-        .select("user_id, role, joined_at, profiles(display_name)")
-        .eq("party_id", id)
-        .order("joined_at");
-
-    const { data: invites } = await supabase
-        .from("party_invites")
-        .select("code")
-        .eq("party_id", id)
-        .limit(1);
-
-    const { data: days } = await supabase
-        .from("planned_days")
-        .select("id, date, category, planned_day_exercises(id)")
-        .eq("party_id", id)
-        .gte("date", todayISO)
-        .order("date")
-        .limit(10);
 
     const isOwner = members?.some(
         m => m.user_id === user.id && m.role === "owner",

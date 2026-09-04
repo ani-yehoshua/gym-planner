@@ -14,23 +14,33 @@ export default async function ProgressPage() {
 
   const todayISO = await getUserToday();
 
-  const { data: bw } = await supabase
-    .from("bodyweight_logs")
-    .select("date, weight")
-    .eq("user_id", user.id)
-    .order("date", { ascending: false })
-    .limit(14);
-
-  const { data: sets } = await supabase
-    .from("set_logs")
-    .select(
-      "weight, reps, logged_at, planned_day_exercises(exercises(name))",
-    )
-    .eq("user_id", user.id)
-    .not("weight", "is", null)
-    .not("reps", "is", null)
-    .order("logged_at", { ascending: false })
-    .limit(200);
+  const [{ data: bw }, { data: sets }, { data: pastDays }] = await Promise.all([
+    supabase
+      .from("bodyweight_logs")
+      .select("date, weight")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(14),
+    supabase
+      .from("set_logs")
+      .select(
+        "weight, reps, logged_at, planned_day_exercises(exercises(name))",
+      )
+      .eq("user_id", user.id)
+      .not("weight", "is", null)
+      .not("reps", "is", null)
+      .order("logged_at", { ascending: false })
+      .limit(200),
+    // ---- history: past days where you logged something --------------------
+    supabase
+      .from("planned_days")
+      .select(
+        "id, date, category, party_id, parties(name), planned_day_exercises(id, sort, exercises(name))",
+      )
+      .lte("date", todayISO)
+      .order("date", { ascending: false })
+      .limit(60),
+  ]);
 
   // best weight per exercise
   const best = new Map<string, { weight: number; reps: number }>();
@@ -44,16 +54,6 @@ export default async function ProgressPage() {
 
   const bwMax = Math.max(1, ...(bw ?? []).map((b) => b.weight));
   const bwMin = Math.min(bwMax, ...(bw ?? []).map((b) => b.weight));
-
-  // ---- history: past days where you logged something ----------------------
-  const { data: pastDays } = await supabase
-    .from("planned_days")
-    .select(
-      "id, date, category, party_id, parties(name), planned_day_exercises(id, sort, exercises(name))",
-    )
-    .lte("date", todayISO)
-    .order("date", { ascending: false })
-    .limit(60);
 
   const pastPdeIds = (pastDays ?? []).flatMap((d) =>
     d.planned_day_exercises.map((p) => p.id),

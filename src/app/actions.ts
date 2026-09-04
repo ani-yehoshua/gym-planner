@@ -323,7 +323,7 @@ function parseMuscles(raw: string): string[] {
 function exerciseFieldsFromForm(formData: FormData) {
   const numOrNull = (k: string) => {
     const v = formData.get(k);
-    return v === null || v === "" ? null : Math.max(1, Math.min(20, Number(v)));
+    return v === null || v === "" ? null : Math.max(1, Math.min(999, Number(v)));
   };
   return {
     name: String(formData.get("name") || "").trim(),
@@ -335,6 +335,7 @@ function exerciseFieldsFromForm(formData: FormData) {
     default_sets: numOrNull("default_sets"),
     default_rep_min: numOrNull("default_rep_min"),
     default_rep_max: numOrNull("default_rep_max"),
+    time_based: formData.get("time_based") === "true",
   };
 }
 
@@ -580,7 +581,7 @@ export async function setExercisePref(formData: FormData) {
   const exerciseId = String(formData.get("exercise_id"));
   const n = (k: string) => {
     const v = formData.get(k);
-    return v === null || v === "" ? null : Math.max(1, Math.min(20, Number(v)));
+    return v === null || v === "" ? null : Math.max(1, Math.min(999, Number(v)));
   };
   const sets = n("default_sets");
   const repMin = n("default_rep_min");
@@ -941,7 +942,7 @@ export async function updateSplitExercise(formData: FormData) {
   const id = String(formData.get("tde_id"));
   const n = (k: string) => {
     const v = formData.get(k);
-    return v === null || v === "" ? null : Math.max(1, Math.min(20, Number(v)));
+    return v === null || v === "" ? null : Math.max(1, Math.min(999, Number(v)));
   };
   check(
     await supabase
