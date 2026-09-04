@@ -88,6 +88,7 @@ export default function DayEditor({
 }: {
     day: {
         id: string;
+        date: string;
         category: Cat | null;
         partyId: string | null;
         exercises: DayEx[];
@@ -127,7 +128,7 @@ export default function DayEditor({
     useEffect(() => {
         const s = getActiveSession();
         const startExerciseId = s?.dayId === day.id ? s.exerciseId : null;
-        setActiveSession(day.id, startExerciseId);
+        setActiveSession(day.id, day.date, day.category, startExerciseId);
         if (startExerciseId) {
             const el = itemRefs.current.get(startExerciseId);
             if (el) {
@@ -136,7 +137,7 @@ export default function DayEditor({
                 );
             }
         }
-    }, [day.id]);
+    }, [day.id, day.date, day.category]);
 
     useEffect(() => {
         if (typeof IntersectionObserver === "undefined") return;
@@ -149,13 +150,14 @@ export default function DayEditor({
                             a.boundingClientRect.top - b.boundingClientRect.top,
                     );
                 const id = visible[0]?.target.getAttribute("data-ex-id");
-                if (id) setActiveSession(day.id, id);
+                if (id)
+                    setActiveSession(day.id, day.date, day.category, id);
             },
             { rootMargin: "-15% 0px -70% 0px", threshold: 0 },
         );
         for (const el of itemRefs.current.values()) observer.observe(el);
         return () => observer.disconnect();
-    }, [day.id, day.exercises]);
+    }, [day.id, day.date, day.category, day.exercises]);
 
     // ---- realtime: refresh when a party-mate changes this day ----------------
     useEffect(() => {

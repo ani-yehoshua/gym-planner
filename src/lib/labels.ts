@@ -57,6 +57,25 @@ export const CATEGORY_STYLE: Record<Enums<"muscle_category">, string> = {
   rest: "bg-surface-2 text-text-muted border-border",
 };
 
+// solid dot colors matching CATEGORY_STYLE's color family — for small
+// indicators (nav badges) where the tinted/bordered chip look doesn't fit
+export const CATEGORY_DOT: Record<Enums<"muscle_category">, string> = {
+  push: "bg-rose-500",
+  pull: "bg-sky-500",
+  legs: "bg-amber-500",
+  upper: "bg-violet-500",
+  lower: "bg-emerald-500",
+  full_body: "bg-indigo-500",
+  chest: "bg-rose-500",
+  back: "bg-sky-500",
+  shoulders: "bg-cyan-500",
+  arms: "bg-fuchsia-500",
+  core: "bg-orange-500",
+  cardio: "bg-teal-500",
+  custom: "bg-text-muted",
+  rest: "bg-text-muted",
+};
+
 // Every exercise now carries one of these 7 body-part categories — push/pull/
 // upper/lower/full_body/custom/rest are day-only types with no exercises of
 // their own, so they draw from this pool instead.

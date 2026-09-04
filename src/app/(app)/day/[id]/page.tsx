@@ -161,6 +161,7 @@ export default async function DayPage({
       <DayEditor
         day={{
           id: day.id,
+          date: day.date,
           category: day.category,
           partyId: day.party_id,
           exercises: [...day.planned_day_exercises]

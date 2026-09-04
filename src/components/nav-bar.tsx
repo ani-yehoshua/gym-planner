@@ -12,6 +12,8 @@ import {
   UsersIcon,
 } from "@/components/icons";
 import { getActiveSession } from "@/lib/active-session";
+import { CATEGORY_DOT } from "@/lib/labels";
+import type { Enums } from "@/lib/supabase/database.types";
 
 const NAV = [
   { href: "/exercises", label: "Exercises", Icon: DumbbellIcon, match: (p: string) => p.startsWith("/exercises") },
@@ -22,12 +24,14 @@ const NAV = [
 
 export function NavBar() {
   const pathname = usePathname();
-  const [resumeDayId, setResumeDayId] = useState<string | null>(null);
+  const [resume, setResume] = useState<{ dayId: string; category: string | null } | null>(null);
 
   useEffect(() => {
     const check = () => {
       const s = getActiveSession();
-      setResumeDayId(s && !pathname.startsWith(`/day/${s.dayId}`) ? s.dayId : null);
+      const suppressed =
+        !s || pathname === "/" || pathname.startsWith(`/day/${s.dayId}`);
+      setResume(suppressed ? null : { dayId: s.dayId, category: s.category });
     };
     check();
     window.addEventListener("storage", check);
@@ -38,10 +42,14 @@ export function NavBar() {
     };
   }, [pathname]);
 
+  const dotClass = resume?.category
+    ? CATEGORY_DOT[resume.category as Enums<"muscle_category">]
+    : "bg-accent";
+
   const onCalendarTab = pathname === "/" || pathname.startsWith("/day");
-  const calendarTab = resumeDayId
+  const calendarTab = resume
     ? {
-        href: `/day/${resumeDayId}`,
+        href: `/day/${resume.dayId}`,
         label: "Resume",
         Icon: ResumeIcon,
         active: false,
@@ -76,7 +84,9 @@ export function NavBar() {
           <span className="relative">
             <Icon className="h-5 w-5" />
             {badge && (
-              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent" />
+              <span
+                className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${dotClass}`}
+              />
             )}
           </span>
           {label}
