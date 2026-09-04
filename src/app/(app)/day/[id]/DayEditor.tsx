@@ -13,6 +13,7 @@ import {
 } from "@/app/actions";
 import {
     CATEGORY_LABEL,
+    CATEGORY_ORDER,
     CATEGORY_STYLE,
     DAY_CATEGORY_CHOICES,
     muscleList,
@@ -326,6 +327,21 @@ export default function DayEditor({
     const offCategory = matches.filter(
         c => !dayAcceptsExercise(day.category, c.category),
     );
+
+    function groupByCategory(items: CatalogItem[]) {
+        const m = new Map<Cat, CatalogItem[]>();
+        for (const c of items) {
+            const arr = m.get(c.category) ?? [];
+            arr.push(c);
+            m.set(c.category, arr);
+        }
+        return [...CATEGORY_ORDER]
+            .filter(c => m.has(c))
+            .sort((a, b) => CATEGORY_LABEL[a].localeCompare(CATEGORY_LABEL[b]))
+            .map(c => ({ category: c, items: m.get(c)! }));
+    }
+    const acceptedGroups = groupByCategory(accepted);
+    const offCategoryGroups = groupByCategory(offCategory);
 
     const inputCls =
         "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm outline-none focus:border-text-muted";
@@ -826,49 +842,85 @@ export default function DayEditor({
                         onChange={e => setQuery(e.target.value)}
                         className='mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-text-muted'
                     />
-                    <ul className='mt-2 max-h-72 overflow-y-auto'>
-                        {accepted.map(c => (
-                            <li key={c.id}>
-                                <button
-                                    onClick={() => tryAdd(c)}
-                                    className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2'>
-                                    <span>{c.name}</span>
-                                    <span className='text-xs text-text-muted'>
-                                        {muscleList(c.primary_muscles)}
+                    <div className='mt-2 max-h-96 overflow-y-auto'>
+                        {acceptedGroups.map(g => (
+                            <details
+                                key={g.category}
+                                open={query.length > 0}
+                                className='mb-1.5 rounded-lg border border-border'>
+                                <summary className='flex cursor-pointer list-none items-center justify-between px-2.5 py-2 text-sm font-medium'>
+                                    {CATEGORY_LABEL[g.category]}
+                                    <span className='text-xs font-normal text-text-muted'>
+                                        {g.items.length} ▾
                                     </span>
-                                </button>
-                            </li>
+                                </summary>
+                                <ul className='border-t border-border p-1'>
+                                    {g.items.map(c => (
+                                        <li key={c.id}>
+                                            <button
+                                                onClick={() => tryAdd(c)}
+                                                className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2'>
+                                                <span>{c.name}</span>
+                                                <span className='text-xs text-text-muted'>
+                                                    {muscleList(
+                                                        c.primary_muscles,
+                                                    )}
+                                                </span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </details>
                         ))}
-                        {accepted.length === 0 && (
-                            <li className='px-2 py-3 text-sm text-text-muted'>
+                        {acceptedGroups.length === 0 && (
+                            <p className='px-2 py-3 text-sm text-text-muted'>
                                 No{" "}
                                 {day.category
                                     ? CATEGORY_LABEL[day.category]
                                     : ""}{" "}
                                 matches.
-                            </li>
+                            </p>
                         )}
 
-                        {offCategory.length > 0 && (
+                        {offCategoryGroups.length > 0 && (
                             <>
-                                <li className='px-2 pb-1 pt-3 text-[11px] uppercase text-text-muted'>
+                                <p className='px-1 pb-1 pt-3 text-[11px] uppercase text-text-muted'>
                                     Other categories
-                                </li>
-                                {offCategory.map(c => (
-                                    <li key={c.id}>
-                                        <button
-                                            onClick={() => tryAdd(c)}
-                                            className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm text-text-muted hover:bg-surface-2'>
-                                            <span>{c.name}</span>
-                                            <span className='text-xs'>
-                                                {CATEGORY_LABEL[c.category]}
+                                </p>
+                                {offCategoryGroups.map(g => (
+                                    <details
+                                        key={g.category}
+                                        open={query.length > 0}
+                                        className='mb-1.5 rounded-lg border border-border'>
+                                        <summary className='flex cursor-pointer list-none items-center justify-between px-2.5 py-2 text-sm font-medium text-text-muted'>
+                                            {CATEGORY_LABEL[g.category]}
+                                            <span className='text-xs font-normal'>
+                                                {g.items.length} ▾
                                             </span>
-                                        </button>
-                                    </li>
+                                        </summary>
+                                        <ul className='border-t border-border p-1'>
+                                            {g.items.map(c => (
+                                                <li key={c.id}>
+                                                    <button
+                                                        onClick={() =>
+                                                            tryAdd(c)
+                                                        }
+                                                        className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm text-text-muted hover:bg-surface-2'>
+                                                        <span>{c.name}</span>
+                                                        <span className='text-xs'>
+                                                            {muscleList(
+                                                                c.primary_muscles,
+                                                            )}
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </details>
                                 ))}
                             </>
                         )}
-                    </ul>
+                    </div>
                 </div>
             ) : (
                 <button
