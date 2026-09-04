@@ -5,14 +5,21 @@ import { useState } from "react";
 const PHRASES = [
     "Chalking up…",
     "Racking plates…",
-    "Loading the bar…",
+    "Loading bar…",
     "Warming up…",
     "Counting reps…",
     "Spotting…",
-    "Finding your PR…",
-    "Tightening your belt…",
-    "Setting up the rack…",
-    "Rolling out the mat…",
+    "Setting PR…",
+    "Tightening belt…",
+    "Setting up rack…",
+    "Rolling out mat…",
+    "Pumping…",
+    "Curling…",
+    "Supplementing…",
+    "Training…",
+    "Hydrating…",
+    "Pronating…",
+    "Supinating…",
 ];
 
 export function LoadingSpinner() {
@@ -23,7 +30,9 @@ export function LoadingSpinner() {
     return (
         <div className='flex min-h-[60vh] flex-col items-center justify-center gap-3'>
             <div className='h-6 w-6 animate-spin rounded-full border-2 border-border border-t-text-muted' />
-            <span className='text-xs text-text-muted' suppressHydrationWarning>
+            <span
+                className='text-xs text-text-muted'
+                suppressHydrationWarning>
                 {text}
             </span>
         </div>
