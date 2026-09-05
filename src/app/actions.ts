@@ -615,6 +615,57 @@ export async function setExercisePref(formData: FormData) {
   revalidatePath("/exercises");
 }
 
+/** Quick "make this my working weight" from a day's exercise card — writes only
+ *  `default_weight` on the user's pref row, leaving any saved sets/reps alone. */
+export async function setExerciseDefaultWeight(input: {
+  exerciseId: string;
+  dayId: string;
+  weight: number | null;
+}) {
+  const { supabase, user } = await requireUser();
+  const weight =
+    input.weight === null || Number.isNaN(input.weight)
+      ? null
+      : Math.max(0, input.weight);
+
+  const { data: existing } = await supabase
+    .from("user_exercise_prefs")
+    .select("default_sets, default_rep_min, default_rep_max")
+    .eq("user_id", user.id)
+    .eq("exercise_id", input.exerciseId)
+    .maybeSingle();
+
+  if (
+    weight === null &&
+    !existing?.default_sets &&
+    !existing?.default_rep_min &&
+    !existing?.default_rep_max
+  ) {
+    await supabase
+      .from("user_exercise_prefs")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("exercise_id", input.exerciseId);
+  } else {
+    check(
+      await supabase.from("user_exercise_prefs").upsert(
+        {
+          user_id: user.id,
+          exercise_id: input.exerciseId,
+          default_sets: existing?.default_sets ?? null,
+          default_rep_min: existing?.default_rep_min ?? null,
+          default_rep_max: existing?.default_rep_max ?? null,
+          default_weight: weight,
+        },
+        { onConflict: "user_id,exercise_id" },
+      ),
+      "save default weight",
+    );
+  }
+  revalidatePath(`/day/${input.dayId}`);
+  revalidatePath("/exercises");
+}
+
 /** Per-user targets. On any day (personal or party) these are yours alone and
  *  never touch another member's numbers. */
 export async function updateDayExerciseTarget(input: {

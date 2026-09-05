@@ -9,8 +9,10 @@ import {
     reorderDayExercise,
     saveExerciseNote,
     setDayCategory,
+    setExerciseDefaultWeight,
     updateDayExerciseTarget,
 } from "@/app/actions";
+import { formatShort } from "@/lib/date";
 import {
     CATEGORY_LABEL,
     CATEGORY_ORDER,
@@ -79,6 +81,8 @@ const TrashIcon = () => (
     </svg>
 );
 
+type LastEntry = { date: string; sets: { weight: number; reps: number }[] };
+
 export default function DayEditor({
     day,
     currentUserId,
@@ -87,6 +91,7 @@ export default function DayEditor({
     logs,
     notes,
     catalog,
+    lastByExercise,
     goal,
     experience,
 }: {
@@ -103,6 +108,7 @@ export default function DayEditor({
     logs: LogRow[];
     notes: NoteRow[];
     catalog: CatalogItem[];
+    lastByExercise: Record<string, LastEntry>;
     goal: string | null;
     experience: Enums<"experience_level"> | null;
 }) {
@@ -125,6 +131,22 @@ export default function DayEditor({
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [query, setQuery] = useState("");
     const [showAdd, setShowAdd] = useState(day.exercises.length === 0);
+    const [savedDefault, setSavedDefault] = useState<string | null>(null);
+    const weightInputRefs = useRef(new Map<string, HTMLInputElement>());
+
+    function saveDefaultWeight(pdeId: string, exerciseId: string) {
+        const raw = weightInputRefs.current.get(pdeId)?.value ?? "";
+        const weight = raw === "" ? null : Number(raw);
+        start(async () => {
+            await setExerciseDefaultWeight({
+                exerciseId,
+                dayId: day.id,
+                weight,
+            });
+            setSavedDefault(pdeId);
+            setTimeout(() => setSavedDefault(null), 1600);
+        });
+    }
 
     // ---- "return to session": remember this day + last exercise in view ------
     // Only a live, unfinished workout counts as a "session" to resume: today's
@@ -460,6 +482,16 @@ export default function DayEditor({
                         isCompound(ex.exercise),
                     );
                     const rows = rowsFor(ex);
+                    const last = lastByExercise[ex.exercise.id];
+                    const fmtLastSet = (s: {
+                        weight: number;
+                        reps: number;
+                    }) =>
+                        ex.exercise.timeBased
+                            ? s.weight
+                                ? `${s.weight}×${s.reps}s`
+                                : `${s.reps}s`
+                            : `${s.weight}×${s.reps}`;
                     return (
                         <li
                             key={ex.id}
@@ -555,6 +587,19 @@ export default function DayEditor({
                                 </div>
                             </div>
 
+                            {last && last.sets.length > 0 && (
+                                <div className='mt-2 rounded-md bg-surface px-2 py-1.5 text-xs'>
+                                    <span className='text-[10px] uppercase tracking-wide text-text-muted'>
+                                        Last · {formatShort(last.date)}
+                                    </span>{" "}
+                                    <span className='text-text'>
+                                        {last.sets
+                                            .map(fmtLastSet)
+                                            .join("  ·  ")}
+                                    </span>
+                                </div>
+                            )}
+
                             {isOpen && (
                                 <div className='mt-3 rounded-lg bg-surface p-3'>
                                     <ExerciseDetailBody ex={ex.exercise} />
@@ -639,6 +684,17 @@ export default function DayEditor({
                                     </span>
                                     <input
                                         key={`w-${ex.id}-${ex.targetWeight ?? ""}`}
+                                        ref={el => {
+                                            if (el)
+                                                weightInputRefs.current.set(
+                                                    ex.id,
+                                                    el,
+                                                );
+                                            else
+                                                weightInputRefs.current.delete(
+                                                    ex.id,
+                                                );
+                                        }}
                                         inputMode='decimal'
                                         defaultValue={ex.targetWeight ?? ""}
                                         onBlur={e =>
@@ -650,6 +706,20 @@ export default function DayEditor({
                                         }
                                         className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
                                     />
+                                    <button
+                                        type='button'
+                                        onClick={() =>
+                                            saveDefaultWeight(
+                                                ex.id,
+                                                ex.exercise.id,
+                                            )
+                                        }
+                                        className='rounded-md border border-border px-1.5 py-1 text-[11px] text-text-muted enabled:hover:text-text disabled:opacity-50'
+                                        disabled={pending}>
+                                        {savedDefault === ex.id
+                                            ? "Saved ✓"
+                                            : "Set default"}
+                                    </button>
                                 </div>
                             </div>
 

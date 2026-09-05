@@ -63,6 +63,12 @@ export function formatLong(s: string): string {
   return `${DOW[d.getDay()]}, ${MON[d.getMonth()]} ${d.getDate()}`;
 }
 
+// "Sep 1"
+export function formatShort(s: string): string {
+  const d = parseISODate(s);
+  return `${MON[d.getMonth()]} ${d.getDate()}`;
+}
+
 export function formatRange(startS: string, endS: string): string {
   const a = parseISODate(startS);
   const b = parseISODate(endS);

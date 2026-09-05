@@ -48,6 +48,7 @@ export default async function DayPage({
     { data: m },
     { data: constants },
     { data: catalog },
+    { data: prevLogs },
   ] = await Promise.all([
     pdeIds.length
       ? supabase
@@ -93,6 +94,19 @@ export default async function DayPage({
       .select("id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based")
       .is("archived_at", null)
       .order("name"),
+    // my own prior sets for these exercises — for the "last time" line on each card
+    exIds.length
+      ? supabase
+          .from("set_logs")
+          .select(
+            "set_no, weight, reps, planned_day_exercises!inner(exercise_id, planned_days!inner(id, date))",
+          )
+          .eq("user_id", user.id)
+          .in("planned_day_exercises.exercise_id", exIds)
+          .not("weight", "is", null)
+          .not("reps", "is", null)
+          .order("set_no")
+      : Promise.resolve({ data: [] }),
   ]);
 
   const targetByPde = new Map(
@@ -112,6 +126,48 @@ export default async function DayPage({
   const canManageAll = !day.party_id || isPartyOwner;
 
   const goal = (constants?.primary_goal as Goal) ?? null;
+
+  // most recent prior session per exercise (this user), for the card summary
+  type PrevRow = {
+    set_no: number;
+    weight: number | null;
+    reps: number | null;
+    planned_day_exercises: {
+      exercise_id: string;
+      planned_days: { id: string; date: string } | null;
+    } | null;
+  };
+  const prevByExercise: Record<
+    string,
+    { date: string; sets: { weight: number; reps: number }[] }
+  > = {};
+  {
+    const rowsByEx: Record<
+      string,
+      { date: string; set_no: number; weight: number; reps: number }[]
+    > = {};
+    for (const row of (prevLogs ?? []) as PrevRow[]) {
+      const pde = row.planned_day_exercises;
+      const pd = pde?.planned_days;
+      if (!pde || !pd || pd.id === id || pd.date >= day.date) continue;
+      (rowsByEx[pde.exercise_id] ??= []).push({
+        date: pd.date,
+        set_no: row.set_no,
+        weight: row.weight!,
+        reps: row.reps!,
+      });
+    }
+    for (const [exId, rows] of Object.entries(rowsByEx)) {
+      const maxDate = rows.reduce((a, r) => (r.date > a ? r.date : a), "");
+      prevByExercise[exId] = {
+        date: maxDate,
+        sets: rows
+          .filter((r) => r.date === maxDate)
+          .sort((a, b) => a.set_no - b.set_no)
+          .map((r) => ({ weight: r.weight, reps: r.reps })),
+      };
+    }
+  }
 
   /** effective target for the current user. Sets/reps: my day edit -> my saved
    *  default -> the shared (global) seed -> goal recommendation. Weight is
@@ -185,6 +241,7 @@ export default async function DayPage({
         logs={logs ?? []}
         notes={notes ?? []}
         catalog={(catalog ?? []).map((c) => ({ ...c, timeBased: c.time_based }))}
+        lastByExercise={prevByExercise}
         goal={goal}
         experience={constants?.experience ?? null}
       />
