@@ -163,7 +163,7 @@ export default async function ProgressPage() {
 
         {(bw ?? []).length > 0 && (
           <ul className="mt-4 flex flex-col gap-1">
-            {[...(bw ?? [])].reverse().map((b) => (
+            {(bw ?? []).map((b) => (
               <li key={b.date} className="flex items-center gap-3 text-xs">
                 <span className="w-20 text-text-muted">{b.date.slice(5)}</span>
                 <span className="flex-1">

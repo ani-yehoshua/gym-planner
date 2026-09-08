@@ -49,6 +49,7 @@ export default async function DayPage({
     { data: constants },
     { data: catalog },
     { data: prevLogs },
+    { data: prevNotes },
   ] = await Promise.all([
     pdeIds.length
       ? supabase
@@ -107,6 +108,16 @@ export default async function DayPage({
           .not("reps", "is", null)
           .order("set_no")
       : Promise.resolve({ data: [] }),
+    // my own prior notes for these exercises — shown under the "last time" line
+    exIds.length
+      ? supabase
+          .from("day_exercise_notes")
+          .select(
+            "note, planned_day_exercises!inner(exercise_id, planned_days!inner(id, date))",
+          )
+          .eq("user_id", user.id)
+          .in("planned_day_exercises.exercise_id", exIds)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const targetByPde = new Map(
@@ -128,18 +139,20 @@ export default async function DayPage({
   const goal = (constants?.primary_goal as Goal) ?? null;
 
   // most recent prior session per exercise (this user), for the card summary
+  type PrevEmbed = {
+    exercise_id: string;
+    planned_days: { id: string; date: string } | null;
+  } | null;
   type PrevRow = {
     set_no: number;
     weight: number | null;
     reps: number | null;
-    planned_day_exercises: {
-      exercise_id: string;
-      planned_days: { id: string; date: string } | null;
-    } | null;
+    planned_day_exercises: PrevEmbed;
   };
+  type PrevNoteRow = { note: string | null; planned_day_exercises: PrevEmbed };
   const prevByExercise: Record<
     string,
-    { date: string; sets: { weight: number; reps: number }[] }
+    { date: string; sets: { weight: number; reps: number }[]; note?: string }
   > = {};
   {
     const rowsByEx: Record<
@@ -166,6 +179,14 @@ export default async function DayPage({
           .sort((a, b) => a.set_no - b.set_no)
           .map((r) => ({ weight: r.weight, reps: r.reps })),
       };
+    }
+    for (const row of (prevNotes ?? []) as unknown as PrevNoteRow[]) {
+      const pde = row.planned_day_exercises;
+      const pd = pde?.planned_days;
+      const entry = pde ? prevByExercise[pde.exercise_id] : undefined;
+      if (!pde || !pd || !entry || pd.date !== entry.date) continue;
+      const note = (row.note ?? "").trim();
+      if (note) entry.note = note;
     }
   }
 

@@ -81,7 +81,11 @@ const TrashIcon = () => (
     </svg>
 );
 
-type LastEntry = { date: string; sets: { weight: number; reps: number }[] };
+type LastEntry = {
+    date: string;
+    sets: { weight: number; reps: number }[];
+    note?: string;
+};
 
 export default function DayEditor({
     day,
@@ -588,15 +592,22 @@ export default function DayEditor({
                             </div>
 
                             {last && last.sets.length > 0 && (
-                                <div className='mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md bg-surface px-2 py-1.5 text-xs'>
-                                    <span className='text-[10px] uppercase tracking-wide text-text-muted'>
-                                        Last · {formatShort(last.date)}
-                                    </span>
-                                    <span className='text-text'>
-                                        {last.sets
-                                            .map(fmtLastSet)
-                                            .join("  ·  ")}
-                                    </span>
+                                <div className='mt-2 rounded-md bg-surface px-2 py-1.5 text-xs'>
+                                    <div className='flex flex-wrap items-baseline gap-x-3 gap-y-1'>
+                                        <span className='text-[10px] uppercase tracking-wide text-text-muted'>
+                                            Last · {formatShort(last.date)}
+                                        </span>
+                                        <span className='text-text'>
+                                            {last.sets
+                                                .map(fmtLastSet)
+                                                .join("  ·  ")}
+                                        </span>
+                                    </div>
+                                    {last.note && (
+                                        <div className='mt-1 italic text-text-muted'>
+                                            “{last.note}”
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
