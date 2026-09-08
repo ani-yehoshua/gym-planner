@@ -33,15 +33,20 @@ export function today(): string {
   return toISODate(new Date());
 }
 
+/** Calendar date (YYYY-MM-DD) for an instant, in a specific IANA timezone. */
+export function isoDateInTz(d: Date, tz: string): string {
+  try {
+    // en-CA formats as YYYY-MM-DD
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
+  } catch {
+    return toISODate(d);
+  }
+}
+
 /** Current calendar date (YYYY-MM-DD) in a specific IANA timezone. Server code
  *  runs in UTC on Vercel, so "today" must be resolved in the user's zone. */
 export function todayInTz(tz: string): string {
-  try {
-    // en-CA formats as YYYY-MM-DD
-    return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
-  } catch {
-    return today();
-  }
+  return isoDateInTz(new Date(), tz);
 }
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

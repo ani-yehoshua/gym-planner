@@ -1,9 +1,13 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logBodyweight } from "@/app/actions";
-import { startOfWeek } from "@/lib/date";
-import { getUserToday } from "@/lib/user-today";
+import { isoDateInTz, startOfWeek } from "@/lib/date";
+import { getUserToday, getUserTimezone } from "@/lib/user-today";
 import { HistoryList, type HistoryDay } from "@/components/history-list";
+import {
+  StrengthWidgets,
+  type StrengthRow,
+} from "@/components/strength-widgets";
 
 export default async function ProgressPage() {
   const supabase = await createClient();
@@ -12,7 +16,10 @@ export default async function ProgressPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const todayISO = await getUserToday();
+  const [todayISO, tz] = await Promise.all([
+    getUserToday(),
+    getUserTimezone(),
+  ]);
 
   const [{ data: bw }, { data: sets }, { data: pastDays }] = await Promise.all([
     supabase
@@ -24,13 +31,13 @@ export default async function ProgressPage() {
     supabase
       .from("set_logs")
       .select(
-        "weight, reps, logged_at, planned_day_exercises(exercises(name))",
+        "weight, reps, logged_at, planned_day_exercises(exercises(id, name, category, time_based))",
       )
       .eq("user_id", user.id)
       .not("weight", "is", null)
       .not("reps", "is", null)
       .order("logged_at", { ascending: false })
-      .limit(200),
+      .limit(2000),
     // ---- history: past days where you logged something --------------------
     supabase
       .from("planned_days")
@@ -42,15 +49,21 @@ export default async function ProgressPage() {
       .limit(60),
   ]);
 
-  // best weight per exercise
-  const best = new Map<string, { weight: number; reps: number }>();
-  for (const s of sets ?? []) {
-    const name = s.planned_day_exercises?.exercises?.name;
-    if (!name || s.weight == null || s.reps == null) continue;
-    const cur = best.get(name);
-    if (!cur || s.weight > cur.weight) best.set(name, { weight: s.weight, reps: s.reps });
-  }
-  const prs = [...best.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  // weighted sets for the Lifts widgets — dates resolved in the user's zone
+  const strengthRows: StrengthRow[] = (sets ?? []).flatMap((s) => {
+    const ex = s.planned_day_exercises?.exercises;
+    if (!ex || ex.time_based || s.weight == null || s.reps == null) return [];
+    return [
+      {
+        exerciseId: ex.id,
+        name: ex.name,
+        category: ex.category,
+        weight: s.weight,
+        reps: s.reps,
+        date: isoDateInTz(new Date(s.logged_at), tz),
+      },
+    ];
+  });
 
   const bwMax = Math.max(1, ...(bw ?? []).map((b) => b.weight));
   const bwMin = Math.min(bwMax, ...(bw ?? []).map((b) => b.weight));
@@ -199,26 +212,7 @@ export default async function ProgressPage() {
         )}
       </section>
 
-      <section>
-        <h2 className="mb-2 text-sm font-medium">Best sets</h2>
-        {prs.length === 0 ? (
-          <p className="text-sm text-text-muted">Log some sets and your bests show up here.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {prs.map(([name, v]) => (
-              <li
-                key={name}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-              >
-                <span>{name}</span>
-                <span className="text-text-muted">
-                  {v.weight} × {v.reps}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <StrengthWidgets rows={strengthRows} todayISO={todayISO} />
     </div>
   );
 }
