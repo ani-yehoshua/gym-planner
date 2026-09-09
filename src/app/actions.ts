@@ -93,10 +93,23 @@ export async function saveOnboarding(formData: FormData) {
 // ---------------------------------------------------------------------------
 // account — edit onboarding answers later
 // ---------------------------------------------------------------------------
+export async function updateDisplayName(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const name = String(formData.get("display_name") || "").trim();
+  check(
+    await supabase
+      .from("profiles")
+      .update({ display_name: name || null })
+      .eq("id", user.id),
+    "update display name",
+  );
+  revalidatePath("/account");
+  revalidatePath("/", "layout");
+}
+
 export async function updateAccount(formData: FormData) {
   const { supabase, user } = await requireUser();
 
-  const displayName = String(formData.get("display_name") || "").trim();
   const units = (String(formData.get("units")) as Enums<"unit_system">) || "lb";
   const experience = String(formData.get("experience") || "") as
     | Enums<"experience_level">
@@ -109,10 +122,7 @@ export async function updateAccount(formData: FormData) {
   };
 
   check(
-    await supabase
-      .from("profiles")
-      .update({ display_name: displayName || null, units })
-      .eq("id", user.id),
+    await supabase.from("profiles").update({ units }).eq("id", user.id),
     "update profile",
   );
 

@@ -42,8 +42,8 @@ export function NavBar() {
     };
   }, [pathname]);
 
-  const dotClass = resume?.category
-    ? CATEGORY_DOT[resume.category as Enums<"muscle_category">]
+  const dotClass = resume
+    ? CATEGORY_DOT[(resume.category ?? "custom") as Enums<"muscle_category">]
     : "bg-accent";
 
   const onCalendarTab = pathname === "/" || pathname.startsWith("/day");

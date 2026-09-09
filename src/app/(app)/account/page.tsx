@@ -1,8 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { clearUpcomingCalendar, updateAccount } from "@/app/actions";
+import {
+    clearUpcomingCalendar,
+    updateAccount,
+    updateDisplayName,
+} from "@/app/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TimezoneField } from "@/components/timezone-field";
+import { EmailField } from "@/components/email-field";
+import { ReplayTourButton } from "@/components/app-tour";
 import { SplitPicker, type SplitTemplate } from "@/components/split-picker";
 import { SubmitButton } from "@/components/submit-button";
 import { GOAL_LABEL, MUSCLE_LABEL } from "@/lib/labels";
@@ -85,24 +91,34 @@ export default async function AccountPage() {
                 <TimezoneField current={profile?.timezone ?? "America/Chicago"} />
             </section>
 
-            {/* profile + goals */}
+            {/* profile: name + email */}
+            <section className='flex flex-col gap-4'>
+                <form action={updateDisplayName} className={field}>
+                    <label className={label} htmlFor='display_name'>
+                        Display name
+                    </label>
+                    <div className='flex items-center gap-2'>
+                        <input
+                            id='display_name'
+                            name='display_name'
+                            defaultValue={profile?.display_name ?? ""}
+                            className={`${input} min-w-0 flex-1`}
+                        />
+                        <SubmitButton
+                            pendingText='Saving…'
+                            className='shrink-0 rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface disabled:opacity-50'>
+                            Save
+                        </SubmitButton>
+                    </div>
+                </form>
+
+                <EmailField current={user.email ?? ""} />
+            </section>
+
+            {/* goals + training */}
             <form
                 action={updateAccount}
                 className='flex flex-col gap-5'>
-                <div className={field}>
-                    <label
-                        className={label}
-                        htmlFor='display_name'>
-                        Display name
-                    </label>
-                    <input
-                        id='display_name'
-                        name='display_name'
-                        defaultValue={profile?.display_name ?? ""}
-                        className={input}
-                    />
-                </div>
-
                 <div className={field}>
                     <span className={label}>Units</span>
                     <div className='flex gap-2'>
@@ -256,14 +272,14 @@ export default async function AccountPage() {
                 <SplitPicker templates={templates} />
             </section>
 
-            <form
-                action='/auth/signout'
-                method='post'
-                className='border-t border-border pt-6'>
-                <button className='text-sm text-text-muted hover:text-rose-400'>
-                    Sign out
-                </button>
-            </form>
+            <section className='flex flex-col items-start gap-3 border-t border-border pt-6'>
+                <ReplayTourButton />
+                <form action='/auth/signout' method='post'>
+                    <button className='rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-500/20 dark:text-rose-300'>
+                        Sign out
+                    </button>
+                </form>
+            </section>
         </div>
     );
 }

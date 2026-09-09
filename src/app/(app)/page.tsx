@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createDay } from "@/app/actions";
 import {
     addDays,
     dayOfMonth,
@@ -11,42 +10,9 @@ import {
     weekDates,
 } from "@/lib/date";
 import { getUserToday } from "@/lib/user-today";
-import {
-    CATEGORY_LABEL,
-    CATEGORY_STYLE,
-    DAY_CATEGORY_CHOICES,
-} from "@/lib/labels";
+import { CATEGORY_LABEL, CATEGORY_STYLE, dayType } from "@/lib/labels";
 import { ChevronLeftIcon } from "@/components/icons";
-
-function AddSessionForm({ date }: { date: string }) {
-    return (
-        <form
-            action={createDay}
-            className='flex items-center gap-2'>
-            <input
-                type='hidden'
-                name='date'
-                value={date}
-            />
-            <select
-                name='category'
-                defaultValue=''
-                className='flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm'>
-                <option value=''>Plan session…</option>
-                {DAY_CATEGORY_CHOICES.filter(c => c !== "rest").map(c => (
-                    <option
-                        key={c}
-                        value={c}>
-                        {CATEGORY_LABEL[c]}
-                    </option>
-                ))}
-            </select>
-            <button className='rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-fg'>
-                Add
-            </button>
-        </form>
-    );
-}
+import { AddSessionForm } from "@/components/add-session-form";
 
 export default async function CalendarPage({
     searchParams,
@@ -139,16 +105,14 @@ export default async function CalendarPage({
                                             href={`/day/${d.id}`}
                                             className='flex items-center justify-between rounded-lg bg-surface-2/60 px-3 py-2 hover:bg-surface-2'>
                                             <span className='flex items-center gap-2'>
-                                                {d.category && (
-                                                    <span
-                                                        className={`rounded-md border px-2 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}>
-                                                        {
-                                                            CATEGORY_LABEL[
-                                                                d.category
-                                                            ]
-                                                        }
-                                                    </span>
-                                                )}
+                                                <span
+                                                    className={`rounded-md border px-2 py-0.5 text-xs ${CATEGORY_STYLE[dayType(d.category)]}`}>
+                                                    {
+                                                        CATEGORY_LABEL[
+                                                            dayType(d.category)
+                                                        ]
+                                                    }
+                                                </span>
                                                 {d.party_id && (
                                                     <span className='text-xs text-text-muted'>
                                                         ·{" "}

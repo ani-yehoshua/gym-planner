@@ -17,9 +17,10 @@ import {
     CATEGORY_LABEL,
     CATEGORY_ORDER,
     CATEGORY_STYLE,
-    DAY_CATEGORY_CHOICES,
+    DAY_PLAN_CHOICES,
     muscleList,
     dayAcceptsExercise,
+    dayType,
 } from "@/lib/labels";
 import { isCompound, suggestedSets, type Goal } from "@/lib/targets";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
@@ -403,12 +404,12 @@ export default function DayEditor({
         <div className='flex flex-col gap-3'>
             {/* category */}
             <div className='flex flex-wrap gap-1.5'>
-                {DAY_CATEGORY_CHOICES.filter(c => c !== "rest").map(c => (
+                {DAY_PLAN_CHOICES.map(c => (
                     <button
                         key={c}
                         onClick={() => start(() => setDayCategory(day.id, c))}
                         className={`rounded-md border px-2.5 py-1 text-xs ${
-                            day.category === c
+                            dayType(day.category) === c
                                 ? CATEGORY_STYLE[c]
                                 : "border-border text-text-muted hover:border-text-muted"
                         }`}>
@@ -927,9 +928,7 @@ export default function DayEditor({
                 <div className='rounded-xl border border-border p-3'>
                     <div className='flex items-center justify-between'>
                         <span className='text-sm font-medium'>
-                            Add{" "}
-                            {day.category ? CATEGORY_LABEL[day.category] : ""}{" "}
-                            exercise
+                            Add {CATEGORY_LABEL[dayType(day.category)]} exercise
                         </span>
                         <button
                             onClick={() => setShowAdd(false)}
@@ -980,10 +979,7 @@ export default function DayEditor({
                         ))}
                         {acceptedGroups.length === 0 && (
                             <p className='px-2 py-3 text-sm text-text-muted'>
-                                No{" "}
-                                {day.category
-                                    ? CATEGORY_LABEL[day.category]
-                                    : ""}{" "}
+                                No {CATEGORY_LABEL[dayType(day.category)]}{" "}
                                 matches.
                             </p>
                         )}

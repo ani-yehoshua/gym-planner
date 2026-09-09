@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { NavBar } from "@/components/nav-bar";
+import { AppTour } from "@/components/app-tour";
 
 export default async function AppLayout({
   children,
@@ -39,6 +40,7 @@ export default async function AppLayout({
       <main className="flex-1 px-4 py-5">{children}</main>
 
       <NavBar />
+      <AppTour />
     </div>
   );
 }

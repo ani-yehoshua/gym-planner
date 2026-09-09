@@ -13,7 +13,7 @@ export const CATEGORY_LABEL: Record<Enums<"muscle_category">, string> = {
   arms: "Arms",
   core: "Core",
   cardio: "Cardio",
-  custom: "Custom",
+  custom: "Mix",
   rest: "Rest",
 };
 
@@ -39,6 +39,23 @@ export const DAY_CATEGORY_CHOICES: Enums<"muscle_category">[] = CATEGORY_ORDER.f
   (c) => c !== "custom",
 );
 
+// day-type options when planning a session: "Mix" (anything from the catalog,
+// no off-category nag) pinned first, the rest alphabetical. "rest" isn't a
+// planned session.
+export const DAY_PLAN_CHOICES: Enums<"muscle_category">[] = [
+  "custom",
+  ...CATEGORY_ORDER.filter((c) => c !== "custom" && c !== "rest").sort((a, b) =>
+    CATEGORY_LABEL[a].localeCompare(CATEGORY_LABEL[b]),
+  ),
+];
+
+/** A planned day with no category set behaves as a "Mix" — anything goes. */
+export function dayType(
+  category: Enums<"muscle_category"> | null | undefined,
+): Enums<"muscle_category"> {
+  return category ?? "custom";
+}
+
 // tailwind classes per category — used for chips / day headers (theme-aware)
 export const CATEGORY_STYLE: Record<Enums<"muscle_category">, string> = {
   push: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
@@ -53,7 +70,7 @@ export const CATEGORY_STYLE: Record<Enums<"muscle_category">, string> = {
   arms: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30",
   core: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30",
   cardio: "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30",
-  custom: "bg-surface-2 text-text-muted border-border",
+  custom: "bg-white text-zinc-800 border-zinc-300",
   rest: "bg-surface-2 text-text-muted border-border",
 };
 
@@ -72,7 +89,7 @@ export const CATEGORY_DOT: Record<Enums<"muscle_category">, string> = {
   arms: "bg-fuchsia-500",
   core: "bg-orange-500",
   cardio: "bg-teal-500",
-  custom: "bg-text-muted",
+  custom: "bg-white ring-1 ring-black/15 dark:ring-white/25",
   rest: "bg-text-muted",
 };
 

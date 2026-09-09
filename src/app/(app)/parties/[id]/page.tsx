@@ -10,7 +10,8 @@ import { ChevronLeftIcon } from "@/components/icons";
 import {
     CATEGORY_LABEL,
     CATEGORY_STYLE,
-    DAY_CATEGORY_CHOICES,
+    DAY_PLAN_CHOICES,
+    dayType,
 } from "@/lib/labels";
 import { formatLong } from "@/lib/date";
 import { getUserToday } from "@/lib/user-today";
@@ -190,15 +191,13 @@ export default async function PartyPage({
                         name='category'
                         className='rounded-lg border border-border bg-surface px-3 py-2 text-sm'>
                         <option value=''>Category…</option>
-                        {DAY_CATEGORY_CHOICES.filter(c => c !== "rest").map(
-                            c => (
-                                <option
-                                    key={c}
-                                    value={c}>
-                                    {CATEGORY_LABEL[c]}
-                                </option>
-                            ),
-                        )}
+                        {DAY_PLAN_CHOICES.map(c => (
+                            <option
+                                key={c}
+                                value={c}>
+                                {CATEGORY_LABEL[c]}
+                            </option>
+                        ))}
                     </select>
                     <SubmitButton
                         pendingText='Opening…'
@@ -221,12 +220,10 @@ export default async function PartyPage({
                                     className='flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface'>
                                     <span className='flex items-center gap-2'>
                                         {formatLong(d.date)}
-                                        {d.category && (
-                                            <span
-                                                className={`rounded-md border px-2 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}>
-                                                {CATEGORY_LABEL[d.category]}
-                                            </span>
-                                        )}
+                                        <span
+                                            className={`rounded-md border px-2 py-0.5 text-xs ${CATEGORY_STYLE[dayType(d.category)]}`}>
+                                            {CATEGORY_LABEL[dayType(d.category)]}
+                                        </span>
                                     </span>
                                     <span className='text-xs text-text-muted'>
                                         {d.planned_day_exercises.length}{" "}
