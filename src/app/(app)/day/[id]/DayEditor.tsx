@@ -25,6 +25,7 @@ import {
 import { isCompound, suggestedSets, type Goal } from "@/lib/targets";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
 import { PlateCalculator } from "@/components/plate-calculator";
+import { unitLabel, type Unit } from "@/lib/units";
 import { createClient } from "@/lib/supabase/client";
 import {
     clearActiveSession,
@@ -99,6 +100,7 @@ export default function DayEditor({
     lastByExercise,
     goal,
     experience,
+    units,
 }: {
     day: {
         id: string;
@@ -116,7 +118,9 @@ export default function DayEditor({
     lastByExercise: Record<string, LastEntry>;
     goal: string | null;
     experience: Enums<"experience_level"> | null;
+    units: Unit;
 }) {
+    const u = unitLabel(units);
     const [pending, start] = useTransition();
     const router = useRouter();
 
@@ -462,7 +466,7 @@ export default function DayEditor({
                     </details>
                 )}
                 {/* weight calculator */}
-                <PlateCalculator />
+                <PlateCalculator units={units} />
             </div>
 
             {/* exercises */}
@@ -692,7 +696,7 @@ export default function DayEditor({
                                 </div>
                                 <div className='flex items-center gap-1.5'>
                                     <span className='text-text-muted'>
-                                        Current weight
+                                        Current weight ({u})
                                     </span>
                                     <input
                                         key={`w-${ex.id}-${ex.targetWeight ?? ""}`}
@@ -739,7 +743,9 @@ export default function DayEditor({
                             <div className='mt-3 flex flex-col gap-1.5'>
                                 <div className='grid grid-cols-[1.5rem_1fr_1fr] items-center gap-2 text-[11px] uppercase text-text-muted'>
                                     <span>Set</span>
-                                    <span className='text-center'>Weight</span>
+                                    <span className='text-center'>
+                                        Weight ({u})
+                                    </span>
                                     <span className='text-center'>
                                         {ex.exercise.timeBased
                                             ? "Sec"

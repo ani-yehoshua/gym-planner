@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { addDays, formatShort } from "@/lib/date";
 import { CATEGORY_DOT, CATEGORY_LABEL, CATEGORY_ORDER } from "@/lib/labels";
+import { epley1rm, round5 } from "@/lib/one-rm";
+import { unitLabel, type Unit } from "@/lib/units";
 import type { Enums } from "@/lib/supabase/database.types";
 
 export type StrengthRow = {
@@ -40,8 +42,7 @@ const STORE_KEY = "gymplanner:strengthWidget";
 const TOP_N = 8;
 const NEW_PR_DAYS = 14;
 
-// Epley, capped at 12 reps where the estimate stays meaningful
-const e1rm = (w: number, r: number) => Math.round(w * (1 + Math.min(r, 12) / 30));
+const e1rm = (w: number, r: number) => round5(epley1rm(w, r));
 
 type Session = { date: string; topWeight: number; topE1rm: number };
 type ExAgg = {
@@ -57,10 +58,13 @@ type ExAgg = {
 export function StrengthWidgets({
   rows,
   todayISO,
+  units,
 }: {
   rows: StrengthRow[];
   todayISO: string;
+  units: Unit;
 }) {
+  const u = unitLabel(units);
   const [prefs, setPrefs] = useState<{ view: View; range: Range }>({
     view: "records",
     range: "30d",
@@ -225,16 +229,17 @@ export function StrengthWidgets({
       ) : (
         <>
           {view === "records" && (
-            <RecordsView
-              aggs={visible(ranked)}
-              prd={justPrd}
-            />
+            <RecordsView aggs={visible(ranked)} prd={justPrd} unit={u} />
           )}
-          {view === "e1rm" && <E1rmView aggs={visible(ranked)} />}
+          {view === "e1rm" && (
+            <E1rmView aggs={visible(ranked)} unit={u} />
+          )}
           {view === "trend" && (
             <TrendView aggs={visible(ranked)} prd={justPrd} />
           )}
-          {view === "volume" && <VolumeView aggs={visible(byFrequency)} />}
+          {view === "volume" && (
+            <VolumeView aggs={visible(byFrequency)} unit={u} />
+          )}
 
           {hiddenCount > 0 && (
             <button
@@ -267,9 +272,11 @@ function NewPill() {
 function RecordsView({
   aggs,
   prd,
+  unit,
 }: {
   aggs: ExAgg[];
   prd: (a: ExAgg) => boolean;
+  unit: string;
 }) {
   const groups = CATEGORY_ORDER.map((cat) => ({
     cat,
@@ -300,7 +307,7 @@ function RecordsView({
                   {setLabel(a)}
                 </div>
                 <div className="text-[11px] text-text-muted">
-                  e1RM {a.best.e1rm} · {formatShort(a.best.date)}
+                  e1RM {a.best.e1rm} {unit} · {formatShort(a.best.date)}
                 </div>
               </div>
             ))}
@@ -328,7 +335,7 @@ function Delta({ sessions }: { sessions: Session[] }) {
   );
 }
 
-function E1rmView({ aggs }: { aggs: ExAgg[] }) {
+function E1rmView({ aggs, unit }: { aggs: ExAgg[]; unit: string }) {
   return (
     <div className="flex flex-col gap-2">
       {aggs.map((a) => (
@@ -345,6 +352,9 @@ function E1rmView({ aggs }: { aggs: ExAgg[] }) {
           <div className="flex shrink-0 flex-col items-end">
             <span className="text-xl font-semibold tabular-nums">
               {a.best.e1rm}
+              <span className="ml-1 text-xs font-normal text-text-muted">
+                {unit}
+              </span>
             </span>
             <Delta sessions={a.sessions} />
           </div>
@@ -451,7 +461,7 @@ function TrendView({
   );
 }
 
-function VolumeView({ aggs }: { aggs: ExAgg[] }) {
+function VolumeView({ aggs, unit }: { aggs: ExAgg[]; unit: string }) {
   const sorted = [...aggs].sort((a, b) => b.volume - a.volume);
   const max = Math.max(1, ...sorted.map((a) => a.volume));
 
@@ -465,7 +475,7 @@ function VolumeView({ aggs }: { aggs: ExAgg[] }) {
           <div className="flex items-baseline justify-between gap-2 text-sm">
             <span className="min-w-0 truncate">{a.name}</span>
             <span className="shrink-0 tabular-nums">
-              {a.volume.toLocaleString()}
+              {a.volume.toLocaleString()} {unit}
               <span className="ml-1 text-[11px] text-text-muted">
                 · {a.sessionCount}{" "}
                 {a.sessionCount === 1 ? "session" : "sessions"}

@@ -13,6 +13,7 @@ import { ExerciseForm } from "@/components/exercise-form";
 import { SubmitButton } from "@/components/submit-button";
 import { recommendedReps, isCompound, type Goal } from "@/lib/targets";
 import { isAdmin } from "@/lib/admin";
+import { type Unit } from "@/lib/units";
 import type { Enums } from "@/lib/supabase/database.types";
 
 const inp = "rounded-lg border border-border bg-surface px-3 py-2 text-sm";
@@ -37,6 +38,7 @@ export default async function ExercisesPage() {
         { data: prefRows },
         { data: constants },
         { data: requests },
+        { data: profile },
     ] = await Promise.all([
         supabase
             .from("exercises")
@@ -48,7 +50,7 @@ export default async function ExercisesPage() {
         supabase
             .from("user_exercise_prefs")
             .select(
-                "exercise_id, default_sets, default_rep_min, default_rep_max, default_weight",
+                "exercise_id, default_sets, default_rep_min, default_rep_max, default_weight, default_1rm",
             )
             .eq("user_id", user.id),
         supabase
@@ -61,6 +63,7 @@ export default async function ExercisesPage() {
             .select("id, name, note, status, created_at")
             .eq("status", "open")
             .order("created_at", { ascending: false }),
+        supabase.from("profiles").select("units").eq("id", user.id).maybeSingle(),
     ]);
 
     const exercises = (allExercises ?? []).filter(e => !e.archived_at);
@@ -286,6 +289,10 @@ export default async function ExercisesPage() {
                                                         repMax: rMax,
                                                     }}
                                                     timeBased={e.time_based}
+                                                    units={
+                                                        (profile?.units as Unit) ??
+                                                        "lb"
+                                                    }
                                                 />
                                             );
                                         })()}

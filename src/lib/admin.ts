@@ -1,9 +1,11 @@
 import type { createClient } from "@/lib/supabase/server";
 
-/** ADMIN_EMAILS is a comma-separated list; the first entry receives request emails. */
-export function adminRecipient(): string | null {
-  const first = (process.env.ADMIN_EMAILS ?? "").split(",")[0]?.trim();
-  return first || null;
+/** ADMIN_EMAILS is a comma-separated list — every entry gets request emails. */
+export function adminRecipients(): string[] {
+  return (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /** Authoritative admin check — the DB `is_admin()` function (admins table or
@@ -23,9 +25,9 @@ export async function notifyExerciseRequest(input: {
   note: string | null;
   fromEmail: string | null;
 }) {
-  const to = adminRecipient();
+  const to = adminRecipients();
   const key = process.env.RESEND_API_KEY;
-  if (!to || !key) return;
+  if (to.length === 0 || !key) return;
 
   try {
     await fetch("https://api.resend.com/emails", {

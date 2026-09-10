@@ -11,6 +11,7 @@ import {
   type Goal,
 } from "@/lib/targets";
 import { isAdmin, notifyExerciseRequest } from "@/lib/admin";
+import { epley1rm, round5, WORKING_REPS } from "@/lib/one-rm";
 import type { Enums } from "@/lib/supabase/database.types";
 
 async function requireUser() {
@@ -596,11 +597,20 @@ export async function setExercisePref(formData: FormData) {
   const sets = n("default_sets");
   const repMin = n("default_rep_min");
   const repMax = n("default_rep_max");
-  const weightRaw = formData.get("default_weight");
-  const weight =
-    weightRaw === null || weightRaw === "" ? null : Math.max(0, Number(weightRaw));
+  const w = (k: string) => {
+    const v = formData.get(k);
+    return v === null || v === "" ? null : Math.max(0, Number(v));
+  };
+  const weight = w("default_weight");
+  const oneRm = w("default_1rm");
 
-  if (sets === null && repMin === null && repMax === null && weight === null) {
+  if (
+    sets === null &&
+    repMin === null &&
+    repMax === null &&
+    weight === null &&
+    oneRm === null
+  ) {
     await supabase
       .from("user_exercise_prefs")
       .delete()
@@ -616,6 +626,7 @@ export async function setExercisePref(formData: FormData) {
           default_rep_min: repMin,
           default_rep_max: repMax,
           default_weight: weight,
+          default_1rm: oneRm,
         },
         { onConflict: "user_id,exercise_id" },
       ),
@@ -645,6 +656,15 @@ export async function setExerciseDefaultWeight(input: {
     .eq("exercise_id", input.exerciseId)
     .maybeSingle();
 
+  // keep the est. 1RM in sync with the new working weight (Epley over the
+  // exercise's rep range, or WORKING_REPS if none is set)
+  const lo = existing?.default_rep_min;
+  const hi = existing?.default_rep_max;
+  const reps =
+    lo != null && hi != null ? (lo + hi) / 2 : (lo ?? hi ?? WORKING_REPS);
+  const oneRm =
+    weight !== null && weight > 0 ? round5(epley1rm(weight, reps)) : null;
+
   if (
     weight === null &&
     !existing?.default_sets &&
@@ -666,6 +686,7 @@ export async function setExerciseDefaultWeight(input: {
           default_rep_min: existing?.default_rep_min ?? null,
           default_rep_max: existing?.default_rep_max ?? null,
           default_weight: weight,
+          default_1rm: oneRm,
         },
         { onConflict: "user_id,exercise_id" },
       ),

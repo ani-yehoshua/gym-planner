@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { NavBar } from "@/components/nav-bar";
 import { AppTour } from "@/components/app-tour";
+import { SubmitFeedback } from "@/components/submit-feedback";
 
 export default async function AppLayout({
   children,
@@ -29,12 +30,15 @@ export default async function AppLayout({
         <Link href="/" className="font-semibold">
           Gym<span className="text-text-muted">Planner</span>
         </Link>
-        <Link
-          href="/account"
-          className="rounded-md px-2 py-1 text-xs text-text-muted hover:text-text"
-        >
-          {profile?.display_name || "Account"}
-        </Link>
+        <div className="flex items-center gap-3">
+          <SubmitFeedback defaultEmail={user.email ?? ""} />
+          <Link
+            href="/account"
+            className="rounded-md px-2 py-1 text-xs text-text-muted hover:text-text"
+          >
+            {profile?.display_name || "Account"}
+          </Link>
+        </div>
       </header>
 
       <main className="flex-1 px-4 py-5">{children}</main>

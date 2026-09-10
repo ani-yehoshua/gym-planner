@@ -5,6 +5,7 @@ import { formatLong } from "@/lib/date";
 import { isCompound, recommendedReps, type Goal } from "@/lib/targets";
 import { DeleteDayButton } from "@/components/danger-button";
 import { ChevronLeftIcon } from "@/components/icons";
+import { type Unit } from "@/lib/units";
 import DayEditor from "./DayEditor";
 
 // stable per-member accent colors
@@ -50,6 +51,7 @@ export default async function DayPage({
     { data: catalog },
     { data: prevLogs },
     { data: prevNotes },
+    { data: profile },
   ] = await Promise.all([
     pdeIds.length
       ? supabase
@@ -118,6 +120,7 @@ export default async function DayPage({
           .eq("user_id", user.id)
           .in("planned_day_exercises.exercise_id", exIds)
       : Promise.resolve({ data: [] }),
+    supabase.from("profiles").select("units").eq("id", user.id).maybeSingle(),
   ]);
 
   const targetByPde = new Map(
@@ -265,6 +268,7 @@ export default async function DayPage({
         lastByExercise={prevByExercise}
         goal={goal}
         experience={constants?.experience ?? null}
+        units={(profile?.units as Unit) ?? "lb"}
       />
     </div>
   );

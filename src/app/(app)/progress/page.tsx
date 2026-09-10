@@ -8,6 +8,7 @@ import {
   StrengthWidgets,
   type StrengthRow,
 } from "@/components/strength-widgets";
+import { unitLabel, type Unit } from "@/lib/units";
 
 export default async function ProgressPage() {
   const supabase = await createClient();
@@ -21,7 +22,8 @@ export default async function ProgressPage() {
     getUserTimezone(),
   ]);
 
-  const [{ data: bw }, { data: sets }, { data: pastDays }] = await Promise.all([
+  const [{ data: bw }, { data: sets }, { data: pastDays }, { data: profile }] =
+    await Promise.all([
     supabase
       .from("bodyweight_logs")
       .select("date, weight")
@@ -47,7 +49,11 @@ export default async function ProgressPage() {
       .lte("date", todayISO)
       .order("date", { ascending: false })
       .limit(60),
+    supabase.from("profiles").select("units").eq("id", user.id).maybeSingle(),
   ]);
+
+  const units: Unit = (profile?.units as Unit) ?? "lb";
+  const u = unitLabel(units);
 
   // weighted sets for the Lifts widgets — dates resolved in the user's zone
   const strengthRows: StrengthRow[] = (sets ?? []).flatMap((s) => {
@@ -153,7 +159,7 @@ export default async function ProgressPage() {
       <h1 className="text-lg font-semibold">Progress</h1>
 
       <section className="rounded-xl border border-border p-4">
-        <h2 className="text-sm font-medium">Bodyweight</h2>
+        <h2 className="text-sm font-medium">Bodyweight ({u})</h2>
         <form action={logBodyweight} className="mt-3 flex flex-wrap gap-2">
           <input
             type="date"
@@ -166,8 +172,8 @@ export default async function ProgressPage() {
             step="0.1"
             name="weight"
             required
-            placeholder="Weight"
-            className="w-28 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+            placeholder={`Weight (${u})`}
+            className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
           <button className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg">
             Log
@@ -212,7 +218,11 @@ export default async function ProgressPage() {
         )}
       </section>
 
-      <StrengthWidgets rows={strengthRows} todayISO={todayISO} />
+      <StrengthWidgets
+        rows={strengthRows}
+        todayISO={todayISO}
+        units={units}
+      />
     </div>
   );
 }

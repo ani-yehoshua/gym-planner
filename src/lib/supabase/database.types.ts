@@ -682,6 +682,7 @@ export type Database = {
           default_rep_max: number | null
           default_rep_min: number | null
           default_sets: number | null
+          default_1rm: number | null
           default_weight: number | null
           exercise_id: string
           updated_at: string
@@ -691,6 +692,7 @@ export type Database = {
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
+          default_1rm?: number | null
           default_weight?: number | null
           exercise_id: string
           updated_at?: string
@@ -700,6 +702,7 @@ export type Database = {
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
+          default_1rm?: number | null
           default_weight?: number | null
           exercise_id?: string
           updated_at?: string
