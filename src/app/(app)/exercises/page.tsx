@@ -10,6 +10,7 @@ import { CATEGORY_LABEL, CATEGORY_ORDER, muscleList } from "@/lib/labels";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
 import { ExercisePrefForm } from "@/components/exercise-pref-form";
 import { ExerciseForm } from "@/components/exercise-form";
+import { ExerciseSearch } from "@/components/exercise-search";
 import { SubmitButton } from "@/components/submit-button";
 import { recommendedReps, isCompound, type Goal } from "@/lib/targets";
 import { isAdmin } from "@/lib/admin";
@@ -244,12 +245,14 @@ export default async function ExercisesPage() {
                 </details>
             )}
 
+            <ExerciseSearch>
             {[...CATEGORY_ORDER]
                 .filter(c => grouped.has(c))
                 .sort((a, b) => CATEGORY_LABEL[a].localeCompare(CATEGORY_LABEL[b]))
                 .map(c => (
                 <details
                     key={c}
+                    data-exercise-group
                     className='rounded-xl border border-border'>
                     <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold'>
                         {CATEGORY_LABEL[c]}
@@ -261,6 +264,7 @@ export default async function ExercisesPage() {
                         {grouped.get(c)!.map(e => (
                             <li
                                 key={e.id}
+                                data-exercise-name={e.name}
                                 className='rounded-lg border border-border'>
                                 <details className='group'>
                                     <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm'>
@@ -277,12 +281,15 @@ export default async function ExercisesPage() {
                                                     goal,
                                                     isCompound(e),
                                                 );
+                                            const p = prefs.get(e.id) ?? null;
                                             return (
                                                 <ExercisePrefForm
+                                                    // remount when the saved pref changes (e.g. via the
+                                                    // day page's "Set default") so stale client state
+                                                    // from an earlier navigation doesn't stick around
+                                                    key={`${e.id}:${p?.default_sets ?? ""}:${p?.default_rep_min ?? ""}:${p?.default_rep_max ?? ""}:${p?.default_weight ?? ""}:${p?.default_1rm ?? ""}`}
                                                     exerciseId={e.id}
-                                                    pref={
-                                                        prefs.get(e.id) ?? null
-                                                    }
+                                                    pref={p}
                                                     fallback={{
                                                         sets: 2,
                                                         repMin: rMin,
@@ -356,6 +363,7 @@ export default async function ExercisesPage() {
                     </ul>
                 </details>
             ))}
+            </ExerciseSearch>
         </div>
     );
 }

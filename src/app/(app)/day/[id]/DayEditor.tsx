@@ -947,7 +947,6 @@ export default function DayEditor({
                         reorder.
                     </p>
                     <input
-                        autoFocus
                         placeholder='Search…'
                         value={query}
                         onChange={e => setQuery(e.target.value)}
