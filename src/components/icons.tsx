@@ -64,6 +64,15 @@ export const ExitIcon = ({ className }: P) => (
   </svg>
 );
 
+export const SwapIcon = ({ className }: P) => (
+  <svg {...svg(className ?? "h-4 w-4")}>
+    <path d="m16 3 4 4-4 4" />
+    <path d="M20 7H4" />
+    <path d="m8 21-4-4 4-4" />
+    <path d="M4 17h16" />
+  </svg>
+);
+
 export const ResumeIcon = ({ className }: P) => (
   <svg {...svg(className)}>
     <circle cx="12" cy="12" r="9" />
