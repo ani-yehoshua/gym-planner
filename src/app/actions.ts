@@ -336,6 +336,9 @@ function exerciseFieldsFromForm(formData: FormData) {
     const v = formData.get(k);
     return v === null || v === "" ? null : Math.max(1, Math.min(999, Number(v)));
   };
+  const measurement = (String(formData.get("measurement") || "reps") ||
+    "reps") as Enums<"exercise_measurement">;
+  const distanceRaw = formData.get("default_distance");
   return {
     name: String(formData.get("name") || "").trim(),
     category: String(formData.get("category")) as Enums<"muscle_category">,
@@ -346,7 +349,11 @@ function exerciseFieldsFromForm(formData: FormData) {
     default_sets: numOrNull("default_sets"),
     default_rep_min: numOrNull("default_rep_min"),
     default_rep_max: numOrNull("default_rep_max"),
-    time_based: formData.get("time_based") === "true",
+    default_distance:
+      distanceRaw === null || distanceRaw === "" ? null : Math.max(0, Number(distanceRaw)),
+    measurement,
+    time_based: measurement === "time" || measurement === "time_or_distance",
+    weighted: formData.get("weighted") === "true",
   };
 }
 
@@ -603,13 +610,18 @@ export async function setExercisePref(formData: FormData) {
   };
   const weight = w("default_weight");
   const oneRm = w("default_1rm");
+  const distance = w("default_distance");
+  const logModeRaw = String(formData.get("default_log_mode") || "");
+  const logMode = logModeRaw === "time" || logModeRaw === "distance" ? logModeRaw : null;
 
   if (
     sets === null &&
     repMin === null &&
     repMax === null &&
     weight === null &&
-    oneRm === null
+    oneRm === null &&
+    distance === null &&
+    logMode === null
   ) {
     await supabase
       .from("user_exercise_prefs")
@@ -627,6 +639,8 @@ export async function setExercisePref(formData: FormData) {
           default_rep_max: repMax,
           default_weight: weight,
           default_1rm: oneRm,
+          default_distance: distance,
+          default_log_mode: logMode,
         },
         { onConflict: "user_id,exercise_id" },
       ),
@@ -697,6 +711,83 @@ export async function setExerciseDefaultWeight(input: {
   revalidatePath("/exercises");
 }
 
+/** Duration slider commit for a time-based exercise — saves the picked
+ *  duration as the user's personal default (reusing default_rep_min/max,
+ *  same as target_rep_min/max, to mean "seconds" for time-based exercises). */
+export async function setExerciseDefaultSeconds(input: {
+  exerciseId: string;
+  dayId: string;
+  seconds: number;
+}) {
+  const { supabase, user } = await requireUser();
+  const seconds = Math.max(1, Math.min(999, Math.round(input.seconds)));
+
+  const { data: existing } = await supabase
+    .from("user_exercise_prefs")
+    .select("default_sets, default_weight, default_1rm")
+    .eq("user_id", user.id)
+    .eq("exercise_id", input.exerciseId)
+    .maybeSingle();
+
+  check(
+    await supabase.from("user_exercise_prefs").upsert(
+      {
+        user_id: user.id,
+        exercise_id: input.exerciseId,
+        default_sets: existing?.default_sets ?? null,
+        default_rep_min: seconds,
+        default_rep_max: seconds,
+        default_weight: existing?.default_weight ?? null,
+        default_1rm: existing?.default_1rm ?? null,
+      },
+      { onConflict: "user_id,exercise_id" },
+    ),
+    "save default duration",
+  );
+  revalidatePath(`/day/${input.dayId}`);
+  revalidatePath("/exercises");
+}
+
+/** Same idea for a distance-based exercise's target distance. */
+export async function setExerciseDefaultDistance(input: {
+  exerciseId: string;
+  dayId: string;
+  distance: number;
+}) {
+  const { supabase, user } = await requireUser();
+  const distance = Math.max(0, input.distance);
+
+  const { data: existing } = await supabase
+    .from("user_exercise_prefs")
+    .select("default_sets")
+    .eq("user_id", user.id)
+    .eq("exercise_id", input.exerciseId)
+    .maybeSingle();
+
+  check(
+    await supabase.from("user_exercise_prefs").upsert(
+      {
+        user_id: user.id,
+        exercise_id: input.exerciseId,
+        default_sets: existing?.default_sets ?? null,
+        default_distance: distance,
+      },
+      { onConflict: "user_id,exercise_id" },
+    ),
+    "save default distance",
+  );
+  revalidatePath(`/day/${input.dayId}`);
+  revalidatePath("/exercises");
+}
+
+/** Per-session time-or-distance mode for a dual-measurement exercise
+ *  (e.g. Farmer's Carry, a treadmill walk). */
+export async function setLogMode(pdeId: string, dayId: string, mode: "time" | "distance") {
+  const { supabase } = await requireUser();
+  await supabase.from("planned_day_exercises").update({ log_mode: mode }).eq("id", pdeId);
+  revalidatePath(`/day/${dayId}`);
+}
+
 /** Per-user targets. On any day (personal or party) these are yours alone and
  *  never touch another member's numbers. */
 export async function updateDayExerciseTarget(input: {
@@ -706,12 +797,13 @@ export async function updateDayExerciseTarget(input: {
   repMin?: number | null;
   repMax?: number | null;
   weight?: number | null;
+  distance?: number | null;
 }) {
   const { supabase, user } = await requireUser();
 
   const { data: existing } = await supabase
     .from("day_exercise_user_targets")
-    .select("target_sets, target_rep_min, target_rep_max, target_weight")
+    .select("target_sets, target_rep_min, target_rep_max, target_weight, target_distance")
     .eq("planned_day_exercise_id", input.pdeId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -731,6 +823,8 @@ export async function updateDayExerciseTarget(input: {
           input.repMax !== undefined ? input.repMax : (existing?.target_rep_max ?? null),
         target_weight:
           input.weight !== undefined ? input.weight : (existing?.target_weight ?? null),
+        target_distance:
+          input.distance !== undefined ? input.distance : (existing?.target_distance ?? null),
       },
       { onConflict: "planned_day_exercise_id,user_id" },
     ),
@@ -773,6 +867,38 @@ export async function removeDayExercise(pdeId: string, dayId: string) {
   revalidatePath(`/day/${dayId}`);
 }
 
+/** Hot-swap this slot to a different catalog exercise (e.g. Lying Leg Curl ->
+ *  Seated Leg Curl). Blocked once anyone has logged a set for it this
+ *  session, so history/PRs never end up mislabeled. Old targets are cleared
+ *  since they were tuned for the exercise being replaced. */
+export async function swapExercise(pdeId: string, dayId: string, newExerciseId: string) {
+  const { supabase } = await requireUser();
+
+  const { count } = await supabase
+    .from("set_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("planned_day_exercise_id", pdeId);
+  if (count && count > 0) throw new Error("Can't swap — sets are already logged for this one.");
+
+  check(
+    await supabase
+      .from("planned_day_exercises")
+      .update({
+        exercise_id: newExerciseId,
+        target_sets: null,
+        target_rep_min: null,
+        target_rep_max: null,
+        target_weight: null,
+        target_distance: null,
+        log_mode: null,
+      })
+      .eq("id", pdeId),
+    "swap exercise",
+  );
+  await supabase.from("day_exercise_user_targets").delete().eq("planned_day_exercise_id", pdeId);
+  revalidatePath(`/day/${dayId}`);
+}
+
 // ---------------------------------------------------------------------------
 // set logging
 // ---------------------------------------------------------------------------
@@ -782,10 +908,12 @@ export async function logSet(input: {
   setNo: number;
   weight: number | null;
   reps: number | null;
+  distance?: number | null;
 }) {
   const { supabase, user } = await requireUser();
+  const distance = input.distance ?? null;
 
-  if (input.weight === null && input.reps === null) {
+  if (input.weight === null && input.reps === null && distance === null) {
     await supabase
       .from("set_logs")
       .delete()
@@ -800,6 +928,7 @@ export async function logSet(input: {
         set_no: input.setNo,
         weight: input.weight,
         reps: input.reps,
+        distance,
       },
       { onConflict: "planned_day_exercise_id,user_id,set_no" },
     );

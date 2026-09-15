@@ -15,6 +15,15 @@ const inp = "rounded-lg border border-border bg-surface px-3 py-2 text-sm";
 const smallInp =
   "w-16 rounded-md border border-border bg-surface px-2 py-1 text-center text-sm";
 
+type Measurement = Enums<"exercise_measurement">;
+
+const MEASUREMENT_LABEL: Record<Measurement, string> = {
+  reps: "Reps (weight × reps)",
+  time: "Time (holds, cardio)",
+  distance: "Distance (walks, runs)",
+  time_or_distance: "Time or distance (either, per session)",
+};
+
 export type ExerciseFormValues = {
   id: string;
   name: string;
@@ -26,7 +35,10 @@ export type ExerciseFormValues = {
   default_sets: number | null;
   default_rep_min: number | null;
   default_rep_max: number | null;
+  default_distance: number | null;
+  measurement: Measurement;
   time_based: boolean;
+  weighted: boolean;
 };
 
 const toInput = (ms: string[]) => ms.map(muscleLabel).join(", ");
@@ -45,7 +57,12 @@ export function ExerciseForm({
 }) {
   const editing = !!exercise;
   const action = editing ? updateExercise : createExercise;
-  const [timeBased, setTimeBased] = useState(exercise?.time_based ?? false);
+  const [measurement, setMeasurement] = useState<Measurement>(
+    exercise?.measurement ?? "reps",
+  );
+  const [weighted, setWeighted] = useState(exercise?.weighted ?? true);
+  const timeBased = measurement === "time" || measurement === "time_or_distance";
+  const distanceBased = measurement === "distance" || measurement === "time_or_distance";
 
   return (
     <form action={action} className="flex flex-col gap-3">
@@ -110,15 +127,32 @@ export function ExerciseForm({
         />
       </label>
 
+      <label className="flex flex-col gap-1 text-xs text-text-muted">
+        Measurement
+        <select
+          name="measurement"
+          value={measurement}
+          onChange={(e) => setMeasurement(e.target.value as Measurement)}
+          className={inp}
+        >
+          {Object.entries(MEASUREMENT_LABEL).map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm has-[:checked]:border-text has-[:checked]:bg-surface-2">
         <input
           type="checkbox"
-          name="time_based"
+          name="weighted"
           value="true"
-          checked={timeBased}
-          onChange={(e) => setTimeBased(e.target.checked)}
+          checked={weighted}
+          onChange={(e) => setWeighted(e.target.checked)}
         />
-        Time-based (holds / cardio — sets of a duration, not reps)
+        Weighted (uncheck for bodyweight-only moves — push-ups, hanging leg
+        raise, etc.; a member can still add weight for their own version)
       </label>
 
       <div className="flex flex-col gap-1 text-xs text-text-muted">
@@ -151,6 +185,19 @@ export function ExerciseForm({
           <span>{timeBased ? "sec" : "reps"}</span>
         </div>
       </div>
+
+      {distanceBased && (
+        <label className="flex flex-col gap-1 text-xs text-text-muted">
+          Default distance (in the member&rsquo;s unit — mi or km)
+          <input
+            name="default_distance"
+            inputMode="decimal"
+            defaultValue={exercise?.default_distance ?? ""}
+            placeholder="0.5"
+            className={smallInp}
+          />
+        </label>
+      )}
 
       <label className="flex flex-col gap-1 text-xs text-text-muted">
         How to do it

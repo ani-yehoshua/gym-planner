@@ -101,6 +101,7 @@ export type Database = {
       day_exercise_user_targets: {
         Row: {
           planned_day_exercise_id: string
+          target_distance: number | null
           target_rep_max: number | null
           target_rep_min: number | null
           target_sets: number | null
@@ -110,6 +111,7 @@ export type Database = {
         }
         Insert: {
           planned_day_exercise_id: string
+          target_distance?: number | null
           target_rep_max?: number | null
           target_rep_min?: number | null
           target_sets?: number | null
@@ -119,6 +121,7 @@ export type Database = {
         }
         Update: {
           planned_day_exercise_id?: string
+          target_distance?: number | null
           target_rep_max?: number | null
           target_rep_min?: number | null
           target_sets?: number | null
@@ -134,51 +137,60 @@ export type Database = {
           category: Database["public"]["Enums"]["muscle_category"]
           created_at: string
           created_by: string | null
+          default_distance: number | null
           default_rep_max: number | null
           default_rep_min: number | null
           default_sets: number | null
           howto_text: string | null
           id: string
           is_public: boolean
+          measurement: Database["public"]["Enums"]["exercise_measurement"]
           media_url: string | null
           name: string
           primary_muscles: string[]
           secondary_muscles: string[]
           time_based: boolean
+          weighted: boolean
         }
         Insert: {
           archived_at?: string | null
           category: Database["public"]["Enums"]["muscle_category"]
           created_at?: string
           created_by?: string | null
+          default_distance?: number | null
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
           howto_text?: string | null
           id?: string
           is_public?: boolean
+          measurement?: Database["public"]["Enums"]["exercise_measurement"]
           media_url?: string | null
           name: string
           primary_muscles?: string[]
           secondary_muscles?: string[]
           time_based?: boolean
+          weighted?: boolean
         }
         Update: {
           archived_at?: string | null
           category?: Database["public"]["Enums"]["muscle_category"]
           created_at?: string
           created_by?: string | null
+          default_distance?: number | null
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
           howto_text?: string | null
           id?: string
           is_public?: boolean
+          measurement?: Database["public"]["Enums"]["exercise_measurement"]
           media_url?: string | null
           name?: string
           primary_muscles?: string[]
           secondary_muscles?: string[]
           time_based?: boolean
+          weighted?: boolean
         }
         Relationships: [
           {
@@ -312,8 +324,10 @@ export type Database = {
           created_at: string
           exercise_id: string
           id: string
+          log_mode: string | null
           planned_day_id: string
           sort: number
+          target_distance: number | null
           target_rep_max: number | null
           target_rep_min: number | null
           target_sets: number | null
@@ -324,8 +338,10 @@ export type Database = {
           created_at?: string
           exercise_id: string
           id?: string
+          log_mode?: string | null
           planned_day_id: string
           sort?: number
+          target_distance?: number | null
           target_rep_max?: number | null
           target_rep_min?: number | null
           target_sets?: number | null
@@ -336,8 +352,10 @@ export type Database = {
           created_at?: string
           exercise_id?: string
           id?: string
+          log_mode?: string | null
           planned_day_id?: string
           sort?: number
+          target_distance?: number | null
           target_rep_max?: number | null
           target_rep_min?: number | null
           target_sets?: number | null
@@ -492,6 +510,7 @@ export type Database = {
       }
       set_logs: {
         Row: {
+          distance: number | null
           id: string
           logged_at: string
           notes: string | null
@@ -504,6 +523,7 @@ export type Database = {
           weight: number | null
         }
         Insert: {
+          distance?: number | null
           id?: string
           logged_at?: string
           notes?: string | null
@@ -516,6 +536,7 @@ export type Database = {
           weight?: number | null
         }
         Update: {
+          distance?: number | null
           id?: string
           logged_at?: string
           notes?: string | null
@@ -679,6 +700,8 @@ export type Database = {
       }
       user_exercise_prefs: {
         Row: {
+          default_distance: number | null
+          default_log_mode: string | null
           default_rep_max: number | null
           default_rep_min: number | null
           default_sets: number | null
@@ -689,6 +712,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          default_distance?: number | null
+          default_log_mode?: string | null
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
@@ -699,6 +724,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          default_distance?: number | null
+          default_log_mode?: string | null
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
@@ -719,6 +746,7 @@ export type Database = {
       join_party_with_code: { Args: { p_code: string }; Returns: string }
     }
     Enums: {
+      exercise_measurement: "reps" | "time" | "distance" | "time_or_distance"
       experience_level: "beginner" | "returning" | "intermediate" | "advanced"
       muscle_category:
         | "push"
@@ -869,6 +897,7 @@ export type Enums<
 export const Constants = {
   public: {
     Enums: {
+      exercise_measurement: ["reps", "time", "distance", "time_or_distance"],
       experience_level: ["beginner", "returning", "intermediate", "advanced"],
       muscle_category: [
         "push",

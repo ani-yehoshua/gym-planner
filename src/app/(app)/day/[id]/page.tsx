@@ -29,7 +29,7 @@ export default async function DayPage({
   const { data: day } = await supabase
     .from("planned_days")
     .select(
-      "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based))",
+      "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -56,7 +56,7 @@ export default async function DayPage({
     pdeIds.length
       ? supabase
           .from("set_logs")
-          .select("planned_day_exercise_id, user_id, set_no, weight, reps, volume")
+          .select("planned_day_exercise_id, user_id, set_no, weight, reps, distance, volume")
           .in("planned_day_exercise_id", pdeIds)
       : Promise.resolve({ data: [] }),
     pdeIds.length
@@ -69,14 +69,14 @@ export default async function DayPage({
     pdeIds.length
       ? supabase
           .from("day_exercise_user_targets")
-          .select("planned_day_exercise_id, target_sets, target_rep_min, target_rep_max, target_weight")
+          .select("planned_day_exercise_id, target_sets, target_rep_min, target_rep_max, target_weight, target_distance")
           .eq("user_id", user.id)
           .in("planned_day_exercise_id", pdeIds)
       : Promise.resolve({ data: [] }),
     exIds.length
       ? supabase
           .from("user_exercise_prefs")
-          .select("exercise_id, default_sets, default_rep_min, default_rep_max, default_weight")
+          .select("exercise_id, default_sets, default_rep_min, default_rep_max, default_weight, default_distance, default_log_mode")
           .eq("user_id", user.id)
           .in("exercise_id", exIds)
       : Promise.resolve({ data: [] }),
@@ -94,7 +94,7 @@ export default async function DayPage({
       .maybeSingle(),
     supabase
       .from("exercises")
-      .select("id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based")
+      .select("id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance")
       .is("archived_at", null)
       .order("name"),
     // my own prior sets for these exercises — for the "last time" line on each card
@@ -102,12 +102,10 @@ export default async function DayPage({
       ? supabase
           .from("set_logs")
           .select(
-            "set_no, weight, reps, planned_day_exercises!inner(exercise_id, planned_days!inner(id, date))",
+            "set_no, weight, reps, distance, planned_day_exercises!inner(exercise_id, planned_days!inner(id, date))",
           )
           .eq("user_id", user.id)
           .in("planned_day_exercises.exercise_id", exIds)
-          .not("weight", "is", null)
-          .not("reps", "is", null)
           .order("set_no")
       : Promise.resolve({ data: [] }),
     // my own prior notes for these exercises — shown under the "last time" line
@@ -150,27 +148,41 @@ export default async function DayPage({
     set_no: number;
     weight: number | null;
     reps: number | null;
+    distance: number | null;
     planned_day_exercises: PrevEmbed;
   };
   type PrevNoteRow = { note: string | null; planned_day_exercises: PrevEmbed };
   const prevByExercise: Record<
     string,
-    { date: string; sets: { weight: number; reps: number }[]; note?: string }
+    {
+      date: string;
+      sets: { weight: number; reps: number; distance: number | null }[];
+      note?: string;
+    }
   > = {};
   {
     const rowsByEx: Record<
       string,
-      { date: string; set_no: number; weight: number; reps: number }[]
+      {
+        date: string;
+        set_no: number;
+        weight: number;
+        reps: number;
+        distance: number | null;
+      }[]
     > = {};
     for (const row of (prevLogs ?? []) as PrevRow[]) {
       const pde = row.planned_day_exercises;
       const pd = pde?.planned_days;
       if (!pde || !pd || pd.id === id || pd.date >= day.date) continue;
+      if (row.weight == null && row.reps == null && row.distance == null)
+        continue;
       (rowsByEx[pde.exercise_id] ??= []).push({
         date: pd.date,
         set_no: row.set_no,
-        weight: row.weight!,
-        reps: row.reps!,
+        weight: row.weight ?? 0,
+        reps: row.reps ?? 0,
+        distance: row.distance,
       });
     }
     for (const [exId, rows] of Object.entries(rowsByEx)) {
@@ -180,7 +192,7 @@ export default async function DayPage({
         sets: rows
           .filter((r) => r.date === maxDate)
           .sort((a, b) => a.set_no - b.set_no)
-          .map((r) => ({ weight: r.weight, reps: r.reps })),
+          .map((r) => ({ weight: r.weight, reps: r.reps, distance: r.distance })),
       };
     }
     for (const row of (prevNotes ?? []) as unknown as PrevNoteRow[]) {
@@ -208,6 +220,13 @@ export default async function DayPage({
       repMax:
         t?.target_rep_max ?? pref?.default_rep_max ?? p.target_rep_max ?? recMax,
       weight: t?.target_weight ?? pref?.default_weight ?? null,
+      distance:
+        t?.target_distance ??
+        pref?.default_distance ??
+        p.target_distance ??
+        p.exercises.default_distance ??
+        null,
+      logMode: (p.log_mode ?? pref?.default_log_mode ?? "time") as "time" | "distance",
     };
   }
 
@@ -254,8 +273,13 @@ export default async function DayPage({
                 targetRepMin: e.repMin,
                 targetRepMax: e.repMax,
                 targetWeight: e.weight,
+                targetDistance: e.distance,
+                logMode: e.logMode,
                 addedBy: p.added_by,
-                exercise: { ...p.exercises, timeBased: p.exercises.time_based },
+                exercise: {
+                  ...p.exercises,
+                  timeBased: p.exercises.time_based,
+                },
               };
             }),
         }}

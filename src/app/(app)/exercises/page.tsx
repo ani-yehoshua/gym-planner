@@ -44,14 +44,14 @@ export default async function ExercisesPage() {
         supabase
             .from("exercises")
             .select(
-                "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, default_sets, default_rep_min, default_rep_max, time_based, created_by, archived_at",
+                "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, default_sets, default_rep_min, default_rep_max, default_distance, measurement, time_based, weighted, created_by, archived_at",
             )
             .order("category")
             .order("name"),
         supabase
             .from("user_exercise_prefs")
             .select(
-                "exercise_id, default_sets, default_rep_min, default_rep_max, default_weight, default_1rm",
+                "exercise_id, default_sets, default_rep_min, default_rep_max, default_weight, default_1rm, default_distance, default_log_mode",
             )
             .eq("user_id", user.id),
         supabase
@@ -287,7 +287,7 @@ export default async function ExercisesPage() {
                                                     // remount when the saved pref changes (e.g. via the
                                                     // day page's "Set default") so stale client state
                                                     // from an earlier navigation doesn't stick around
-                                                    key={`${e.id}:${p?.default_sets ?? ""}:${p?.default_rep_min ?? ""}:${p?.default_rep_max ?? ""}:${p?.default_weight ?? ""}:${p?.default_1rm ?? ""}`}
+                                                    key={`${e.id}:${p?.default_sets ?? ""}:${p?.default_rep_min ?? ""}:${p?.default_rep_max ?? ""}:${p?.default_weight ?? ""}:${p?.default_1rm ?? ""}:${p?.default_distance ?? ""}:${p?.default_log_mode ?? ""}`}
                                                     exerciseId={e.id}
                                                     pref={p}
                                                     fallback={{
@@ -296,6 +296,8 @@ export default async function ExercisesPage() {
                                                         repMax: rMax,
                                                     }}
                                                     timeBased={e.time_based}
+                                                    weighted={e.weighted}
+                                                    measurement={e.measurement}
                                                     units={
                                                         (profile?.units as Unit) ??
                                                         "lb"

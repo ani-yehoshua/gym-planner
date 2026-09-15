@@ -66,7 +66,12 @@ export default async function OnboardingPage() {
         <div className={field}>
           <span className={label}>Units</span>
           <div className="flex gap-2">
-            {(["lb", "kg"] as const).map((u, i) => (
+            {(
+              [
+                ["lb", "Imperial", "lb, mi"],
+                ["kg", "Metric", "kg, km"],
+              ] as const
+            ).map(([u, name, hint], i) => (
               <label
                 key={u}
                 className="flex-1 cursor-pointer rounded-lg border border-border px-3 py-2 text-center text-sm has-[:checked]:border-text has-[:checked]:bg-surface-2"
@@ -78,7 +83,10 @@ export default async function OnboardingPage() {
                   defaultChecked={i === 0}
                   className="sr-only"
                 />
-                {u}
+                {name}
+                <span className="block text-[11px] text-text-muted">
+                  {hint}
+                </span>
               </label>
             ))}
           </div>
