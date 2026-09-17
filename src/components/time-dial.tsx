@@ -90,6 +90,14 @@ export function TimeDialModal({
     );
     const [seconds, setSeconds] = useState(initialSeconds % 60);
 
+    useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.body.style.overflow = prev;
+        };
+    }, []);
+
     return createPortal(
         <div
             className='fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center'
