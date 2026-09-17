@@ -28,9 +28,11 @@ function beep() {
     }
 }
 
-/** The always-visible timer for a time-based exercise: a tappable duration
- *  (opens the dial picker while idle), Start/Pause, and Stop & log. No more
- *  separate "reveal the timer" step — this row *is* the timer. */
+/** The always-visible stopwatch for a time-based exercise: counts up from
+ *  0:00 (not down) — Start/Pause, and Stop & log records whatever elapsed.
+ *  While idle it shows the target instead, tappable to open the dial picker;
+ *  once you cross that target it gives a one-time beep/vibrate but keeps
+ *  counting, since you might hold past your goal. */
 export function ExerciseTimer({
     targetSeconds,
     onChangeTarget,
@@ -42,26 +44,23 @@ export function ExerciseTimer({
 }) {
     const [elapsed, setElapsed] = useState(0);
     const [running, setRunning] = useState(false);
-    const [done, setDone] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
     const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const alertedRef = useRef(false);
 
     useEffect(() => {
         if (!running) return;
         tickRef.current = setInterval(() => {
             setElapsed(e => {
                 const next = e + 1;
-                if (next >= targetSeconds) {
-                    if (tickRef.current) clearInterval(tickRef.current);
-                    setRunning(false);
-                    setDone(true);
+                if (next >= targetSeconds && !alertedRef.current) {
+                    alertedRef.current = true;
                     try {
                         navigator.vibrate?.(200);
                     } catch {
                         /* no-op */
                     }
                     beep();
-                    return targetSeconds;
                 }
                 return next;
             });
@@ -71,13 +70,12 @@ export function ExerciseTimer({
         };
     }, [running, targetSeconds]);
 
-    const remaining = Math.max(0, targetSeconds - elapsed);
-    const idle = elapsed === 0 && !running && !done;
+    const idle = elapsed === 0 && !running;
 
     function reset() {
         setElapsed(0);
         setRunning(false);
-        setDone(false);
+        alertedRef.current = false;
     }
 
     return (
@@ -86,23 +84,21 @@ export function ExerciseTimer({
                 type='button'
                 onClick={() => idle && setPickerOpen(true)}
                 disabled={!idle}
-                title={idle ? "Set duration" : undefined}
+                title={idle ? "Set target duration" : undefined}
                 className='w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center font-mono text-base font-semibold tabular-nums enabled:hover:border-text-muted disabled:opacity-100'>
-                {formatDuration(remaining)}
+                {formatDuration(idle ? targetSeconds : elapsed)}
             </button>
-            {!done && (
-                <button
-                    type='button'
-                    onClick={() => setRunning(r => !r)}
-                    className='rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-fg'>
-                    {running ? "Pause" : elapsed > 0 ? "Resume" : "Start"}
-                </button>
-            )}
+            <button
+                type='button'
+                onClick={() => setRunning(r => !r)}
+                className='rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-fg'>
+                {running ? "Pause" : elapsed > 0 ? "Resume" : "Start"}
+            </button>
             {elapsed > 0 && (
                 <button
                     type='button'
                     onClick={() => {
-                        onFinish(done ? targetSeconds : elapsed);
+                        onFinish(elapsed);
                         reset();
                     }}
                     className='rounded-md border border-border px-3 py-1.5 text-xs text-text-muted hover:text-text'>
