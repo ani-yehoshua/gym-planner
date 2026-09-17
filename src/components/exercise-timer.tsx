@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { TimeDialModal } from "@/components/time-dial";
+import { StopwatchModal } from "@/components/stopwatch-modal";
 import { formatDuration } from "@/lib/duration";
 
 function beep() {
@@ -28,11 +28,10 @@ function beep() {
     }
 }
 
-/** The always-visible stopwatch for a time-based exercise: counts up from
- *  0:00 (not down) — Start/Pause, and Stop & log records whatever elapsed.
- *  While idle it shows the target instead, tappable to open the dial picker;
- *  once you cross that target it gives a one-time beep/vibrate but keeps
- *  counting, since you might hold past your goal. */
+/** A "Stopwatch" button on the exercise card — tapping it opens the actual
+ *  stopwatch face (StopwatchModal), Apple/Google-clock style. The running
+ *  state lives here, not in the modal, so closing the modal mid-hold doesn't
+ *  stop the count; the button itself shows the live time while it runs. */
 export function ExerciseTimer({
     targetSeconds,
     onChangeTarget,
@@ -44,7 +43,7 @@ export function ExerciseTimer({
 }) {
     const [elapsed, setElapsed] = useState(0);
     const [running, setRunning] = useState(false);
-    const [pickerOpen, setPickerOpen] = useState(false);
+    const [open, setOpen] = useState(false);
     const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const alertedRef = useRef(false);
 
@@ -70,8 +69,6 @@ export function ExerciseTimer({
         };
     }, [running, targetSeconds]);
 
-    const idle = elapsed === 0 && !running;
-
     function reset() {
         setElapsed(0);
         setRunning(false);
@@ -79,42 +76,32 @@ export function ExerciseTimer({
     }
 
     return (
-        <div className='flex items-center gap-2'>
+        <>
             <button
                 type='button'
-                onClick={() => idle && setPickerOpen(true)}
-                disabled={!idle}
-                title={idle ? "Set target duration" : undefined}
-                className='w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center font-mono text-base font-semibold tabular-nums enabled:hover:border-text-muted disabled:opacity-100'>
-                {formatDuration(idle ? targetSeconds : elapsed)}
+                onClick={() => setOpen(true)}
+                className='flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface-2'>
+                {running && (
+                    <span className='h-1.5 w-1.5 animate-pulse rounded-full bg-accent' />
+                )}
+                {elapsed > 0 ? formatDuration(elapsed) : "Stopwatch"}
             </button>
-            <button
-                type='button'
-                onClick={() => setRunning(r => !r)}
-                className='rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-fg'>
-                {running ? "Pause" : elapsed > 0 ? "Resume" : "Start"}
-            </button>
-            {elapsed > 0 && (
-                <button
-                    type='button'
-                    onClick={() => {
+
+            {open && (
+                <StopwatchModal
+                    elapsed={elapsed}
+                    running={running}
+                    targetSeconds={targetSeconds}
+                    onToggleRun={() => setRunning(r => !r)}
+                    onStopLog={() => {
                         onFinish(elapsed);
                         reset();
+                        setOpen(false);
                     }}
-                    className='rounded-md border border-border px-3 py-1.5 text-xs text-text-muted hover:text-text'>
-                    Stop &amp; log
-                </button>
-            )}
-            {pickerOpen && (
-                <TimeDialModal
-                    initialSeconds={targetSeconds}
-                    onConfirm={secs => {
-                        onChangeTarget(secs);
-                        setPickerOpen(false);
-                    }}
-                    onClose={() => setPickerOpen(false)}
+                    onChangeTarget={onChangeTarget}
+                    onClose={() => setOpen(false)}
                 />
             )}
-        </div>
+        </>
     );
 }
