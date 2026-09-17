@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { TimeDialModal } from "@/components/time-dial";
+import { formatDuration } from "@/lib/duration";
 
 function beep() {
     try {
@@ -26,34 +28,30 @@ function beep() {
     }
 }
 
-function fmt(s: number) {
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${m}:${String(r).padStart(2, "0")}`;
-}
-
-/** A countdown timer seeded from a target duration. Stopping (or finishing)
- *  reports how many seconds actually elapsed so the caller can drop it
- *  straight into a set. */
+/** The always-visible timer for a time-based exercise: a tappable duration
+ *  (opens the dial picker while idle), Start/Pause, and Stop & log. No more
+ *  separate "reveal the timer" step — this row *is* the timer. */
 export function ExerciseTimer({
-    target,
+    targetSeconds,
+    onChangeTarget,
     onFinish,
-    onClose,
 }: {
-    target: number;
+    targetSeconds: number;
+    onChangeTarget: (seconds: number) => void;
     onFinish: (elapsedSeconds: number) => void;
-    onClose: () => void;
 }) {
-    const [remaining, setRemaining] = useState(target);
+    const [elapsed, setElapsed] = useState(0);
     const [running, setRunning] = useState(false);
     const [done, setDone] = useState(false);
+    const [pickerOpen, setPickerOpen] = useState(false);
     const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     useEffect(() => {
         if (!running) return;
         tickRef.current = setInterval(() => {
-            setRemaining(r => {
-                if (r <= 1) {
+            setElapsed(e => {
+                const next = e + 1;
+                if (next >= targetSeconds) {
                     if (tickRef.current) clearInterval(tickRef.current);
                     setRunning(false);
                     setDone(true);
@@ -63,51 +61,64 @@ export function ExerciseTimer({
                         /* no-op */
                     }
                     beep();
-                    return 0;
+                    return targetSeconds;
                 }
-                return r - 1;
+                return next;
             });
         }, 1000);
         return () => {
             if (tickRef.current) clearInterval(tickRef.current);
         };
-    }, [running]);
+    }, [running, targetSeconds]);
 
-    const elapsed = target - remaining;
+    const remaining = Math.max(0, targetSeconds - elapsed);
+    const idle = elapsed === 0 && !running && !done;
+
+    function reset() {
+        setElapsed(0);
+        setRunning(false);
+        setDone(false);
+    }
 
     return (
-        <div className='mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm'>
-            <span className='w-12 font-mono text-lg font-semibold tabular-nums'>
-                {fmt(remaining)}
-            </span>
-            {!running && !done && (
-                <button
-                    type='button'
-                    onClick={() => setRunning(true)}
-                    className='rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-fg'>
-                    {elapsed > 0 ? "Resume" : "Start"}
-                </button>
-            )}
-            {running && (
-                <button
-                    type='button'
-                    onClick={() => setRunning(false)}
-                    className='rounded-md border border-border px-3 py-1 text-xs'>
-                    Pause
-                </button>
-            )}
+        <div className='flex items-center gap-2'>
             <button
                 type='button'
-                onClick={() => onFinish(Math.max(1, elapsed || target))}
-                className='rounded-md border border-border px-3 py-1 text-xs text-text-muted hover:text-text'>
-                {done ? "Log it" : "Stop & log"}
+                onClick={() => idle && setPickerOpen(true)}
+                disabled={!idle}
+                title={idle ? "Set duration" : undefined}
+                className='w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center font-mono text-base font-semibold tabular-nums enabled:hover:border-text-muted disabled:opacity-100'>
+                {formatDuration(remaining)}
             </button>
-            <button
-                type='button'
-                onClick={onClose}
-                className='ml-auto text-xs text-text-muted hover:text-text'>
-                Close
-            </button>
+            {!done && (
+                <button
+                    type='button'
+                    onClick={() => setRunning(r => !r)}
+                    className='rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-fg'>
+                    {running ? "Pause" : elapsed > 0 ? "Resume" : "Start"}
+                </button>
+            )}
+            {elapsed > 0 && (
+                <button
+                    type='button'
+                    onClick={() => {
+                        onFinish(done ? targetSeconds : elapsed);
+                        reset();
+                    }}
+                    className='rounded-md border border-border px-3 py-1.5 text-xs text-text-muted hover:text-text'>
+                    Stop &amp; log
+                </button>
+            )}
+            {pickerOpen && (
+                <TimeDialModal
+                    initialSeconds={targetSeconds}
+                    onConfirm={secs => {
+                        onChangeTarget(secs);
+                        setPickerOpen(false);
+                    }}
+                    onClose={() => setPickerOpen(false)}
+                />
+            )}
         </div>
     );
 }

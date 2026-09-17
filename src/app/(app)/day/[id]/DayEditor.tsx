@@ -17,6 +17,7 @@ import {
     updateDayExerciseTarget,
 } from "@/app/actions";
 import { formatShort } from "@/lib/date";
+import { formatDuration, parseDuration } from "@/lib/duration";
 import {
     CATEGORY_LABEL,
     CATEGORY_ORDER,
@@ -126,6 +127,7 @@ export default function DayEditor({
     lastByExercise,
     goal,
     experience,
+    focusMuscles,
     units,
 }: {
     day: {
@@ -144,12 +146,26 @@ export default function DayEditor({
     lastByExercise: Record<string, LastEntry>;
     goal: string | null;
     experience: Enums<"experience_level"> | null;
+    focusMuscles: string[];
     units: Unit;
 }) {
     const u = unitLabel(units);
     const du = distanceUnitLabel(units);
     const [pending, start] = useTransition();
     const router = useRouter();
+
+    // Most saves round-trip in well under this, so the pill only shows for
+    // the rare slow one instead of flashing on every stepper click.
+    const [showSavingPill, setShowSavingPill] = useState(false);
+    useEffect(() => {
+        const sync = () => setShowSavingPill(pending);
+        if (!pending) {
+            sync();
+            return;
+        }
+        const t = setTimeout(sync, 350);
+        return () => clearTimeout(t);
+    }, [pending]);
 
     const initial = useMemo(() => {
         const m = new Map<
@@ -175,7 +191,6 @@ export default function DayEditor({
     const [weightOverride, setWeightOverride] = useState<
         Record<string, boolean>
     >({});
-    const [timerOpen, setTimerOpen] = useState<Record<string, boolean>>({});
     const [swapId, setSwapId] = useState<string | null>(null);
     const [swapQuery, setSwapQuery] = useState("");
     const weightInputRefs = useRef(new Map<string, HTMLInputElement>());
@@ -336,6 +351,24 @@ export default function DayEditor({
         );
     }
 
+    /** Same as persist(), but the reps field is a duration — accepts "90" or
+     *  "1:30", and reformats to whichever's natural once it's parsed. */
+    function persistTimeField(pdeId: string, setNo: number) {
+        const c = cell(pdeId, setNo);
+        const parsed = parseDuration(c.reps);
+        update(pdeId, setNo, "reps", parsed == null ? "" : formatDuration(parsed));
+        start(() =>
+            logSet({
+                pdeId,
+                dayId: day.id,
+                setNo,
+                weight: c.weight === "" ? null : Number(c.weight),
+                reps: parsed,
+                distance: null,
+            }),
+        );
+    }
+
     function nextOpenSet(ex: DayEx) {
         const total = rowsFor(ex);
         for (let s = 1; s <= total; s++) {
@@ -346,7 +379,7 @@ export default function DayEditor({
     function logTimerResult(ex: DayEx, elapsed: number) {
         const s = nextOpenSet(ex);
         const c = cell(ex.id, s);
-        update(ex.id, s, "reps", String(elapsed));
+        update(ex.id, s, "reps", formatDuration(elapsed));
         start(() =>
             logSet({
                 pdeId: ex.id,
@@ -357,7 +390,6 @@ export default function DayEditor({
                 distance: null,
             }),
         );
-        setTimerOpen(p => ({ ...p, [ex.id]: false }));
     }
 
     function maxLoggedSet(pdeId: string) {
@@ -595,6 +627,8 @@ export default function DayEditor({
                         (goal as Goal) ?? null,
                         experience,
                         isCompound(ex.exercise),
+                        ex.exercise.primary_muscles,
+                        focusMuscles,
                     );
                     const rows = rowsFor(ex);
                     const mode = modeFor(ex);
@@ -616,8 +650,8 @@ export default function DayEditor({
                         }
                         if (ex.exercise.timeBased) {
                             return s.weight
-                                ? `${s.weight} ${u} / ${s.reps}s`
-                                : `${s.reps}s`;
+                                ? `${s.weight} ${u} / ${formatDuration(s.reps)}`
+                                : formatDuration(s.reps);
                         }
                         return `${s.weight}×${s.reps}`;
                     };
@@ -1013,96 +1047,25 @@ export default function DayEditor({
                                 )}
 
                                 {mode === "time" && (
-                                    <div className='flex w-full flex-col gap-1'>
-                                        <div className='flex items-center gap-2'>
-                                            <span className='text-text-muted'>
-                                                Target
-                                            </span>
-                                            <input
-                                                type='range'
-                                                min={5}
-                                                max={300}
-                                                step={5}
-                                                value={ex.targetRepMin ?? 30}
-                                                onChange={e => {
-                                                    const secs = Number(
-                                                        e.target.value,
-                                                    );
-                                                    setTarget(ex.id, {
-                                                        repMin: secs,
-                                                        repMax: secs,
-                                                    });
-                                                }}
-                                                onMouseUp={e =>
-                                                    start(() =>
-                                                        setExerciseDefaultSeconds(
-                                                            {
-                                                                exerciseId:
-                                                                    ex.exercise
-                                                                        .id,
-                                                                dayId: day.id,
-                                                                seconds: Number(
-                                                                    (
-                                                                        e.target as HTMLInputElement
-                                                                    ).value,
-                                                                ),
-                                                            },
-                                                        ),
-                                                    )
-                                                }
-                                                onTouchEnd={e =>
-                                                    start(() =>
-                                                        setExerciseDefaultSeconds(
-                                                            {
-                                                                exerciseId:
-                                                                    ex.exercise
-                                                                        .id,
-                                                                dayId: day.id,
-                                                                seconds: Number(
-                                                                    (
-                                                                        e.target as HTMLInputElement
-                                                                    ).value,
-                                                                ),
-                                                            },
-                                                        ),
-                                                    )
-                                                }
-                                                className='h-1.5 flex-1 accent-[currentColor]'
-                                            />
-                                            <span className='w-10 text-right tabular-nums'>
-                                                {ex.targetRepMin ?? 30}s
-                                            </span>
-                                            <button
-                                                onClick={() =>
-                                                    setTimerOpen(p => ({
-                                                        ...p,
-                                                        [ex.id]: !p[ex.id],
-                                                    }))
-                                                }
-                                                className='rounded-md border border-border px-2.5 py-1 text-[11px] font-medium hover:bg-surface-2'>
-                                                {timerOpen[ex.id]
-                                                    ? "Hide"
-                                                    : "Start"}
-                                            </button>
-                                        </div>
-                                        {timerOpen[ex.id] && (
-                                            <ExerciseTimer
-                                                target={ex.targetRepMin ?? 30}
-                                                onFinish={elapsed =>
-                                                    logTimerResult(
-                                                        ex,
-                                                        elapsed,
-                                                    )
-                                                }
-                                                onClose={() =>
-                                                    setTimerOpen(p => ({
-                                                        ...p,
-                                                        [ex.id]: false,
-                                                    }))
-                                                }
-                                            />
-                                        )}
-                                    </div>
+                                    <ExerciseTimer
+                                        targetSeconds={ex.targetRepMin ?? 30}
+                                        onChangeTarget={secs => {
+                                            setTarget(ex.id, {
+                                                repMin: secs,
+                                                repMax: secs,
+                                            });
+                                            start(() =>
+                                                setExerciseDefaultSeconds({
+                                                    exerciseId: ex.exercise.id,
+                                                    dayId: day.id,
+                                                    seconds: secs,
+                                                }),
+                                            );
+                                        }}
+                                        onFinish={elapsed =>
+                                            logTimerResult(ex, elapsed)
+                                        }
+                                    />
                                 )}
 
                                 {mode === "distance" && (
@@ -1299,14 +1262,18 @@ export default function DayEditor({
                                                 />
                                             ) : (
                                                 <input
-                                                    inputMode='numeric'
+                                                    inputMode={
+                                                        mode === "time"
+                                                            ? "text"
+                                                            : "numeric"
+                                                    }
                                                     className={inputCls}
                                                     placeholder={
                                                         mode === "time" &&
-                                                        s === 1
-                                                            ? String(
-                                                                  ex.targetRepMin ??
-                                                                      "",
+                                                        s === 1 &&
+                                                        ex.targetRepMin != null
+                                                            ? formatDuration(
+                                                                  ex.targetRepMin,
                                                               )
                                                             : ""
                                                     }
@@ -1320,7 +1287,15 @@ export default function DayEditor({
                                                         )
                                                     }
                                                     onBlur={() =>
-                                                        persist(ex.id, s)
+                                                        mode === "time"
+                                                            ? persistTimeField(
+                                                                  ex.id,
+                                                                  s,
+                                                              )
+                                                            : persist(
+                                                                  ex.id,
+                                                                  s,
+                                                              )
                                                     }
                                                 />
                                             )}
@@ -1561,7 +1536,7 @@ export default function DayEditor({
                 </button>
             )}
 
-            {pending && (
+            {showSavingPill && (
                 <span className='fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-text-muted shadow'>
                     Saving…
                 </span>

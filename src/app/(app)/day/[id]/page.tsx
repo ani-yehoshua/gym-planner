@@ -89,7 +89,7 @@ export default async function DayPage({
       : Promise.resolve({ data: [] }),
     supabase
       .from("user_constants")
-      .select("primary_goal, experience")
+      .select("primary_goal, experience, focus_muscles")
       .eq("user_id", user.id)
       .maybeSingle(),
     supabase
@@ -292,6 +292,7 @@ export default async function DayPage({
         lastByExercise={prevByExercise}
         goal={goal}
         experience={constants?.experience ?? null}
+        focusMuscles={constants?.focus_muscles ?? []}
         units={(profile?.units as Unit) ?? "lb"}
       />
     </div>

@@ -64,3 +64,12 @@ textarea {
   scroll-margin-top: 6rem;
   scroll-margin-bottom: 6rem;
 }
+
+/* wheel-style pickers (duration dial): native momentum scroll, no visible bar */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

@@ -77,6 +77,12 @@ export function NavBar() {
         <Link
           key={label}
           href={href}
+          // The nav bar sits in view the whole time, so Next's viewport
+          // prefetch would cache each tab's data as soon as a day loads —
+          // long before you actually switch tabs, making things like this
+          // day's "Set default" writes look like they never landed on the
+          // Exercises tab. Always fetch fresh on tap instead.
+          prefetch={false}
           className={`relative flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 text-center text-[11px] font-medium ${
             active ? "text-text" : "text-text-muted hover:text-text"
           } ${badge ? "text-accent" : ""}`}

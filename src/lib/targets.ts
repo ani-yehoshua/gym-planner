@@ -34,11 +34,16 @@ export function recommendedReps(goal: Goal | null, compound: boolean): [number, 
 }
 
 /** Suggested working-set count. The stored default is always 2 — this is the
- *  number we surface as "suggested N" so the user can dial up to it. */
+ *  number we surface as "suggested N" so the user can dial up to it.
+ *  `primaryMuscles`/`focusMuscles` are optional: when the exercise targets a
+ *  muscle the user picked as a focus area (Account -> Focus muscles), the
+ *  suggestion bumps up by one set. */
 export function suggestedSets(
   goal: Goal | null,
   experience: Enums<"experience_level"> | null,
   compound: boolean,
+  primaryMuscles: string[] = [],
+  focusMuscles: string[] = [],
 ): number {
   let sets: number;
   switch (goal) {
@@ -57,6 +62,9 @@ export function suggestedSets(
   }
   if (experience === "beginner") sets -= 1;
   if (experience === "advanced") sets += 1;
+  if (focusMuscles.length > 0 && primaryMuscles.some((m) => focusMuscles.includes(m))) {
+    sets += 1;
+  }
   return Math.min(6, Math.max(2, sets));
 }
 
