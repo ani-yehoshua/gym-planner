@@ -151,11 +151,18 @@ export default function DayEditor({
 }) {
     const u = unitLabel(units);
     const du = distanceUnitLabel(units);
+    // Two transitions on purpose: `start` is for saves worth telling you
+    // about (logging a set, a note) and drives the "Saving…" pill below.
+    // `startQuiet` is for everything that's really a UI toggle even though
+    // it happens to persist — sets stepper, reorder, category, add/remove/
+    // swap exercise, time/distance mode, timer defaults — those should feel
+    // instant, not announce themselves.
     const [pending, start] = useTransition();
+    const [, startQuiet] = useTransition();
     const router = useRouter();
 
     // Most saves round-trip in well under this, so the pill only shows for
-    // the rare slow one instead of flashing on every stepper click.
+    // the rare slow one instead of flashing on every keystroke.
     const [showSavingPill, setShowSavingPill] = useState(false);
     useEffect(() => {
         const sync = () => setShowSavingPill(pending);
@@ -465,7 +472,7 @@ export default function DayEditor({
             distance?: number | null;
         },
     ) {
-        start(() =>
+        startQuiet(() =>
             updateDayExerciseTarget({ pdeId, dayId: day.id, ...patch }),
         );
     }
@@ -482,12 +489,12 @@ export default function DayEditor({
             )
                 return;
         }
-        start(() => addExerciseToDay(day.id, item.id));
+        startQuiet(() => addExerciseToDay(day.id, item.id));
         setQuery("");
     }
 
     function trySwap(pdeId: string, item: CatalogItem) {
-        start(async () => {
+        startQuiet(async () => {
             try {
                 await swapExercise(pdeId, day.id, item.id);
             } catch (e) {
@@ -549,7 +556,7 @@ export default function DayEditor({
                 {DAY_PLAN_CHOICES.map(c => (
                     <button
                         key={c}
-                        onClick={() => start(() => setDayCategory(day.id, c))}
+                        onClick={() => startQuiet(() => setDayCategory(day.id, c))}
                         className={`rounded-md border px-2.5 py-1 text-xs ${
                             dayType(day.category) === c
                                 ? CATEGORY_STYLE[c]
@@ -705,7 +712,7 @@ export default function DayEditor({
                                     <button
                                         aria-label='Move up'
                                         onClick={() =>
-                                            start(() =>
+                                            startQuiet(() =>
                                                 reorderDayExercise(
                                                     ex.id,
                                                     day.id,
@@ -720,7 +727,7 @@ export default function DayEditor({
                                     <button
                                         aria-label='Move down'
                                         onClick={() =>
-                                            start(() =>
+                                            startQuiet(() =>
                                                 reorderDayExercise(
                                                     ex.id,
                                                     day.id,
@@ -756,7 +763,7 @@ export default function DayEditor({
                                         <button
                                             aria-label='Remove exercise'
                                             onClick={() =>
-                                                start(() =>
+                                                startQuiet(() =>
                                                     removeDayExercise(
                                                         ex.id,
                                                         day.id,
@@ -983,7 +990,7 @@ export default function DayEditor({
                                                 <button
                                                     key={m}
                                                     onClick={() =>
-                                                        start(() =>
+                                                        startQuiet(() =>
                                                             setLogMode(
                                                                 ex.id,
                                                                 day.id,
@@ -1054,7 +1061,7 @@ export default function DayEditor({
                                                 repMin: secs,
                                                 repMax: secs,
                                             });
-                                            start(() =>
+                                            startQuiet(() =>
                                                 setExerciseDefaultSeconds({
                                                     exerciseId: ex.exercise.id,
                                                     dayId: day.id,
@@ -1087,7 +1094,7 @@ export default function DayEditor({
                                                     distance: val,
                                                 });
                                                 if (val != null)
-                                                    start(() =>
+                                                    startQuiet(() =>
                                                         setExerciseDefaultDistance(
                                                             {
                                                                 exerciseId:
