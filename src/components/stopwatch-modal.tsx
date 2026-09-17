@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { TimeDialModal } from "@/components/time-dial";
-import { formatDuration } from "@/lib/duration";
+import { formatDuration, formatStopwatch } from "@/lib/duration";
 
 /** Full-screen-ish stopwatch face — big elapsed readout, a big round Start/
  *  Pause button, Stop & log to the side. Closing this doesn't stop the
  *  stopwatch; the running state lives in the caller, so reopening it picks
  *  up wherever it was. */
 export function StopwatchModal({
-    elapsed,
+    elapsedMs,
     running,
     targetSeconds,
     onToggleRun,
@@ -18,7 +18,7 @@ export function StopwatchModal({
     onChangeTarget,
     onClose,
 }: {
-    elapsed: number;
+    elapsedMs: number;
     running: boolean;
     targetSeconds: number;
     onToggleRun: () => void;
@@ -27,7 +27,7 @@ export function StopwatchModal({
     onClose: () => void;
 }) {
     const [pickerOpen, setPickerOpen] = useState(false);
-    const idle = elapsed === 0 && !running;
+    const idle = elapsedMs === 0 && !running;
 
     useEffect(() => {
         const prev = document.body.style.overflow;
@@ -60,12 +60,12 @@ export function StopwatchModal({
                     </button>
                 </div>
 
-                <div className='my-8 font-mono text-5xl font-semibold tabular-nums'>
-                    {formatDuration(elapsed)}
+                <div className='my-8 font-mono text-4xl font-semibold tabular-nums'>
+                    {formatStopwatch(elapsedMs)}
                 </div>
 
                 <div className='flex items-center justify-center gap-4'>
-                    {elapsed > 0 && (
+                    {elapsedMs > 0 && (
                         <button
                             type='button'
                             onClick={onStopLog}
@@ -81,7 +81,7 @@ export function StopwatchModal({
                                 ? "border-2 border-rose-500/40 bg-rose-500/15 text-rose-600 dark:text-rose-300"
                                 : "bg-primary text-primary-fg"
                         }`}>
-                        {running ? "Pause" : elapsed > 0 ? "Resume" : "Start"}
+                        {running ? "Pause" : elapsedMs > 0 ? "Resume" : "Start"}
                     </button>
                 </div>
             </div>

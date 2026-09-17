@@ -24,3 +24,20 @@ export function formatDuration(totalSeconds: number): string {
   const s = totalSeconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
+
+/** Formats milliseconds as a stopwatch readout: MM:SS:CS, growing to
+ *  HH:MM:SS:CS once an hour has elapsed — the hour slot stays hidden until
+ *  it's actually needed. */
+export function formatStopwatch(ms: number): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const totalCs = Math.floor(Math.max(0, ms) / 10);
+  const cs = totalCs % 100;
+  const totalSeconds = Math.floor(totalCs / 100);
+  const s = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const m = totalMinutes % 60;
+  const h = Math.floor(totalMinutes / 60);
+  return h > 0
+    ? `${pad(h)}:${pad(m)}:${pad(s)}:${pad(cs)}`
+    : `${pad(m)}:${pad(s)}:${pad(cs)}`;
+}

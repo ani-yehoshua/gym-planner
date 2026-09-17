@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { StopwatchModal } from "@/components/stopwatch-modal";
-import { formatDuration } from "@/lib/duration";
+import { formatStopwatch } from "@/lib/duration";
 
 function beep() {
     try {
@@ -31,7 +31,9 @@ function beep() {
 /** A "Stopwatch" button on the exercise card — tapping it opens the actual
  *  stopwatch face (StopwatchModal), Apple/Google-clock style. The running
  *  state lives here, not in the modal, so closing the modal mid-hold doesn't
- *  stop the count; the button itself shows the live time while it runs. */
+ *  stop the count; the button itself shows the live time while it runs.
+ *  Tracks real elapsed milliseconds (via timestamps, not a per-tick counter)
+ *  so the centisecond readout doesn't drift. */
 export function ExerciseTimer({
     targetSeconds,
     onChangeTarget,
@@ -41,37 +43,46 @@ export function ExerciseTimer({
     onChangeTarget: (seconds: number) => void;
     onFinish: (elapsedSeconds: number) => void;
 }) {
-    const [elapsed, setElapsed] = useState(0);
+    const [elapsedMs, setElapsedMs] = useState(0);
     const [running, setRunning] = useState(false);
     const [open, setOpen] = useState(false);
     const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const runStartRef = useRef(0); // performance.now() when this run segment began
+    const baseMsRef = useRef(0); // accumulated ms from earlier run segments
     const alertedRef = useRef(false);
 
     useEffect(() => {
         if (!running) return;
+        runStartRef.current = performance.now();
         tickRef.current = setInterval(() => {
-            setElapsed(e => {
-                const next = e + 1;
-                if (next >= targetSeconds && !alertedRef.current) {
-                    alertedRef.current = true;
-                    try {
-                        navigator.vibrate?.(200);
-                    } catch {
-                        /* no-op */
-                    }
-                    beep();
+            const ms = baseMsRef.current + (performance.now() - runStartRef.current);
+            setElapsedMs(ms);
+            if (ms >= targetSeconds * 1000 && !alertedRef.current) {
+                alertedRef.current = true;
+                try {
+                    navigator.vibrate?.(200);
+                } catch {
+                    /* no-op */
                 }
-                return next;
-            });
-        }, 1000);
+                beep();
+            }
+        }, 40);
         return () => {
             if (tickRef.current) clearInterval(tickRef.current);
         };
     }, [running, targetSeconds]);
 
+    function toggleRun() {
+        setRunning(r => {
+            if (r) baseMsRef.current = elapsedMs; // pausing: freeze where we are
+            return !r;
+        });
+    }
+
     function reset() {
-        setElapsed(0);
+        setElapsedMs(0);
         setRunning(false);
+        baseMsRef.current = 0;
         alertedRef.current = false;
     }
 
@@ -84,17 +95,17 @@ export function ExerciseTimer({
                 {running && (
                     <span className='h-1.5 w-1.5 animate-pulse rounded-full bg-accent' />
                 )}
-                {elapsed > 0 ? formatDuration(elapsed) : "Stopwatch"}
+                {elapsedMs > 0 ? formatStopwatch(elapsedMs) : "Stopwatch"}
             </button>
 
             {open && (
                 <StopwatchModal
-                    elapsed={elapsed}
+                    elapsedMs={elapsedMs}
                     running={running}
                     targetSeconds={targetSeconds}
-                    onToggleRun={() => setRunning(r => !r)}
+                    onToggleRun={toggleRun}
                     onStopLog={() => {
-                        onFinish(elapsed);
+                        onFinish(Math.round(elapsedMs / 1000));
                         reset();
                         setOpen(false);
                     }}

@@ -106,7 +106,7 @@ export function TimeDialModal({
                 className='w-full max-w-xs rounded-2xl border border-border bg-bg p-5 shadow-xl'
                 onClick={e => e.stopPropagation()}>
                 <h2 className='text-center text-sm font-semibold'>
-                    Set duration
+                    Set target
                 </h2>
 
                 <div className='relative mt-4 flex items-center justify-center'>
