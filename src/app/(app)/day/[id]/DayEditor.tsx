@@ -493,10 +493,17 @@ export default function DayEditor({
         setQuery("");
     }
 
-    function trySwap(pdeId: string, item: CatalogItem) {
+    function trySwap(pdeId: string, item: CatalogItem, logged: boolean) {
+        if (
+            logged &&
+            !confirm(
+                "Sets have already been logged for this exercise. Swapping keeps those logged sets attached to the new exercise. Continue?",
+            )
+        )
+            return;
         startQuiet(async () => {
             try {
-                await swapExercise(pdeId, day.id, item.id);
+                await swapExercise(pdeId, day.id, item.id, logged);
             } catch (e) {
                 alert(e instanceof Error ? e.message : "Couldn't swap.");
             }
@@ -662,8 +669,12 @@ export default function DayEditor({
                         }
                         return `${s.weight}×${s.reps}`;
                     };
+                    const swapLogged = hasAnyLog(ex.id);
+                    // the owner can always swap (confirming past any logged
+                    // sets); a member can only swap their own add, and only
+                    // before anyone's logged anything on it
                     const canSwap =
-                        (canManageAll || addedByMe) && !hasAnyLog(ex.id);
+                        canManageAll || (addedByMe && !swapLogged);
                     return (
                         <li
                             key={ex.id}
@@ -789,6 +800,13 @@ export default function DayEditor({
                                             Cancel
                                         </button>
                                     </div>
+                                    {swapLogged && (
+                                        <p className='mt-1 text-[11px] text-amber-600 dark:text-amber-400'>
+                                            Sets are already logged here —
+                                            swapping keeps them attached to
+                                            the new exercise.
+                                        </p>
+                                    )}
                                     <input
                                         placeholder='Search…'
                                         value={swapQuery}
@@ -817,6 +835,7 @@ export default function DayEditor({
                                                                     trySwap(
                                                                         ex.id,
                                                                         c,
+                                                                        swapLogged,
                                                                     )
                                                                 }
                                                                 className='flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2'>
@@ -887,6 +906,7 @@ export default function DayEditor({
                                                                                     trySwap(
                                                                                         ex.id,
                                                                                         c,
+                                                                                        swapLogged,
                                                                                     )
                                                                                 }
                                                                                 className='flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm text-text-muted hover:bg-surface-2'>

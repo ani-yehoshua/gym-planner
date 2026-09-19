@@ -869,16 +869,41 @@ export async function removeDayExercise(pdeId: string, dayId: string) {
 
 /** Hot-swap this slot to a different catalog exercise (e.g. Lying Leg Curl ->
  *  Seated Leg Curl). Blocked once anyone has logged a set for it this
- *  session, so history/PRs never end up mislabeled. Old targets are cleared
- *  since they were tuned for the exercise being replaced. */
-export async function swapExercise(pdeId: string, dayId: string, newExerciseId: string) {
-  const { supabase } = await requireUser();
+ *  session, so history/PRs never end up mislabeled — unless `force` is set,
+ *  which only the day's owner (personal owner, or party owner) may use, so a
+ *  party owner can still fix a member's mis-added exercise. Old targets are
+ *  cleared since they were tuned for the exercise being replaced. */
+export async function swapExercise(
+  pdeId: string,
+  dayId: string,
+  newExerciseId: string,
+  force = false,
+) {
+  const { supabase, user } = await requireUser();
 
   const { count } = await supabase
     .from("set_logs")
     .select("id", { count: "exact", head: true })
     .eq("planned_day_exercise_id", pdeId);
-  if (count && count > 0) throw new Error("Can't swap — sets are already logged for this one.");
+
+  if (count && count > 0) {
+    const blocked = "Can't swap — sets are already logged for this one.";
+    if (!force) throw new Error(blocked);
+
+    const { data: day } = await supabase
+      .from("planned_days")
+      .select("owner_user, party_id")
+      .eq("id", dayId)
+      .maybeSingle();
+    let allowed = day?.owner_user === user.id;
+    if (!allowed && day?.party_id) {
+      const { data: isOwner } = await supabase.rpc("is_party_owner", {
+        p_party: day.party_id,
+      });
+      allowed = isOwner === true;
+    }
+    if (!allowed) throw new Error(blocked);
+  }
 
   check(
     await supabase
