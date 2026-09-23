@@ -41,7 +41,7 @@ export default async function AppLayout({
         </div>
       </header>
 
-      <main className="flex-1 px-4 py-5">{children}</main>
+      <main className="flex-1 px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-5">{children}</main>
 
       <NavBar />
       <AppTour />

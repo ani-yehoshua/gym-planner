@@ -70,7 +70,7 @@ export function NavBar() {
 
   return (
     <nav
-      className="sticky bottom-0 z-10 grid grid-cols-5 border-t border-border bg-bg/95 backdrop-blur"
+      className="fixed inset-x-0 bottom-0 z-10 mx-auto grid w-full max-w-2xl grid-cols-5 border-t border-border bg-bg/95 backdrop-blur"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {tabs.map(({ href, label, Icon, active, badge }) => (
