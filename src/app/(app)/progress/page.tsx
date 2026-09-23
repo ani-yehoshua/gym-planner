@@ -44,7 +44,7 @@ export default async function ProgressPage() {
     supabase
       .from("planned_days")
       .select(
-        "id, date, category, party_id, parties(name), planned_day_exercises(id, sort, exercises(name))",
+        "id, date, category, party_id, parties(name), planned_day_exercises(id, sort, exercises(name, primary_muscles))",
       )
       .lte("date", todayISO)
       .order("date", { ascending: false })
@@ -123,6 +123,7 @@ export default async function ProgressPage() {
         }
         exercises.push({
           name: pde.exercises?.name ?? "?",
+          muscles: pde.exercises?.primary_muscles ?? [],
           sets: done.map((l) => ({ weight: l.weight!, reps: l.reps! })),
           volume: exVol,
           top: exTop,

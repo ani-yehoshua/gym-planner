@@ -1564,7 +1564,7 @@ export default function DayEditor({
             )}
 
             {showSavingPill && (
-                <span className='fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-text-muted shadow'>
+                <span className='fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 rounded-full border border-border bg-surface-2 px-5 py-2 text-sm font-medium text-text-muted shadow-lg'>
                     Saving…
                 </span>
             )}

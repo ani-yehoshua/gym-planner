@@ -156,6 +156,29 @@ export function StrengthWidgets({
     return out;
   }, [rows, range, todayISO]);
 
+  // "G/L" like a stock: latest session's top est. 1RM vs the session before it,
+  // across ALL history (not just the selected range)
+  const changes = useMemo(() => {
+    const byEx = new Map<string, Map<string, number>>();
+    for (const r of rows) {
+      const days = byEx.get(r.exerciseId) ?? new Map<string, number>();
+      days.set(r.date, Math.max(days.get(r.date) ?? 0, e1rm(r.weight, r.reps)));
+      byEx.set(r.exerciseId, days);
+    }
+    const out: Record<string, { delta: number; pct: number } | null> = {};
+    for (const [id, days] of byEx) {
+      const sorted = [...days.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      if (sorted.length < 2) {
+        out[id] = null;
+        continue;
+      }
+      const prev = sorted[sorted.length - 2][1];
+      const last = sorted[sorted.length - 1][1];
+      out[id] = { delta: last - prev, pct: prev > 0 ? ((last - prev) / prev) * 100 : 0 };
+    }
+    return out;
+  }, [rows]);
+
   const ranked = useMemo(
     () => [...aggs].sort((a, b) => b.best.e1rm - a.best.e1rm),
     [aggs],
@@ -229,7 +252,7 @@ export function StrengthWidgets({
       ) : (
         <>
           {view === "records" && (
-            <RecordsView aggs={visible(ranked)} prd={justPrd} unit={u} />
+            <RecordsView aggs={visible(ranked)} prd={justPrd} unit={u} changes={changes} />
           )}
           {view === "e1rm" && (
             <E1rmView aggs={visible(ranked)} unit={u} />
@@ -273,10 +296,12 @@ function RecordsView({
   aggs,
   prd,
   unit,
+  changes,
 }: {
   aggs: ExAgg[];
   prd: (a: ExAgg) => boolean;
   unit: string;
+  changes: Record<string, { delta: number; pct: number } | null>;
 }) {
   const groups = CATEGORY_ORDER.map((cat) => ({
     cat,
@@ -309,6 +334,27 @@ function RecordsView({
                 <div className="text-[11px] text-text-muted">
                   e1RM {a.best.e1rm} {unit} · {formatShort(a.best.date)}
                 </div>
+                {(() => {
+                  const c = changes[a.exerciseId];
+                  if (!c)
+                    return (
+                      <div className="mt-1 text-[11px] text-text-muted">first session</div>
+                    );
+                  if (c.delta === 0)
+                    return <div className="mt-1 text-[11px] text-text-muted">— flat vs last</div>;
+                  const up = c.delta > 0;
+                  return (
+                    <div
+                      className={`mt-1 text-[11px] font-medium tabular-nums ${
+                        up ? "text-emerald-500" : "text-rose-500"
+                      }`}
+                    >
+                      {up ? "▲" : "▼"} {up ? "+" : "−"}
+                      {Math.abs(c.delta)} {unit} ({up ? "+" : "−"}
+                      {Math.abs(c.pct).toFixed(1)}%)
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>

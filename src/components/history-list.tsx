@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { addDays, dayOfMonth, dowShort, formatLong, formatRangeNumeric } from "@/lib/date";
-import { CATEGORY_LABEL, CATEGORY_STYLE } from "@/lib/labels";
+import { CATEGORY_LABEL, CATEGORY_STYLE, muscleLabel } from "@/lib/labels";
 import type { Enums } from "@/lib/supabase/database.types";
 
 export type HistoryDay = {
@@ -16,6 +16,7 @@ export type HistoryDay = {
   top: string | null;
   exercises: {
     name: string;
+    muscles: string[];
     sets: { weight: number; reps: number }[];
     volume: number;
     top: number;
@@ -29,12 +30,48 @@ export function HistoryList({
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [muscle, setMuscle] = useState("");
   const byId = new Map(weeks.flatMap((w) => w.days).map((d) => [d.id, d]));
   // oldest day first, left-to-right
   const chosen = selected
     .map((id) => byId.get(id)!)
     .filter(Boolean)
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  // every primary muscle that shows up anywhere in history, for the filter chips
+  const allMuscles = [
+    ...new Set(
+      weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.flatMap((e) => e.muscles))),
+    ),
+  ].sort((a, b) => muscleLabel(a).localeCompare(muscleLabel(b)));
+
+  const searching = query.trim() !== "" || muscle !== "";
+  // exercise -> its sessions (newest first), filtered by name and/or muscle
+  const results = (() => {
+    if (!searching) return [];
+    const q = query.trim().toLowerCase();
+    const byName = new Map<
+      string,
+      { muscles: string[]; sessions: { day: HistoryDay; ex: HistoryDay["exercises"][number] }[] }
+    >();
+    for (const d of weeks.flatMap((w) => w.days)) {
+      for (const ex of d.exercises) {
+        if (q && !ex.name.toLowerCase().includes(q)) continue;
+        if (muscle && !ex.muscles.includes(muscle)) continue;
+        const g = byName.get(ex.name) ?? { muscles: ex.muscles, sessions: [] };
+        g.sessions.push({ day: d, ex });
+        byName.set(ex.name, g);
+      }
+    }
+    return [...byName.entries()]
+      .map(([name, g]) => ({
+        name,
+        muscles: g.muscles,
+        sessions: g.sessions.sort((a, b) => b.day.date.localeCompare(a.day.date)),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  })();
 
   function toggle(id: string) {
     setSelected((prev) =>
@@ -54,7 +91,76 @@ export function HistoryList({
 
   return (
     <>
-      <div className="max-h-96 overflow-y-auto overflow-x-hidden rounded-xl border border-border">
+      <div className="mb-2 flex flex-col gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search exercises you've done…"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-text-muted"
+        />
+        {allMuscles.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {allMuscles.map((m) => (
+              <button
+                key={m}
+                onClick={() => setMuscle((cur) => (cur === m ? "" : m))}
+                className={`shrink-0 rounded-full border px-2.5 py-1 text-xs ${
+                  muscle === m
+                    ? "border-text bg-text text-bg"
+                    : "border-border text-text-muted hover:text-text"
+                }`}
+              >
+                {muscleLabel(m)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {searching && (
+        <div className="max-h-[28rem] overflow-y-auto rounded-xl border border-border">
+          {results.length === 0 ? (
+            <p className="p-3 text-sm text-text-muted">No matching exercises.</p>
+          ) : (
+            results.map((g, gi) => (
+              <div key={g.name} className={gi > 0 ? "border-t border-border" : ""}>
+                <div className="flex items-baseline justify-between gap-2 px-3 pt-2.5">
+                  <span className="text-sm font-medium">{g.name}</span>
+                  <span className="shrink-0 text-[11px] text-text-muted">
+                    {g.sessions.length} session{g.sessions.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <ul className="flex flex-col p-1.5">
+                  {g.sessions.map(({ day, ex }) => (
+                    <li key={day.id}>
+                      <Link
+                        href={`/day/${day.id}`}
+                        className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-xs hover:bg-surface"
+                      >
+                        <span className="w-24 shrink-0 text-text-muted">
+                          {formatLong(day.date)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {ex.sets.map((s) => `${s.weight}×${s.reps}`).join("  ·  ")}
+                        </span>
+                        <span className="shrink-0 text-text-muted">
+                          top <span className="text-text">{ex.top}</span>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      <div
+        className={`max-h-96 overflow-y-auto overflow-x-hidden rounded-xl border border-border ${
+          searching ? "hidden" : ""
+        }`}
+      >
         {weeks.map((w, wi) => (
           <details
             key={w.start}
@@ -114,7 +220,7 @@ export function HistoryList({
         ))}
       </div>
 
-      {selected.length > 0 && (
+      {!searching && selected.length > 0 && (
         <div className="mt-2 flex items-center gap-3 text-xs">
           <button
             onClick={() => setOpen(true)}
