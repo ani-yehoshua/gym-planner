@@ -104,6 +104,7 @@ export function ExerciseTimer({
                     running={running}
                     targetSeconds={targetSeconds}
                     onToggleRun={toggleRun}
+                    onReset={reset}
                     onStopLog={() => {
                         onFinish(Math.round(elapsedMs / 1000));
                         reset();

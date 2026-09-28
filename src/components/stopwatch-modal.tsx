@@ -15,6 +15,7 @@ export function StopwatchModal({
     targetSeconds,
     onToggleRun,
     onStopLog,
+    onReset,
     onChangeTarget,
     onClose,
 }: {
@@ -23,6 +24,7 @@ export function StopwatchModal({
     targetSeconds: number;
     onToggleRun: () => void;
     onStopLog: () => void;
+    onReset: () => void;
     onChangeTarget: (seconds: number) => void;
     onClose: () => void;
 }) {
@@ -64,13 +66,13 @@ export function StopwatchModal({
                     {formatStopwatch(elapsedMs)}
                 </div>
 
-                <div className='flex items-center justify-center gap-4'>
+                <div className='flex items-center justify-center gap-3'>
                     {elapsedMs > 0 && (
                         <button
                             type='button'
-                            onClick={onStopLog}
-                            className='rounded-full border border-border px-4 py-3 text-xs font-medium text-text-muted hover:text-text'>
-                            Stop &amp; log
+                            onClick={onReset}
+                            className='rounded-full border border-border px-3 py-3 text-xs font-medium text-text-muted hover:text-text'>
+                            Reset
                         </button>
                     )}
                     <button
@@ -83,6 +85,14 @@ export function StopwatchModal({
                         }`}>
                         {running ? "Pause" : elapsedMs > 0 ? "Resume" : "Start"}
                     </button>
+                    {elapsedMs > 0 && (
+                        <button
+                            type='button'
+                            onClick={onStopLog}
+                            className='rounded-full border border-border px-3 py-3 text-xs font-medium text-text-muted hover:text-text'>
+                            Stop &amp; log
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -89,6 +89,81 @@ export function HistoryList({
     };
   }, [open]);
 
+  // Year > month > week. A week that straddles two months belongs wholly to
+  // the earlier one (i.e. the month its Sunday start falls in).
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const groups: {
+    year: string;
+    months: { key: string; label: string; weeks: { start: string; days: HistoryDay[] }[] }[];
+  }[] = [];
+  for (const w of weeks) {
+    const year = w.start.slice(0, 4);
+    const key = w.start.slice(0, 7);
+    let y = groups.find((g) => g.year === year);
+    if (!y) groups.push((y = { year, months: [] }));
+    let m = y.months.find((x) => x.key === key);
+    if (!m) y.months.push((m = { key, label: MONTHS[Number(key.slice(5)) - 1], weeks: [] }));
+    m.weeks.push(w);
+  }
+
+  const renderWeek = (w: { start: string; days: HistoryDay[] }, first: boolean) => (
+          <details
+            key={w.start}
+            open={first}
+            className={first ? "" : "border-t border-border"}
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm">
+              <span className="font-medium">
+                {formatRangeNumeric(w.start, addDays(w.start, 6))}
+              </span>
+              <span className="text-xs text-text-muted">
+                {w.days.length} day{w.days.length === 1 ? "" : "s"} ▾
+              </span>
+            </summary>
+            <ul className="flex flex-col gap-1 border-t border-border p-2">
+              {w.days.map((d) => (
+                <li key={d.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(d.id)}
+                    onChange={() => toggle(d.id)}
+                    className="h-4 w-4 shrink-0 accent-[currentColor]"
+                    aria-label="Select to compare"
+                  />
+                  <Link
+                    href={`/day/${d.id}`}
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface"
+                  >
+                    <span className="w-9 shrink-0 text-center">
+                      <span className="block text-[10px] uppercase text-text-muted">
+                        {dowShort(d.date)}
+                      </span>
+                      <span className="block font-semibold leading-none">
+                        {dayOfMonth(d.date)}
+                      </span>
+                    </span>
+                    {d.category && (
+                      <span
+                        className={`shrink-0 rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}
+                      >
+                        {CATEGORY_LABEL[d.category]}
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-xs text-text-muted">
+                      {d.exercisesDone} ex
+                      {d.top && <> · top {d.top}</>}
+                      {d.partyName && <> · {d.partyName}</>}
+                    </span>
+                    <span className="shrink-0 text-xs text-text-muted">
+                      vol <span className="text-text">{d.volume}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </details>
+  );
+
   return (
     <>
       <div className="mb-2 flex flex-col gap-2">
@@ -161,61 +236,29 @@ export function HistoryList({
           searching ? "hidden" : ""
         }`}
       >
-        {weeks.map((w, wi) => (
-          <details
-            key={w.start}
-            open={wi === 0}
-            className={wi > 0 ? "border-t border-border" : ""}
-          >
-            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm">
-              <span className="font-medium">
-                {formatRangeNumeric(w.start, addDays(w.start, 6))}
-              </span>
-              <span className="text-xs text-text-muted">
-                {w.days.length} day{w.days.length === 1 ? "" : "s"} ▾
+        {groups.map((y, yi) => (
+          <details key={y.year} open={yi === 0} className={yi > 0 ? "border-t border-border" : ""}>
+            <summary className="flex cursor-pointer list-none items-center justify-between bg-surface/60 px-3 py-2 text-sm font-semibold">
+              {y.year}
+              <span className="text-xs font-normal text-text-muted">
+                {y.months.reduce((n, m) => n + m.weeks.reduce((k, w) => k + w.days.length, 0), 0)} days ▾
               </span>
             </summary>
-            <ul className="flex flex-col gap-1 border-t border-border p-2">
-              {w.days.map((d) => (
-                <li key={d.id} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(d.id)}
-                    onChange={() => toggle(d.id)}
-                    className="h-4 w-4 shrink-0 accent-[currentColor]"
-                    aria-label="Select to compare"
-                  />
-                  <Link
-                    href={`/day/${d.id}`}
-                    className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface"
-                  >
-                    <span className="w-9 shrink-0 text-center">
-                      <span className="block text-[10px] uppercase text-text-muted">
-                        {dowShort(d.date)}
-                      </span>
-                      <span className="block font-semibold leading-none">
-                        {dayOfMonth(d.date)}
-                      </span>
-                    </span>
-                    {d.category && (
-                      <span
-                        className={`shrink-0 rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}
-                      >
-                        {CATEGORY_LABEL[d.category]}
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1 truncate text-xs text-text-muted">
-                      {d.exercisesDone} ex
-                      {d.top && <> · top {d.top}</>}
-                      {d.partyName && <> · {d.partyName}</>}
-                    </span>
-                    <span className="shrink-0 text-xs text-text-muted">
-                      vol <span className="text-text">{d.volume}</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            {y.months.map((m, mi) => (
+              <details key={m.key} open={yi === 0 && mi === 0} className="border-t border-border">
+                <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium">
+                  {m.label}
+                  <span className="text-xs font-normal text-text-muted">
+                    {m.weeks.reduce((k, w) => k + w.days.length, 0)} days ▾
+                  </span>
+                </summary>
+                <div className="border-t border-border pl-2">
+                  {m.weeks.map((w, wi) => (
+                    <div key={w.start}>{renderWeek(w, yi === 0 && mi === 0 && wi === 0)}</div>
+                  ))}
+                </div>
+              </details>
+            ))}
           </details>
         ))}
       </div>
