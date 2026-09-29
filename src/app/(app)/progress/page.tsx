@@ -29,7 +29,7 @@ export default async function ProgressPage() {
       .select("date, weight")
       .eq("user_id", user.id)
       .order("date", { ascending: false })
-      .limit(14),
+      .limit(500),
     supabase
       .from("set_logs")
       .select(
@@ -44,7 +44,7 @@ export default async function ProgressPage() {
     supabase
       .from("planned_days")
       .select(
-        "id, date, category, party_id, parties(name), planned_day_exercises(id, sort, exercises(name, primary_muscles))",
+        "id, date, category, party_id, is_deload, parties(name), planned_day_exercises(id, sort, exercises(name, primary_muscles))",
       )
       .lte("date", todayISO)
       .order("date", { ascending: false })
@@ -73,6 +73,37 @@ export default async function ProgressPage() {
 
   const bwMax = Math.max(1, ...(bw ?? []).map((b) => b.weight));
   const bwMin = Math.min(bwMax, ...(bw ?? []).map((b) => b.weight));
+
+  // Year > month > week grouping, same collapse shape as HistoryList, so
+  // long bodyweight history doesn't just dump a giant flat list.
+  const BW_MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  type BwEntry = { date: string; weight: number };
+  const bwWeeks: { start: string; entries: BwEntry[] }[] = [];
+  for (const b of bw ?? []) {
+    const ws = startOfWeek(b.date);
+    const bucket = bwWeeks.find((w) => w.start === ws);
+    if (bucket) bucket.entries.push(b);
+    else bwWeeks.push({ start: ws, entries: [b] });
+  }
+  const bwGroups: {
+    year: string;
+    months: { key: string; label: string; weeks: typeof bwWeeks }[];
+  }[] = [];
+  for (const w of bwWeeks) {
+    const year = w.start.slice(0, 4);
+    const key = w.start.slice(0, 7);
+    let y = bwGroups.find((g) => g.year === year);
+    if (!y) bwGroups.push((y = { year, months: [] }));
+    let m = y.months.find((x) => x.key === key);
+    if (!m)
+      y.months.push(
+        (m = { key, label: BW_MONTHS[Number(key.slice(5)) - 1], weeks: [] }),
+      );
+    m.weeks.push(w);
+  }
 
   const pastPdeIds = (pastDays ?? []).flatMap((d) =>
     d.planned_day_exercises.map((p) => p.id),
@@ -135,6 +166,7 @@ export default async function ProgressPage() {
         date: d.date,
         category: d.category,
         partyName: d.party_id ? (d.parties?.name ?? "Party") : null,
+        isDeload: d.is_deload,
         volume,
         exercisesDone: exercises.length,
         top: topWeight ? `${topName} ${topWeight}` : null,
@@ -182,26 +214,98 @@ export default async function ProgressPage() {
         </form>
 
         {(bw ?? []).length > 0 && (
-          <ul className="mt-4 flex flex-col gap-1">
-            {(bw ?? []).map((b) => (
-              <li key={b.date} className="flex items-center gap-3 text-xs">
-                <span className="w-20 text-text-muted">{b.date.slice(5)}</span>
-                <span className="flex-1">
-                  <span
-                    className="inline-block h-2 rounded bg-emerald-500/60"
-                    style={{
-                      width: `${
-                        bwMax === bwMin
-                          ? 100
-                          : 20 + (70 * (b.weight - bwMin)) / (bwMax - bwMin)
-                      }%`,
-                    }}
-                  />
-                </span>
-                <span className="w-12 text-right text-text-muted">{b.weight}</span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <p className="mt-4 text-xs text-text-muted">
+              Latest{" "}
+              <span className="font-medium text-text">
+                {bw![0].weight} {u}
+              </span>{" "}
+              · {bw![0].date.slice(5)}
+            </p>
+
+            <div className="mt-2 max-h-96 overflow-y-auto overflow-x-hidden rounded-xl border border-border">
+              {bwGroups.map((y, yi) => (
+                <details
+                  key={y.year}
+                  open={yi === 0}
+                  className={yi > 0 ? "border-t border-border" : ""}
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between bg-surface/60 px-3 py-2 text-sm font-semibold">
+                    {y.year}
+                    <span className="text-xs font-normal text-text-muted">
+                      {y.months.reduce(
+                        (n, m) => n + m.weeks.reduce((k, w) => k + w.entries.length, 0),
+                        0,
+                      )}{" "}
+                      logs ▾
+                    </span>
+                  </summary>
+                  {y.months.map((m, mi) => (
+                    <details
+                      key={m.key}
+                      open={yi === 0 && mi === 0}
+                      className="border-t border-border"
+                    >
+                      <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium">
+                        {m.label}
+                        <span className="text-xs font-normal text-text-muted">
+                          {m.weeks.reduce((k, w) => k + w.entries.length, 0)} logs ▾
+                        </span>
+                      </summary>
+                      <div className="border-t border-border pl-2">
+                        {m.weeks.map((w, wi) => (
+                          <details
+                            key={w.start}
+                            open={yi === 0 && mi === 0 && wi === 0}
+                            className={wi > 0 ? "border-t border-border" : ""}
+                          >
+                            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm">
+                              <span className="font-medium">
+                                Week of {w.start.slice(5)}
+                              </span>
+                              <span className="text-xs text-text-muted">
+                                {w.entries.length}{" "}
+                                {w.entries.length === 1 ? "log" : "logs"} ▾
+                              </span>
+                            </summary>
+                            <ul className="flex flex-col gap-1 border-t border-border p-2">
+                              {w.entries.map((b) => (
+                                <li
+                                  key={b.date}
+                                  className="flex items-center gap-3 text-xs"
+                                >
+                                  <span className="w-20 text-text-muted">
+                                    {b.date.slice(5)}
+                                  </span>
+                                  <span className="flex-1">
+                                    <span
+                                      className="inline-block h-2 rounded bg-emerald-500/60"
+                                      style={{
+                                        width: `${
+                                          bwMax === bwMin
+                                            ? 100
+                                            : 20 +
+                                              (70 * (b.weight - bwMin)) /
+                                                (bwMax - bwMin)
+                                        }%`,
+                                      }}
+                                    />
+                                  </span>
+                                  <span className="w-12 text-right text-text-muted">
+                                    {b.weight}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </details>
+              ))}
+            </div>
+          </>
         )}
       </section>
 

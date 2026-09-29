@@ -485,6 +485,12 @@ export async function setDayCategory(dayId: string, category: Enums<"muscle_cate
   revalidatePath(`/day/${dayId}`);
 }
 
+export async function setDayDeload(dayId: string, isDeload: boolean) {
+  const { supabase } = await requireUser();
+  await supabase.from("planned_days").update({ is_deload: isDeload }).eq("id", dayId);
+  revalidatePath(`/day/${dayId}`);
+}
+
 export async function deleteDay(dayId: string) {
   const { supabase } = await requireUser();
   const { data: day } = await supabase
@@ -870,9 +876,11 @@ export async function removeDayExercise(pdeId: string, dayId: string) {
 /** Hot-swap this slot to a different catalog exercise (e.g. Lying Leg Curl ->
  *  Seated Leg Curl). Blocked once anyone has logged a set for it this
  *  session, so history/PRs never end up mislabeled — unless `force` is set,
- *  which only the day's owner (personal owner, or party owner) may use, so a
- *  party owner can still fix a member's mis-added exercise. Old targets are
- *  cleared since they were tuned for the exercise being replaced. */
+ *  which the personal owner, whoever added this slot, or (for a party day)
+ *  any party member may use — party members are co-owners of a shared day's
+ *  exercise list, same as the `pde_write` RLS policy already allows. Old
+ *  targets are cleared since they were tuned for the exercise being
+ *  replaced. */
 export async function swapExercise(
   pdeId: string,
   dayId: string,
@@ -890,17 +898,26 @@ export async function swapExercise(
     const blocked = "Can't swap — sets are already logged for this one.";
     if (!force) throw new Error(blocked);
 
-    const { data: day } = await supabase
-      .from("planned_days")
-      .select("owner_user, party_id")
-      .eq("id", dayId)
+    const { data: pde } = await supabase
+      .from("planned_day_exercises")
+      .select("added_by")
+      .eq("id", pdeId)
       .maybeSingle();
-    let allowed = day?.owner_user === user.id;
-    if (!allowed && day?.party_id) {
-      const { data: isOwner } = await supabase.rpc("is_party_owner", {
-        p_party: day.party_id,
-      });
-      allowed = isOwner === true;
+    let allowed = pde?.added_by === user.id;
+
+    if (!allowed) {
+      const { data: day } = await supabase
+        .from("planned_days")
+        .select("owner_user, party_id")
+        .eq("id", dayId)
+        .maybeSingle();
+      allowed = day?.owner_user === user.id;
+      if (!allowed && day?.party_id) {
+        const { data: isMember } = await supabase.rpc("is_party_member", {
+          p_party: day.party_id,
+        });
+        allowed = isMember === true;
+      }
     }
     if (!allowed) throw new Error(blocked);
   }

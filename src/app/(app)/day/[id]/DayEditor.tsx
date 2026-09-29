@@ -9,6 +9,7 @@ import {
     reorderDayExercise,
     saveExerciseNote,
     setDayCategory,
+    setDayDeload,
     setExerciseDefaultDistance,
     setExerciseDefaultSeconds,
     setExerciseDefaultWeight,
@@ -116,6 +117,13 @@ function modeFor(ex: DayEx): "reps" | "time" | "distance" {
     return ex.exercise.timeBased ? "time" : "reps";
 }
 
+// same smallest-plate increment PlateCalculator uses, so a deload weight
+// lands on something actually loadable
+function roundToPlate(weight: number, units: Unit) {
+    const step = units === "kg" ? 1.25 : 2.5;
+    return Math.round(weight / step) * step;
+}
+
 export default function DayEditor({
     day,
     currentUserId,
@@ -135,6 +143,7 @@ export default function DayEditor({
         date: string;
         category: Cat | null;
         partyId: string | null;
+        isDeload: boolean;
         exercises: DayEx[];
     };
     currentUserId: string;
@@ -201,6 +210,10 @@ export default function DayEditor({
     const [swapId, setSwapId] = useState<string | null>(null);
     const [swapQuery, setSwapQuery] = useState("");
     const weightInputRefs = useRef(new Map<string, HTMLInputElement>());
+    // deload % typed per exercise — purely a live calculator, nothing here
+    // is persisted; only the resulting weight (written into the normal
+    // "current weight" target) sticks around
+    const [deloadPct, setDeloadPct] = useState<Record<string, string>>({});
 
     function saveDefaultWeight(pdeId: string, exerciseId: string) {
         const raw = weightInputRefs.current.get(pdeId)?.value ?? "";
@@ -267,8 +280,7 @@ export default function DayEditor({
                             a.boundingClientRect.top - b.boundingClientRect.top,
                     );
                 const id = visible[0]?.target.getAttribute("data-ex-id");
-                if (id)
-                    setActiveSession(day.id, day.date, day.category, id);
+                if (id) setActiveSession(day.id, day.date, day.category, id);
             },
             { rootMargin: "-15% 0px -70% 0px", threshold: 0 },
         );
@@ -300,6 +312,16 @@ export default function DayEditor({
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "day_exercise_notes" },
+                () => router.refresh(),
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "UPDATE",
+                    schema: "public",
+                    table: "planned_days",
+                    filter: `id=eq.${day.id}`,
+                },
                 () => router.refresh(),
             )
             .subscribe();
@@ -363,7 +385,12 @@ export default function DayEditor({
     function persistTimeField(pdeId: string, setNo: number) {
         const c = cell(pdeId, setNo);
         const parsed = parseDuration(c.reps);
-        update(pdeId, setNo, "reps", parsed == null ? "" : formatDuration(parsed));
+        update(
+            pdeId,
+            setNo,
+            "reps",
+            parsed == null ? "" : formatDuration(parsed),
+        );
         start(() =>
             logSet({
                 pdeId,
@@ -539,16 +566,24 @@ export default function DayEditor({
 
     const swapMatchesAll = swapId
         ? catalog
-              .filter(c => c.id !== day.exercises.find(e => e.id === swapId)?.exercise.id)
+              .filter(
+                  c =>
+                      c.id !==
+                      day.exercises.find(e => e.id === swapId)?.exercise.id,
+              )
               .filter(c =>
                   c.name.toLowerCase().includes(swapQuery.toLowerCase()),
               )
         : [];
     const swapAcceptedGroups = groupByCategory(
-        swapMatchesAll.filter(c => dayAcceptsExercise(day.category, c.category)),
+        swapMatchesAll.filter(c =>
+            dayAcceptsExercise(day.category, c.category),
+        ),
     );
     const swapOffCategoryGroups = groupByCategory(
-        swapMatchesAll.filter(c => !dayAcceptsExercise(day.category, c.category)),
+        swapMatchesAll.filter(
+            c => !dayAcceptsExercise(day.category, c.category),
+        ),
     );
 
     const inputCls =
@@ -563,7 +598,9 @@ export default function DayEditor({
                 {DAY_PLAN_CHOICES.map(c => (
                     <button
                         key={c}
-                        onClick={() => startQuiet(() => setDayCategory(day.id, c))}
+                        onClick={() =>
+                            startQuiet(() => setDayCategory(day.id, c))
+                        }
                         className={`rounded-md border px-2.5 py-1 text-xs ${
                             dayType(day.category) === c
                                 ? CATEGORY_STYLE[c]
@@ -573,6 +610,20 @@ export default function DayEditor({
                     </button>
                 ))}
             </div>
+
+            <button
+                type='button'
+                onClick={() =>
+                    startQuiet(() => setDayDeload(day.id, !day.isDeload))
+                }
+                className={`flex w-full items-center justify-center gap-2 rounded-lg border-2 px-3 py-2.5 text-sm font-semibold transition-colors ${
+                    day.isDeload
+                        ? "border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                        : "border-dashed border-border text-text-muted hover:border-amber-500/50 hover:text-amber-600"
+                }`}>
+                <span aria-hidden>⚡</span>
+                {day.isDeload ? "Deload day — tap to undo" : "Mark as deload day"}
+            </button>
 
             <div className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
                 {/* party progress */}
@@ -671,10 +722,9 @@ export default function DayEditor({
                     };
                     const swapLogged = hasAnyLog(ex.id);
                     // the owner can always swap (confirming past any logged
-                    // sets); a member can only swap their own add, and only
-                    // before anyone's logged anything on it
-                    const canSwap =
-                        canManageAll || (addedByMe && !swapLogged);
+                    // sets); a member can swap their own add too, logged
+                    // sets or not — they just get the same confirm prompt
+                    const canSwap = canManageAll || addedByMe;
                     return (
                         <li
                             key={ex.id}
@@ -803,8 +853,8 @@ export default function DayEditor({
                                     {swapLogged && (
                                         <p className='mt-1 text-[11px] text-amber-600 dark:text-amber-400'>
                                             Sets are already logged here —
-                                            swapping keeps them attached to
-                                            the new exercise.
+                                            swapping keeps them attached to the
+                                            new exercise.
                                         </p>
                                     )}
                                     <input
@@ -916,11 +966,9 @@ export default function DayEditor({
                                                                                     }
                                                                                 </span>
                                                                                 <span className='text-xs'>
-                                                                                    {
-                                                                                        muscleList(
-                                                                                            c.primary_muscles,
-                                                                                        )
-                                                                                    }
+                                                                                    {muscleList(
+                                                                                        c.primary_muscles,
+                                                                                    )}
                                                                                 </span>
                                                                             </button>
                                                                         </li>
@@ -1036,16 +1084,13 @@ export default function DayEditor({
                                             Reps
                                         </span>
                                         <input
+                                            key={`rmin-${ex.id}-${ex.targetRepMin ?? ""}`}
                                             inputMode='numeric'
-                                            defaultValue={
-                                                ex.targetRepMin ?? ""
-                                            }
+                                            defaultValue={ex.targetRepMin ?? ""}
                                             onBlur={e =>
                                                 setTarget(ex.id, {
                                                     repMin: e.target.value
-                                                        ? Number(
-                                                              e.target.value,
-                                                          )
+                                                        ? Number(e.target.value)
                                                         : undefined,
                                                 })
                                             }
@@ -1055,16 +1100,13 @@ export default function DayEditor({
                                             –
                                         </span>
                                         <input
+                                            key={`rmax-${ex.id}-${ex.targetRepMax ?? ""}`}
                                             inputMode='numeric'
-                                            defaultValue={
-                                                ex.targetRepMax ?? ""
-                                            }
+                                            defaultValue={ex.targetRepMax ?? ""}
                                             onBlur={e =>
                                                 setTarget(ex.id, {
                                                     repMax: e.target.value
-                                                        ? Number(
-                                                              e.target.value,
-                                                          )
+                                                        ? Number(e.target.value)
                                                         : undefined,
                                                 })
                                             }
@@ -1153,15 +1195,11 @@ export default function DayEditor({
                                                     );
                                             }}
                                             inputMode='decimal'
-                                            defaultValue={
-                                                ex.targetWeight ?? ""
-                                            }
+                                            defaultValue={ex.targetWeight ?? ""}
                                             onBlur={e =>
                                                 setTarget(ex.id, {
                                                     weight: e.target.value
-                                                        ? Number(
-                                                              e.target.value,
-                                                          )
+                                                        ? Number(e.target.value)
                                                         : null,
                                                 })
                                             }
@@ -1195,6 +1233,77 @@ export default function DayEditor({
                                         + Track weight
                                     </button>
                                 )}
+
+                                {day.isDeload &&
+                                    showWeight &&
+                                    (() => {
+                                        // priority: this exercise's default
+                                        // working weight, then the last
+                                        // logged top set, then nothing to
+                                        // calculate off of — ask for one
+                                        const lastLogged = last?.sets.length
+                                            ? Math.max(
+                                                  ...last.sets.map(
+                                                      s => s.weight,
+                                                  ),
+                                              )
+                                            : null;
+                                        const base =
+                                            ex.targetWeight ?? lastLogged;
+                                        const pct = Number(
+                                            deloadPct[ex.id] || "",
+                                        );
+                                        const deloaded =
+                                            pct && base
+                                                ? roundToPlate(
+                                                      base * (1 - pct / 100),
+                                                      units,
+                                                  )
+                                                : null;
+                                        return (
+                                            <div className='flex items-center gap-1.5 text-xs'>
+                                                <span className='text-amber-600 dark:text-amber-300'>
+                                                    Deload %
+                                                </span>
+                                                <input
+                                                    inputMode='numeric'
+                                                    placeholder='e.g. 40'
+                                                    value={
+                                                        deloadPct[ex.id] ?? ""
+                                                    }
+                                                    onChange={e =>
+                                                        setDeloadPct(p => ({
+                                                            ...p,
+                                                            [ex.id]:
+                                                                e.target.value,
+                                                        }))
+                                                    }
+                                                    className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
+                                                />
+                                                {!base ? (
+                                                    <span className='text-text-muted text-sm'>
+                                                        enter a current weight
+                                                        above to calculate a
+                                                        deload
+                                                    </span>
+                                                ) : (
+                                                    deloaded != null && (
+                                                        <span className='text-text-muted text-sm'>
+                                                            off {base} {u}{" "}
+                                                            {ex.targetWeight ==
+                                                            null
+                                                                ? "(last logged)"
+                                                                : ""}{" "}
+                                                            →{" "}
+                                                            <span className='font-medium text-text'>
+                                                                {deloaded} {u}
+                                                            </span>
+                                                        </span>
+                                                    )
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                             </div>
 
                             {/* set log grid */}
@@ -1319,10 +1428,7 @@ export default function DayEditor({
                                                                   ex.id,
                                                                   s,
                                                               )
-                                                            : persist(
-                                                                  ex.id,
-                                                                  s,
-                                                              )
+                                                            : persist(ex.id, s)
                                                     }
                                                 />
                                             )}

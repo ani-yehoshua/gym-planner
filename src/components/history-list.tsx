@@ -11,6 +11,7 @@ export type HistoryDay = {
   date: string;
   category: Enums<"muscle_category"> | null;
   partyName: string | null;
+  isDeload: boolean;
   volume: number;
   exercisesDone: number;
   top: string | null;
@@ -23,6 +24,65 @@ export type HistoryDay = {
   }[];
 };
 
+// Compare is a side-by-side view, so it only makes sense for a handful of
+// days at once; export has no such limit.
+const MAX_COMPARE = 4;
+
+function csvCell(v: string | number) {
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadText(content: string, filename: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportDays(days: HistoryDay[], format: "csv" | "json") {
+  if (days.length === 0) return;
+  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date));
+  const range =
+    sorted.length === 1
+      ? sorted[0].date
+      : `${sorted[0].date}_to_${sorted[sorted.length - 1].date}`;
+
+  if (format === "json") {
+    downloadText(
+      JSON.stringify(sorted, null, 2),
+      `gymplanner-history-${range}.json`,
+      "application/json",
+    );
+    return;
+  }
+
+  const rows = [["date", "category", "party", "exercise", "set", "weight", "reps"]];
+  for (const d of sorted) {
+    for (const ex of d.exercises) {
+      ex.sets.forEach((s, i) =>
+        rows.push([
+          d.date,
+          d.category ?? "",
+          d.partyName ?? "",
+          ex.name,
+          String(i + 1),
+          String(s.weight),
+          String(s.reps),
+        ]),
+      );
+    }
+  }
+  downloadText(
+    rows.map((r) => r.map(csvCell).join(",")).join("\n"),
+    `gymplanner-history-${range}.csv`,
+    "text/csv",
+  );
+}
+
 export function HistoryList({
   weeks,
 }: {
@@ -32,7 +92,8 @@ export function HistoryList({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [muscle, setMuscle] = useState("");
-  const byId = new Map(weeks.flatMap((w) => w.days).map((d) => [d.id, d]));
+  const allDays = weeks.flatMap((w) => w.days);
+  const byId = new Map(allDays.map((d) => [d.id, d]));
   // oldest day first, left-to-right
   const chosen = selected
     .map((id) => byId.get(id)!)
@@ -75,7 +136,7 @@ export function HistoryList({
 
   function toggle(id: string) {
     setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id].slice(-4),
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   }
 
@@ -113,8 +174,13 @@ export function HistoryList({
             className={first ? "" : "border-t border-border"}
           >
             <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm">
-              <span className="font-medium">
+              <span className="flex items-center gap-1.5 font-medium">
                 {formatRangeNumeric(w.start, addDays(w.start, 6))}
+                {w.days.some((d) => d.isDeload) && (
+                  <span className="rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-300">
+                    Deload
+                  </span>
+                )}
               </span>
               <span className="text-xs text-text-muted">
                 {w.days.length} day{w.days.length === 1 ? "" : "s"} ▾
@@ -147,6 +213,11 @@ export function HistoryList({
                         className={`shrink-0 rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}
                       >
                         {CATEGORY_LABEL[d.category]}
+                      </span>
+                    )}
+                    {d.isDeload && (
+                      <span className="shrink-0 rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-300">
+                        Deload
                       </span>
                     )}
                     <span className="min-w-0 flex-1 truncate text-xs text-text-muted">
@@ -191,6 +262,47 @@ export function HistoryList({
           </div>
         )}
       </div>
+
+      <details className="group relative mb-2">
+        <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs text-text-muted hover:text-text">
+          Export
+          <span className="transition-transform group-open:rotate-180">▾</span>
+        </summary>
+        <div className="absolute z-10 mt-1 w-56 rounded-lg border border-border bg-bg p-1 text-xs shadow-lg">
+          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-text-muted">
+            Selected ({selected.length})
+          </div>
+          <button
+            disabled={selected.length === 0}
+            onClick={() => exportDays(chosen, "csv")}
+            className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-surface-2 disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            as CSV
+          </button>
+          <button
+            disabled={selected.length === 0}
+            onClick={() => exportDays(chosen, "json")}
+            className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-surface-2 disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            as JSON
+          </button>
+          <div className="mt-1 border-t border-border px-2 pt-1.5 text-[10px] uppercase tracking-wide text-text-muted">
+            All history ({allDays.length})
+          </div>
+          <button
+            onClick={() => exportDays(allDays, "csv")}
+            className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-surface-2"
+          >
+            as CSV
+          </button>
+          <button
+            onClick={() => exportDays(allDays, "json")}
+            className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-surface-2"
+          >
+            as JSON
+          </button>
+        </div>
+      </details>
 
       {searching && (
         <div className="max-h-[28rem] overflow-y-auto rounded-xl border border-border">
@@ -264,14 +376,24 @@ export function HistoryList({
       </div>
 
       {!searching && selected.length > 0 && (
-        <div className="mt-2 flex items-center gap-3 text-xs">
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
           <button
             onClick={() => setOpen(true)}
-            disabled={selected.length < 2}
+            disabled={selected.length < 2 || selected.length > MAX_COMPARE}
+            title={
+              selected.length > MAX_COMPARE
+                ? `Compare up to ${MAX_COMPARE} days at once`
+                : undefined
+            }
             className="rounded-lg bg-primary px-3 py-1.5 font-medium text-primary-fg disabled:opacity-40"
           >
             Compare {selected.length}
           </button>
+          {selected.length > MAX_COMPARE && (
+            <span className="text-text-muted">
+              compare up to {MAX_COMPARE} — export has no limit
+            </span>
+          )}
           <button
             onClick={() => setSelected([])}
             className="text-text-muted hover:text-text"
@@ -314,6 +436,11 @@ export function HistoryList({
                         className={`rounded-md border px-1.5 py-0.5 ${CATEGORY_STYLE[d.category]}`}
                       >
                         {CATEGORY_LABEL[d.category]}
+                      </span>
+                    )}
+                    {d.isDeload && (
+                      <span className="rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-amber-600 dark:text-amber-300">
+                        Deload
                       </span>
                     )}
                     <span>vol {d.volume}</span>

@@ -29,7 +29,7 @@ export default async function DayPage({
   const { data: day } = await supabase
     .from("planned_days")
     .select(
-      "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance))",
+      "id, date, category, label, owner_user, party_id, is_deload, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -131,11 +131,15 @@ export default async function DayPage({
     display_name: x.profiles?.display_name ?? null,
     color: MEMBER_COLORS[i % MEMBER_COLORS.length],
   }));
+  // personal days: you own everything; party days: any member is a co-owner
+  // of the shared exercise list (matches the pde_write RLS policy) — but
+  // deleting the day itself stays owner-only (pd_delete RLS), so that one
+  // still checks role separately below
+  const canManageAll = !day.party_id || (m ?? []).some((x) => x.user_id === user.id);
   const isPartyOwner = (m ?? []).some(
     (x) => x.user_id === user.id && x.role === "owner",
   );
-  // personal days: you own everything; party days: only the owner manages all
-  const canManageAll = !day.party_id || isPartyOwner;
+  const canDeleteDay = !day.party_id || isPartyOwner;
 
   const goal = (constants?.primary_goal as Goal) ?? null;
 
@@ -242,7 +246,7 @@ export default async function DayPage({
           <ChevronLeftIcon />
           {day.party_id ? "Party" : "Calendar"}
         </Link>
-        {canManageAll && <DeleteDayButton dayId={day.id} />}
+        {canDeleteDay && <DeleteDayButton dayId={day.id} />}
       </div>
       <div>
         <h1 className="text-lg font-semibold">{formatLong(day.date)}</h1>
@@ -263,6 +267,7 @@ export default async function DayPage({
           date: day.date,
           category: day.category,
           partyId: day.party_id,
+          isDeload: day.is_deload,
           exercises: [...day.planned_day_exercises]
             .sort((a, b) => a.sort - b.sort)
             .map((p) => {
