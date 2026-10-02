@@ -44,7 +44,7 @@ export default async function ProgressPage() {
     supabase
       .from("planned_days")
       .select(
-        "id, date, category, party_id, is_deload, parties(name), planned_day_exercises(id, sort, exercises(name, primary_muscles))",
+        "id, date, category, party_id, is_deload, parties(name), planned_day_exercises(id, sort, exercises(name, primary_muscles, time_based, measurement))",
       )
       .lte("date", todayISO)
       .order("date", { ascending: false })
@@ -129,7 +129,10 @@ export default async function ProgressPage() {
 
   const history: HistoryDay[] = (pastDays ?? [])
     .map((d) => {
+      // rep-based and timed volume are kept apart: timed sets store seconds
+      // in `reps`, so weight × seconds would swamp weight × reps in one total
       let volume = 0;
+      let timedVolume = 0;
       let topWeight = 0;
       let topName = "";
       const exercises: HistoryDay["exercises"] = [];
@@ -147,7 +150,14 @@ export default async function ProgressPage() {
           exVol += l.weight! * l.reps!;
           if (l.weight! > exTop) exTop = l.weight!;
         }
-        volume += exVol;
+        // rows here always have reps, so a time / time-or-distance exercise
+        // can only be a timed set
+        const timed =
+          !!pde.exercises?.time_based ||
+          pde.exercises?.measurement === "time" ||
+          pde.exercises?.measurement === "time_or_distance";
+        if (timed) timedVolume += exVol;
+        else volume += exVol;
         if (exTop > topWeight) {
           topWeight = exTop;
           topName = pde.exercises?.name ?? "";
@@ -157,6 +167,7 @@ export default async function ProgressPage() {
           muscles: pde.exercises?.primary_muscles ?? [],
           sets: done.map((l) => ({ weight: l.weight!, reps: l.reps! })),
           volume: exVol,
+          timed,
           top: exTop,
         });
       }
@@ -168,6 +179,7 @@ export default async function ProgressPage() {
         partyName: d.party_id ? (d.parties?.name ?? "Party") : null,
         isDeload: d.is_deload,
         volume,
+        timedVolume,
         exercisesDone: exercises.length,
         top: topWeight ? `${topName} ${topWeight}` : null,
         exercises,

@@ -12,7 +12,9 @@ export type HistoryDay = {
   category: Enums<"muscle_category"> | null;
   partyName: string | null;
   isDeload: boolean;
+  /** reps-based volume only; timed sets are totalled separately */
   volume: number;
+  timedVolume: number;
   exercisesDone: number;
   top: string | null;
   exercises: {
@@ -20,6 +22,7 @@ export type HistoryDay = {
     muscles: string[];
     sets: { weight: number; reps: number }[];
     volume: number;
+    timed: boolean;
     top: number;
   }[];
 };
@@ -227,6 +230,12 @@ export function HistoryList({
                     </span>
                     <span className="shrink-0 text-xs text-text-muted">
                       vol <span className="text-text">{d.volume}</span>
+                      {d.timedVolume > 0 && (
+                        <>
+                          {" "}
+                          · timed <span className="text-text">{d.timedVolume}</span>
+                        </>
+                      )}
                     </span>
                   </Link>
                 </li>
@@ -443,7 +452,10 @@ export function HistoryList({
                         Deload
                       </span>
                     )}
-                    <span>vol {d.volume}</span>
+                    <span>
+                      vol {d.volume}
+                      {d.timedVolume > 0 && <> · timed {d.timedVolume}</>}
+                    </span>
                     {d.partyName && <span>· {d.partyName}</span>}
                   </div>
                   <ul className="flex flex-col gap-2">
@@ -502,6 +514,16 @@ export function HistoryList({
                       <div className={`mb-2 text-xs font-semibold ${tone(totalDVol)}`}>
                         session volume {sign(totalDVol)}
                       </div>
+                      {(oldest.timedVolume > 0 || newest.timedVolume > 0) && (
+                        <div
+                          className={`mb-2 text-xs font-semibold ${tone(
+                            newest.timedVolume - oldest.timedVolume,
+                          )}`}
+                        >
+                          timed volume{" "}
+                          {sign(newest.timedVolume - oldest.timedVolume)}
+                        </div>
+                      )}
                       <ul className="flex flex-col gap-2">
                         {rows.length === 0 && (
                           <li className="text-xs text-text-muted">

@@ -476,17 +476,21 @@ export default function DayEditor({
     }
 
     function memberDayTotals(userId: string) {
+        // timed sets store seconds in `reps`, so their weight × seconds is
+        // totalled apart from rep-based volume
         let volume = 0;
+        let timedVolume = 0;
         let exercisesLogged = 0;
         for (const ex of day.exercises) {
             const s =
                 userId === currentUserId
                     ? myStats(ex)
                     : otherStats(ex.id, userId);
-            volume += s.volume;
+            if (modeFor(ex) === "time") timedVolume += s.volume;
+            else volume += s.volume;
             if (s.volume > 0) exercisesLogged++;
         }
-        return { volume, exercisesLogged };
+        return { volume, timedVolume, exercisesLogged };
     }
 
     function setTarget(
@@ -661,6 +665,15 @@ export default function DayEditor({
                                             <span className='text-text'>
                                                 {t.volume || "—"}
                                             </span>
+                                            {t.timedVolume > 0 && (
+                                                <>
+                                                    {" "}
+                                                    · timed{" "}
+                                                    <span className='text-text'>
+                                                        {t.timedVolume}
+                                                    </span>
+                                                </>
+                                            )}
                                         </span>
                                     </div>
                                 );
