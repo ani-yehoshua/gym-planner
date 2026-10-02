@@ -124,7 +124,7 @@ export function PlateCalculator({ units = "lb" }: { units?: Unit }) {
                                             }
                                             title='Remove'
                                             className='rounded-md border border-border bg-surface-2 px-2 py-0.5 hover:border-rose-400 hover:text-rose-400'>
-                                            {fmt(plates[plateIdx].value)}
+                                            {plates[plateIdx].label}
                                         </button>
                                     </span>
                                 ))}
