@@ -1,20 +1,17 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { startProgram, stopProgram } from "@/app/actions";
+import { createDay } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { ChevronLeftIcon } from "@/components/icons";
-import { targetChips } from "@/components/program-card";
-import { addDays, formatRangeNumeric } from "@/lib/date";
 import { getUserToday } from "@/lib/user-today";
-import { CATEGORY_LABEL } from "@/lib/labels";
 import {
-  clampWeek,
-  formatRx,
-  groupProgramExercises,
-  programWeekNo,
-  programWeekStart,
-} from "@/lib/programs";
+  CATEGORY_LABEL,
+  CATEGORY_STYLE,
+  dayType,
+  muscleList,
+} from "@/lib/labels";
+import { formatRx, programChoiceValue } from "@/lib/programs";
 
 export default async function ProgramDetailPage({
   params,
@@ -29,31 +26,19 @@ export default async function ProgramDetailPage({
   if (!user) redirect("/login");
 
   const todayISO = await getUserToday();
-  const [{ data: program }, { data: mine }] = await Promise.all([
-    supabase
-      .from("programs")
-      .select(
-        "id, name, description, weeks, program_targets(category, sets), program_exercises(id, sort, sets, rep_min, rep_max, exercises(id, name, category))",
-      )
-      .eq("id", id)
-      .maybeSingle(),
-    supabase
-      .from("user_programs")
-      .select("program_id, start_date, programs(name)")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-  ]);
+  const { data: program } = await supabase
+    .from("programs")
+    .select(
+      "id, name, description, category, program_exercises(id, sort, sets, rep_min, rep_max, exercises(id, name, primary_muscles, time_based, default_sets, default_rep_min, default_rep_max))",
+    )
+    .eq("id", id)
+    .maybeSingle();
   if (!program) notFound();
 
-  const chips = targetChips(program);
-  const weeklyTotal = chips.reduce((a, c) => a + c.sets, 0);
-  const targetByGroup = new Map(chips.map((c) => [c.category, c.sets]));
-  const exerciseGroups = groupProgramExercises(program.program_exercises);
-  const following = mine?.program_id === program.id;
-  const followingOther = mine && !following;
-  const currentWeek = following
-    ? clampWeek(programWeekNo(mine.start_date, todayISO), program.weeks)
-    : null;
+  const type = dayType(program.category);
+  const rows = [...program.program_exercises]
+    .sort((a, b) => a.sort - b.sort)
+    .flatMap((r) => (r.exercises ? [{ ...r, ex: r.exercises }] : []));
 
   return (
     <div className="flex flex-col gap-4">
@@ -66,159 +51,95 @@ export default async function ProgramDetailPage({
       </Link>
 
       <div>
-        <h1 className="text-lg font-semibold">{program.name}</h1>
-        <p className="text-xs text-text-muted">
-          {program.weeks} weeks · {weeklyTotal} sets / week
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <h1 className="text-lg font-semibold">{program.name}</h1>
+          <span
+            className={`shrink-0 rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[type]}`}
+          >
+            {CATEGORY_LABEL[type]}
+          </span>
+        </div>
         {program.description && (
           <p className="mt-2 text-sm text-text-muted">{program.description}</p>
         )}
       </div>
 
       <section className="rounded-xl border border-border p-4">
-        <h2 className="mb-2 text-sm font-medium">Weekly targets</h2>
-        {chips.length === 0 ? (
-          <p className="text-sm text-text-muted">No set targets yet.</p>
+        <h2 className="mb-2 text-sm font-medium">
+          Exercises
+          <span className="ml-2 text-xs font-normal text-text-muted">
+            {rows.length}
+          </span>
+        </h2>
+        {rows.length === 0 ? (
+          <p className="text-sm text-text-muted">No exercises yet.</p>
         ) : (
-          <ul className="flex flex-col gap-1.5 text-sm">
-            {chips.map((c) => (
-              <li key={c.category} className="flex justify-between">
-                <span>{CATEGORY_LABEL[c.category]}</span>
-                <span className="text-text-muted">
-                  <span className="text-text">{c.sets}</span> sets
-                </span>
-              </li>
-            ))}
-          </ul>
+          <ol className="flex flex-col divide-y divide-border text-sm">
+            {rows.map((r, i) => {
+              // sets/reps the program leaves blank are whatever the exercise
+              // itself defaults to
+              const rx = formatRx(
+                r.sets ?? r.ex.default_sets,
+                r.rep_min ?? r.ex.default_rep_min,
+                r.rep_max ?? r.ex.default_rep_max,
+                r.ex.time_based ? "sec" : "reps",
+              );
+              return (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between gap-3 py-2"
+                >
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="w-4 shrink-0 text-xs text-text-muted">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block">{r.ex.name}</span>
+                      <span className="block text-xs text-text-muted">
+                        {muscleList(r.ex.primary_muscles)}
+                      </span>
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs text-text-muted">{rx}</span>
+                </li>
+              );
+            })}
+          </ol>
         )}
       </section>
 
-      {exerciseGroups.length > 0 && (
-        <section className="rounded-xl border border-border p-4">
-          <h2 className="mb-3 text-sm font-medium">Exercises</h2>
-          <div className="flex flex-col gap-4">
-            {exerciseGroups.map((g) => (
-              <div key={g.category}>
-                <div className="mb-1 flex items-baseline justify-between text-sm">
-                  <span className="font-medium">{CATEGORY_LABEL[g.category]}</span>
-                  {targetByGroup.has(g.category) && (
-                    <span className="text-xs text-text-muted">
-                      <span className="text-text">
-                        {targetByGroup.get(g.category)}
-                      </span>{" "}
-                      sets / week
-                    </span>
-                  )}
-                </div>
-                <ul className="flex flex-col divide-y divide-border text-sm">
-                  {g.rows.map((r) => (
-                    <li
-                      key={r.id}
-                      className="flex items-center justify-between gap-2 py-1.5"
-                    >
-                      <span>{r.exercises?.name}</span>
-                      <span className="shrink-0 text-xs text-text-muted">
-                        {formatRx(r.sets, r.rep_min, r.rep_max)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="rounded-xl border border-border p-4">
-        <h2 className="mb-2 text-sm font-medium">The whole program</h2>
-        <ul className="flex flex-col divide-y divide-border text-sm">
-          {Array.from({ length: program.weeks }, (_, i) => i + 1).map((w) => {
-            const start = following
-              ? programWeekStart(mine.start_date, w)
-              : null;
-            const row = (
-              <>
-                <span className="flex items-center gap-2">
-                  Week {w}
-                  {currentWeek === w && (
-                    <span className="rounded-md border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600 dark:text-emerald-300">
-                      now
-                    </span>
-                  )}
-                </span>
-                <span className="text-xs text-text-muted">
-                  {start
-                    ? formatRangeNumeric(start, addDays(start, 6))
-                    : `${weeklyTotal} sets`}
-                </span>
-              </>
-            );
-            return following ? (
-              <li key={w}>
-                <Link
-                  href={`/programs?week=${w}`}
-                  className="flex items-center justify-between py-2 hover:bg-surface"
-                >
-                  {row}
-                </Link>
-              </li>
-            ) : (
-              <li key={w} className="flex items-center justify-between py-2">
-                {row}
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      {following ? (
-        <div className="flex flex-col gap-2">
-          <Link
-            href="/programs"
-            className="rounded-lg bg-primary px-3 py-2 text-center text-sm font-medium text-primary-fg"
-          >
-            Open tracker
-          </Link>
-          <form action={stopProgram} className="self-start">
-            <SubmitButton
-              pendingText="…"
-              className="text-xs text-text-muted hover:text-rose-400 disabled:opacity-50"
-            >
-              Stop following this program
-            </SubmitButton>
-          </form>
-        </div>
-      ) : (
-        <form
-          action={startProgram}
-          className="flex flex-col gap-3 rounded-xl border border-border p-4"
+      {/* posts straight to the same action as the Calendar's "Plan session…" */}
+      <form
+        action={createDay}
+        className="flex flex-col gap-3 rounded-xl border border-border p-4"
+      >
+        <input
+          type="hidden"
+          name="category"
+          value={programChoiceValue(program.id)}
+        />
+        <span className="text-sm font-medium">Plan this session</span>
+        <label className="flex items-center gap-2 text-sm text-text-muted">
+          On
+          <input
+            type="date"
+            name="date"
+            required
+            defaultValue={todayISO}
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
+          />
+        </label>
+        <p className="text-xs text-text-muted">
+          Adds it to your calendar with these exercises, sets and rep ranges
+          filled in. You can still change anything on the day afterwards.
+        </p>
+        <SubmitButton
+          pendingText="Planning…"
+          className="self-start rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50"
         >
-          <input type="hidden" name="program_id" value={program.id} />
-          <span className="text-sm font-medium">Start this program</span>
-          <label className="flex items-center gap-2 text-sm text-text-muted">
-            Starting
-            <input
-              type="date"
-              name="start_date"
-              required
-              defaultValue={todayISO}
-              className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
-            />
-          </label>
-          <p className="text-xs text-text-muted">
-            Week 1 is the Sunday–Saturday week that includes this date. Sets you
-            log count toward it automatically.
-            {followingOther &&
-              ` This replaces ${mine.programs?.name ?? "the program"} you're following now.`}
-          </p>
-          <SubmitButton
-            pendingText="Starting…"
-            className="self-start rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50"
-          >
-            Start program
-          </SubmitButton>
-        </form>
-      )}
+          Plan session
+        </SubmitButton>
+      </form>
     </div>
   );
 }

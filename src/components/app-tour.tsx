@@ -36,7 +36,7 @@ const STEPS = [
   {
     Icon: ProgramsIcon,
     title: "Programs",
-    body: "Multi-week plans with weekly set targets per muscle group. Start one and track every day, every week, and the whole program. Your account — goals, units, timezone, theme, and this tour — lives under your name at the top.",
+    body: "Ready-made sessions like Push Day or Pull Day. Pick one when you plan a day on the Calendar and its exercises, sets and rep ranges are filled in for you. Your account — goals, units, timezone, theme, and this tour — lives under your name at the top.",
   },
 ];
 

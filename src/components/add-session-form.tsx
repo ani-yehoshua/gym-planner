@@ -3,10 +3,19 @@
 import { useRef } from "react";
 import { createDay } from "@/app/actions";
 import { CATEGORY_LABEL, DAY_PLAN_CHOICES } from "@/lib/labels";
+import { programChoiceValue } from "@/lib/programs";
 
 /** Calendar: picking a session type from the dropdown creates the day and
- *  drops you straight into it — no separate "Add" button. */
-export function AddSessionForm({ date }: { date: string }) {
+ *  drops you straight into it — no separate "Add" button. A saved program
+ *  (admin-built, e.g. "Push Day") does the same but arrives with its
+ *  exercises, sets and rep ranges already filled in. */
+export function AddSessionForm({
+  date,
+  programs,
+}: {
+  date: string;
+  programs: { id: string; name: string }[];
+}) {
   const formRef = useRef<HTMLFormElement>(null);
 
   return (
@@ -23,11 +32,22 @@ export function AddSessionForm({ date }: { date: string }) {
         <option value="" disabled>
           Plan session…
         </option>
-        {DAY_PLAN_CHOICES.map((c) => (
-          <option key={c} value={c}>
-            {CATEGORY_LABEL[c]}
-          </option>
-        ))}
+        <optgroup label="Build your own">
+          {DAY_PLAN_CHOICES.map((c) => (
+            <option key={c} value={c}>
+              {CATEGORY_LABEL[c]}
+            </option>
+          ))}
+        </optgroup>
+        {programs.length > 0 && (
+          <optgroup label="Programs">
+            {programs.map((p) => (
+              <option key={p.id} value={programChoiceValue(p.id)}>
+                {p.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
       </select>
     </form>
   );

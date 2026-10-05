@@ -30,14 +30,18 @@ export default async function CalendarPage({
     const weekStart = startOfWeek(week ?? todayISO);
     const dates = weekDates(weekStart);
 
-    const { data: days } = await supabase
-        .from("planned_days")
-        .select(
-            "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id)",
-        )
-        .gte("date", dates[0])
-        .lte("date", dates[6])
-        .order("date");
+    const [{ data: days }, { data: programs }] = await Promise.all([
+        supabase
+            .from("planned_days")
+            .select(
+                "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id)",
+            )
+            .gte("date", dates[0])
+            .lte("date", dates[6])
+            .order("date"),
+        // saved days a session can be planned from
+        supabase.from("programs").select("id, name").order("name"),
+    ]);
 
     const byDate = new Map<string, NonNullable<typeof days>>();
     for (const d of days ?? []) {
@@ -128,7 +132,10 @@ export default async function CalendarPage({
                                         </Link>
                                     ))}
 
-                                    <AddSessionForm date={date} />
+                                    <AddSessionForm
+                                        date={date}
+                                        programs={programs ?? []}
+                                    />
                                 </div>
                             </div>
                         </li>

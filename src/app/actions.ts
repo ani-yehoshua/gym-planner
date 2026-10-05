@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { addDays } from "@/lib/date";
 import { DEFAULT_SETS } from "@/lib/targets";
 import { distanceUnitLabel } from "@/lib/units";
-import { PROGRAM_GROUPS } from "@/lib/programs";
+import { parseProgramChoice } from "@/lib/programs";
+import { DAY_PLAN_CHOICES } from "@/lib/labels";
 import { isAdmin, notifyExerciseRequest } from "@/lib/admin";
 import { epley1rm, round5, WORKING_REPS } from "@/lib/one-rm";
 import type { Enums } from "@/lib/supabase/database.types";
@@ -464,8 +465,21 @@ export async function deleteExercise(formData: FormData) {
 export async function createDay(formData: FormData) {
   const { supabase, user } = await requireUser();
   const date = String(formData.get("date"));
-  const category = String(formData.get("category") || "") as Enums<"muscle_category"> | "";
+  const choice = String(formData.get("category") || "");
   if (!date) redirect("/");
+
+  // the select holds either a session type or "program:<id>"
+  const programId = parseProgramChoice(choice);
+  let category = (programId ? "" : choice) as Enums<"muscle_category"> | "";
+  if (programId) {
+    const { data: program } = await supabase
+      .from("programs")
+      .select("category")
+      .eq("id", programId)
+      .maybeSingle();
+    if (!program) redirect("/");
+    category = program.category ?? "";
+  }
 
   const { data: created } = await supabase
     .from("planned_days")
@@ -478,6 +492,9 @@ export async function createDay(formData: FormData) {
     .select("id")
     .single();
 
+  if (created && programId) {
+    await applyProgramToDay(supabase, user.id, created.id, programId);
+  }
   if (created) redirect(`/day/${created.id}`);
   redirect("/");
 }
@@ -1033,14 +1050,29 @@ export async function createPartyDay(formData: FormData) {
   const { supabase, user } = await requireUser();
   const partyId = String(formData.get("party_id"));
   const date = String(formData.get("date"));
-  const category = String(formData.get("category") || "") as Enums<"muscle_category"> | "";
+  const choice = String(formData.get("category") || "");
   if (!partyId || !date) redirect("/parties");
+
+  const programId = parseProgramChoice(choice);
+  let category = (programId ? "" : choice) as Enums<"muscle_category"> | "";
+  if (programId) {
+    const { data: program } = await supabase
+      .from("programs")
+      .select("category")
+      .eq("id", programId)
+      .maybeSingle();
+    if (!program) redirect(`/parties/${partyId}`);
+    category = program.category ?? "";
+  }
 
   const { data: created } = await supabase
     .from("planned_days")
     .insert({ party_id: partyId, date, category: category || null, created_by: user.id })
     .select("id")
     .single();
+  if (created && programId) {
+    await applyProgramToDay(supabase, user.id, created.id, programId);
+  }
   if (created) redirect(`/day/${created.id}`);
   redirect(`/parties/${partyId}`);
 }
@@ -1244,97 +1276,74 @@ export async function reorderSplitExercise(formData: FormData) {
 }
 
 // ---------------------------------------------------------------------------
-// programs: admin-authored multi-week plans + a user following one
+// programs: admin-built single-day sessions ("Push Day") that a member can pick
+// when planning a day
 // ---------------------------------------------------------------------------
+function revalidatePrograms(programId?: string) {
+  revalidatePath("/programs");
+  if (programId) revalidatePath(`/programs/${programId}`);
+}
+
 function readProgramForm(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const description = String(formData.get("description") || "").trim();
-  const weeks = Math.max(
-    1,
-    Math.min(52, Math.round(Number(formData.get("weeks"))) || 8),
-  );
-  const targets = PROGRAM_GROUPS.map((category) => ({
-    category,
-    sets: Math.max(0, Math.min(99, Math.round(Number(formData.get(`target_${category}`))) || 0)),
-  }));
-  return { name, description, weeks, targets };
-}
-
-async function saveProgramTargets(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  programId: string,
-  targets: { category: Enums<"muscle_category">; sets: number }[],
-) {
-  const keep = targets.filter((t) => t.sets > 0);
-  const drop = targets.filter((t) => t.sets === 0).map((t) => t.category);
-  if (keep.length) {
-    check(
-      await supabase
-        .from("program_targets")
-        .upsert(
-          keep.map((t) => ({ program_id: programId, ...t })),
-          { onConflict: "program_id,category" },
-        ),
-      "save program targets",
-    );
-  }
-  if (drop.length) {
-    await supabase
-      .from("program_targets")
-      .delete()
-      .eq("program_id", programId)
-      .in("category", drop);
-  }
+  const raw = String(formData.get("category") || "");
+  const category = (DAY_PLAN_CHOICES as readonly string[]).includes(raw)
+    ? (raw as Enums<"muscle_category">)
+    : null;
+  return { name, description: description || null, category };
 }
 
 export async function createProgram(formData: FormData) {
   const { supabase, user } = await requireAdmin();
-  const { name, description, weeks, targets } = readProgramForm(formData);
+  const { name, description, category } = readProgramForm(formData);
   if (!name) return;
-  const { data: created } = await supabase
-    .from("programs")
-    .insert({ name, description: description || null, weeks, created_by: user.id })
-    .select("id")
-    .single();
-  if (created) await saveProgramTargets(supabase, created.id, targets);
-  revalidatePath("/programs");
+  check(
+    await supabase
+      .from("programs")
+      .insert({ name, description, category, created_by: user.id }),
+    "create program",
+  );
+  revalidatePrograms();
 }
 
 export async function updateProgram(formData: FormData) {
   const { supabase } = await requireAdmin();
   const id = String(formData.get("program_id"));
-  const { name, description, weeks, targets } = readProgramForm(formData);
+  const { name, description, category } = readProgramForm(formData);
   if (!id || !name) return;
+  // the session type is changed from the builder's chips, not this form, so
+  // only touch it if the form actually sent one
+  const patch = formData.has("category")
+    ? { name, description, category }
+    : { name, description };
   check(
-    await supabase
-      .from("programs")
-      .update({ name, description: description || null, weeks })
-      .eq("id", id),
+    await supabase.from("programs").update(patch).eq("id", id),
     "update program",
   );
-  await saveProgramTargets(supabase, id, targets);
-  revalidatePath("/programs");
+  revalidatePrograms(id);
 }
 
 export async function deleteProgram(formData: FormData) {
   const { supabase } = await requireAdmin();
   const id = String(formData.get("program_id"));
   if (!id) return;
-  // cascades to program_targets and to anyone currently following it
+  // days already planned from it keep their exercises — they were copied
   check(await supabase.from("programs").delete().eq("id", id), "delete program");
-  revalidatePath("/programs");
+  revalidatePrograms();
 }
 
-function revalidateProgram(programId: string) {
-  revalidatePath("/programs");
-  revalidatePath(`/programs/${programId}`);
-}
-
-export async function addProgramExercise(formData: FormData) {
+export async function setProgramCategory(
+  programId: string,
+  category: Enums<"muscle_category">,
+) {
   const { supabase } = await requireAdmin();
-  const programId = String(formData.get("program_id"));
-  const exerciseId = String(formData.get("exercise_id"));
-  if (!programId || !exerciseId) return;
+  await supabase.from("programs").update({ category }).eq("id", programId);
+  revalidatePrograms(programId);
+}
+
+export async function addProgramExercise(programId: string, exerciseId: string) {
+  const { supabase } = await requireAdmin();
   const { data: maxRow } = await supabase
     .from("program_exercises")
     .select("sort")
@@ -1353,66 +1362,126 @@ export async function addProgramExercise(formData: FormData) {
     ),
     "add program exercise",
   );
-  revalidateProgram(programId);
+  revalidatePrograms(programId);
 }
 
-/** Sets and the rep range are optional notes — blank saves as "not specified". */
-export async function updateProgramExercise(formData: FormData) {
+/** Sets and the rep range are optional — null means "not specified", and an
+ *  undefined field is left as it is. */
+export async function updateProgramExercise(input: {
+  id: string;
+  programId: string;
+  sets?: number | null;
+  repMin?: number | null;
+  repMax?: number | null;
+}) {
   const { supabase } = await requireAdmin();
-  const id = String(formData.get("id"));
-  const programId = String(formData.get("program_id"));
-  const n = (k: string) => {
-    const v = formData.get(k);
-    return v === null || v === ""
-      ? null
-      : Math.max(1, Math.min(999, Math.round(Number(v)) || 1));
-  };
-  const sets = n("sets");
-  let repMin = n("rep_min");
-  let repMax = n("rep_max");
-  if (repMin !== null && repMax !== null && repMin > repMax) {
-    [repMin, repMax] = [repMax, repMin];
-  }
+  const clamp = (n: number | null | undefined) =>
+    n == null || Number.isNaN(n) ? null : Math.max(1, Math.min(999, Math.round(n)));
+  const patch: { sets?: number | null; rep_min?: number | null; rep_max?: number | null } = {};
+  if (input.sets !== undefined) patch.sets = clamp(input.sets);
+  if (input.repMin !== undefined) patch.rep_min = clamp(input.repMin);
+  if (input.repMax !== undefined) patch.rep_max = clamp(input.repMax);
+  if (Object.keys(patch).length === 0) return;
   check(
-    await supabase
-      .from("program_exercises")
-      .update({ sets, rep_min: repMin, rep_max: repMax })
-      .eq("id", id),
+    await supabase.from("program_exercises").update(patch).eq("id", input.id),
     "update program exercise",
   );
-  revalidateProgram(programId);
+  revalidatePrograms(input.programId);
 }
 
-export async function removeProgramExercise(formData: FormData) {
+export async function removeProgramExercise(id: string, programId: string) {
   const { supabase } = await requireAdmin();
-  const id = String(formData.get("id"));
-  const programId = String(formData.get("program_id"));
   check(
     await supabase.from("program_exercises").delete().eq("id", id),
     "remove program exercise",
   );
-  revalidateProgram(programId);
+  revalidatePrograms(programId);
 }
 
-export async function startProgram(formData: FormData) {
-  const { supabase, user } = await requireUser();
-  const programId = String(formData.get("program_id"));
-  const startDate = String(formData.get("start_date"));
-  if (!programId || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return;
-  check(
-    await supabase.from("user_programs").upsert(
-      { user_id: user.id, program_id: programId, start_date: startDate },
-      { onConflict: "user_id" },
+export async function reorderProgramExercise(
+  id: string,
+  programId: string,
+  dir: -1 | 1,
+) {
+  const { supabase } = await requireAdmin();
+  const { data: rows } = await supabase
+    .from("program_exercises")
+    .select("id, sort")
+    .eq("program_id", programId)
+    .order("sort")
+    .order("id");
+  if (!rows) return;
+  const i = rows.findIndex((r) => r.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= rows.length) return;
+  // renumber 0..n-1 so equal or gapped sort values can't make a move a no-op
+  const [moved] = rows.splice(i, 1);
+  rows.splice(j, 0, moved);
+  await Promise.all(
+    rows.map((r, idx) =>
+      r.sort === idx
+        ? Promise.resolve()
+        : supabase.from("program_exercises").update({ sort: idx }).eq("id", r.id),
     ),
-    "start program",
   );
-  revalidatePath("/programs");
-  redirect("/programs");
+  revalidatePrograms(programId);
 }
 
-export async function stopProgram() {
-  const { supabase, user } = await requireUser();
-  await supabase.from("user_programs").delete().eq("user_id", user.id);
-  revalidatePath("/programs");
-  redirect("/programs");
+/** Fill a freshly created day with a program's exercises. The day gets a copy,
+ *  so editing or deleting the program later doesn't touch days already planned. */
+async function applyProgramToDay(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  dayId: string,
+  programId: string,
+) {
+  const { data: rows } = await supabase
+    .from("program_exercises")
+    .select(
+      "exercise_id, sort, sets, rep_min, rep_max, exercises(default_sets, default_rep_min, default_rep_max)",
+    )
+    .eq("program_id", programId)
+    .order("sort")
+    .order("id");
+  if (!rows?.length) return;
+
+  // shared seed: the program's numbers, else the exercise's catalog default
+  const { data: created } = await supabase
+    .from("planned_day_exercises")
+    .insert(
+      rows.map((r, i) => ({
+        planned_day_id: dayId,
+        exercise_id: r.exercise_id,
+        sort: i,
+        target_sets: r.sets ?? r.exercises?.default_sets ?? DEFAULT_SETS,
+        target_rep_min: r.rep_min ?? r.exercises?.default_rep_min ?? null,
+        target_rep_max: r.rep_max ?? r.exercises?.default_rep_max ?? null,
+        target_weight: null,
+        added_by: userId,
+      })),
+    )
+    .select("id, exercise_id");
+  if (!created) return;
+
+  // The planner's own targets win over any personal exercise default, so what
+  // the program prescribes is what shows up for them. Fields it leaves blank
+  // stay null and fall through to their usual defaults.
+  const mine = created.flatMap((c) => {
+    const r = rows.find((x) => x.exercise_id === c.exercise_id);
+    if (!r || (r.sets == null && r.rep_min == null && r.rep_max == null)) return [];
+    return [
+      {
+        planned_day_exercise_id: c.id,
+        user_id: userId,
+        target_sets: r.sets,
+        target_rep_min: r.rep_min,
+        target_rep_max: r.rep_max,
+      },
+    ];
+  });
+  if (mine.length) {
+    await supabase
+      .from("day_exercise_user_targets")
+      .upsert(mine, { onConflict: "planned_day_exercise_id,user_id" });
+  }
 }
