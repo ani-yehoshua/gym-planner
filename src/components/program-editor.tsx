@@ -6,6 +6,7 @@ import {
   updateProgram,
   updateProgramExercise,
 } from "@/app/actions";
+import { ExerciseSearch } from "@/components/exercise-search";
 import { SubmitButton } from "@/components/submit-button";
 import { CATEGORY_LABEL } from "@/lib/labels";
 import { PROGRAM_GROUPS, groupProgramExercises } from "@/lib/programs";
@@ -131,34 +132,59 @@ function ProgramExercises({
         </div>
       ))}
 
-      <form action={addProgramExercise} className="flex flex-wrap gap-2">
-        <input type="hidden" name="program_id" value={program.id} />
-        <select
-          name="exercise_id"
-          required
-          defaultValue=""
-          className={`${inp} min-w-0 flex-1`}
-        >
-          <option value="" disabled>
-            Add an exercise…
-          </option>
-          {catOrder.map((c) => (
-            <optgroup key={c} label={CATEGORY_LABEL[c]}>
+      {/* same search + collapsible muscle-group list as the Exercises tab;
+          tapping an exercise adds it. Each row is its own form so pressing
+          Enter in the search box can't submit anything. */}
+      <span className="text-xs text-text-muted">
+        Add from the catalog — search, or open a muscle group and tap an
+        exercise.
+      </span>
+      <ExerciseSearch>
+        {catOrder.map((c) => (
+          <details
+            key={c}
+            data-exercise-group
+            className="rounded-xl border border-border"
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold">
+              {CATEGORY_LABEL[c]}
+              <span className="text-xs font-normal text-text-muted">
+                {byCat.get(c)!.length} ▾
+              </span>
+            </summary>
+            <ul className="flex flex-col gap-1 border-t border-border p-2">
               {byCat.get(c)!.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
+                <li
+                  key={e.id}
+                  data-exercise-name={e.name}
+                  className="rounded-lg border border-border"
+                >
+                  <form action={addProgramExercise}>
+                    <input
+                      type="hidden"
+                      name="program_id"
+                      value={program.id}
+                    />
+                    <input type="hidden" name="exercise_id" value={e.id} />
+                    <SubmitButton
+                      pendingText="Adding…"
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-2 disabled:opacity-50"
+                    >
+                      <span>{e.name}</span>
+                      <span className="text-xs text-text-muted">+ Add</span>
+                    </SubmitButton>
+                  </form>
+                </li>
               ))}
-            </optgroup>
-          ))}
-        </select>
-        <SubmitButton
-          pendingText="Adding…"
-          className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface disabled:opacity-50"
-        >
-          Add
-        </SubmitButton>
-      </form>
+            </ul>
+          </details>
+        ))}
+        {catOrder.length === 0 && (
+          <p className="text-xs text-text-muted">
+            Every catalog exercise is already in this program.
+          </p>
+        )}
+      </ExerciseSearch>
       <p className="text-[11px] text-text-muted">
         Sets and reps are optional notes — leave them blank if the exercise just
         belongs in the program.
