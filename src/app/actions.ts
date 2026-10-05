@@ -1297,7 +1297,6 @@ export async function createProgram(formData: FormData) {
     .select("id")
     .single();
   if (created) await saveProgramTargets(supabase, created.id, targets);
-  revalidatePath("/admin/programs");
   revalidatePath("/programs");
 }
 
@@ -1314,7 +1313,6 @@ export async function updateProgram(formData: FormData) {
     "update program",
   );
   await saveProgramTargets(supabase, id, targets);
-  revalidatePath("/admin/programs");
   revalidatePath("/programs");
 }
 
@@ -1324,7 +1322,6 @@ export async function deleteProgram(formData: FormData) {
   if (!id) return;
   // cascades to program_targets and to anyone currently following it
   check(await supabase.from("programs").delete().eq("id", id), "delete program");
-  revalidatePath("/admin/programs");
   revalidatePath("/programs");
 }
 

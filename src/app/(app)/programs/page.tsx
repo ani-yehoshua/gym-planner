@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { stopProgram } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
+import { ProgramEditor } from "@/components/program-editor";
+import { isAdmin } from "@/lib/admin";
 import { ProgramCard, targetChips } from "@/components/program-card";
 import {
   addDays,
@@ -45,7 +47,7 @@ export default async function ProgramsPage({
 
   const todayISO = await getUserToday();
 
-  const [{ data: programs }, { data: mine }] = await Promise.all([
+  const [{ data: programs }, { data: mine }, admin] = await Promise.all([
     supabase
       .from("programs")
       .select("id, name, description, weeks, program_targets(category, sets)")
@@ -55,6 +57,7 @@ export default async function ProgramsPage({
       .select("program_id, start_date")
       .eq("user_id", user.id)
       .maybeSingle(),
+    isAdmin(supabase),
   ]);
   const all = programs ?? [];
   const active = mine ? all.find((p) => p.id === mine.program_id) : undefined;
@@ -330,11 +333,13 @@ export default async function ProgramsPage({
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold">Programs</h1>
 
+      {admin && <ProgramEditor programs={all} />}
+
       {tracker}
 
       {all.length === 0 ? (
         <p className="text-sm text-text-muted">
-          No programs yet. Admins can add some from the Exercises tab.
+          No programs yet.{admin && " Use “Manage programs” above to add one."}
         </p>
       ) : (
         <section className="flex flex-col gap-2">

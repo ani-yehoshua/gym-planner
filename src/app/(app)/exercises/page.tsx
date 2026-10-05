@@ -198,14 +198,6 @@ export default async function ExercisesPage() {
                 </a>
             )}
 
-            {admin && (
-                <a
-                    href='/admin/programs'
-                    className='rounded-xl border border-border px-3 py-2 text-sm font-medium hover:bg-surface'>
-                    Edit programs →
-                </a>
-            )}
-
             {admin && archived.length > 0 && (
                 <details className='rounded-xl border border-border p-3'>
                     <summary className='cursor-pointer text-sm font-medium'>

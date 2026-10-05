@@ -23,7 +23,7 @@ const NAV = [
     href: "/programs",
     label: "Programs",
     Icon: ProgramsIcon,
-    match: (p: string) => p.startsWith("/programs") || p.startsWith("/admin/programs"),
+    match: (p: string) => p.startsWith("/programs"),
   },
 ];
 
