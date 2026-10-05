@@ -512,6 +512,51 @@ export type Database = {
           },
         ]
       }
+      program_exercises: {
+        Row: {
+          exercise_id: string
+          id: string
+          program_id: string
+          rep_max: number | null
+          rep_min: number | null
+          sets: number | null
+          sort: number
+        }
+        Insert: {
+          exercise_id: string
+          id?: string
+          program_id: string
+          rep_max?: number | null
+          rep_min?: number | null
+          sets?: number | null
+          sort?: number
+        }
+        Update: {
+          exercise_id?: string
+          id?: string
+          program_id?: string
+          rep_max?: number | null
+          rep_min?: number | null
+          sets?: number | null
+          sort?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_exercises_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       program_targets: {
         Row: {
           category: Database["public"]["Enums"]["muscle_category"]

@@ -1,8 +1,19 @@
-import { createProgram, deleteProgram, updateProgram } from "@/app/actions";
+import {
+  addProgramExercise,
+  createProgram,
+  deleteProgram,
+  removeProgramExercise,
+  updateProgram,
+  updateProgramExercise,
+} from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { CATEGORY_LABEL } from "@/lib/labels";
-import { PROGRAM_GROUPS } from "@/lib/programs";
+import { PROGRAM_GROUPS, groupProgramExercises } from "@/lib/programs";
 import type { Enums } from "@/lib/supabase/database.types";
+
+type Cat = Enums<"muscle_category">;
+
+export type CatalogExercise = { id: string; name: string; category: Cat };
 
 const inp = "rounded-lg border border-border bg-surface px-3 py-2 text-sm";
 const small =
@@ -16,7 +27,145 @@ export type EditableProgram = {
   description: string | null;
   weeks: number;
   program_targets: { category: Enums<"muscle_category">; sets: number }[];
+  program_exercises: {
+    id: string;
+    sort: number;
+    sets: number | null;
+    rep_min: number | null;
+    rep_max: number | null;
+    exercises: CatalogExercise | null;
+  }[];
 };
+
+const dangerSm =
+  "rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-500/20 disabled:opacity-50 dark:text-rose-300";
+
+/** The exercises a program is built from: grouped by muscle group, each with
+ *  optional sets / rep range, plus a picker to add more from the catalog. */
+function ProgramExercises({
+  program,
+  catalog,
+}: {
+  program: EditableProgram;
+  catalog: CatalogExercise[];
+}) {
+  const groups = groupProgramExercises(program.program_exercises);
+  const taken = new Set(program.program_exercises.map((r) => r.exercises?.id));
+  const available = catalog.filter((c) => !taken.has(c.id));
+  const byCat = new Map<Cat, CatalogExercise[]>();
+  for (const c of available) {
+    const arr = byCat.get(c.category) ?? [];
+    arr.push(c);
+    byCat.set(c.category, arr);
+  }
+  const catOrder = [...byCat.keys()].sort((a, b) =>
+    CATEGORY_LABEL[a].localeCompare(CATEGORY_LABEL[b]),
+  );
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-3">
+      <span className="text-sm font-medium">Exercises</span>
+
+      {groups.length === 0 && (
+        <p className="text-xs text-text-muted">
+          None yet — add exercises below. Members see them grouped by muscle
+          group.
+        </p>
+      )}
+
+      {groups.map((g) => (
+        <div key={g.category} className="flex flex-col gap-1.5">
+          <span className="text-xs text-text-muted">
+            {CATEGORY_LABEL[g.category]}
+          </span>
+          {g.rows.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-2">
+              <form
+                action={updateProgramExercise}
+                className="flex flex-1 flex-wrap items-center gap-1.5"
+              >
+                <input type="hidden" name="id" value={r.id} />
+                <input type="hidden" name="program_id" value={program.id} />
+                <span className="min-w-[8rem] flex-1 text-sm">
+                  {r.exercises?.name}
+                </span>
+                <input
+                  name="sets"
+                  inputMode="numeric"
+                  defaultValue={r.sets ?? ""}
+                  placeholder="sets"
+                  className={small}
+                />
+                <span className="text-text-muted">×</span>
+                <input
+                  name="rep_min"
+                  inputMode="numeric"
+                  defaultValue={r.rep_min ?? ""}
+                  placeholder="min"
+                  className={small}
+                />
+                <span className="text-text-muted">–</span>
+                <input
+                  name="rep_max"
+                  inputMode="numeric"
+                  defaultValue={r.rep_max ?? ""}
+                  placeholder="max"
+                  className={small}
+                />
+                <SubmitButton
+                  pendingText="…"
+                  className="rounded-md border border-border px-2 py-1 text-xs hover:bg-surface disabled:opacity-50"
+                >
+                  Save
+                </SubmitButton>
+              </form>
+              <form action={removeProgramExercise}>
+                <input type="hidden" name="id" value={r.id} />
+                <input type="hidden" name="program_id" value={program.id} />
+                <SubmitButton pendingText="…" className={dangerSm}>
+                  Remove
+                </SubmitButton>
+              </form>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      <form action={addProgramExercise} className="flex flex-wrap gap-2">
+        <input type="hidden" name="program_id" value={program.id} />
+        <select
+          name="exercise_id"
+          required
+          defaultValue=""
+          className={`${inp} min-w-0 flex-1`}
+        >
+          <option value="" disabled>
+            Add an exercise…
+          </option>
+          {catOrder.map((c) => (
+            <optgroup key={c} label={CATEGORY_LABEL[c]}>
+              {byCat.get(c)!.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <SubmitButton
+          pendingText="Adding…"
+          className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface disabled:opacity-50"
+        >
+          Add
+        </SubmitButton>
+      </form>
+      <p className="text-[11px] text-text-muted">
+        Sets and reps are optional notes — leave them blank if the exercise just
+        belongs in the program.
+      </p>
+    </div>
+  );
+}
 
 function ProgramFields({
   values,
@@ -81,7 +230,13 @@ function ProgramFields({
 
 /** Admin-only: create, edit and delete programs. Rendered inline at the top of
  *  the Programs tab (like the add-an-exercise form on the Exercises tab). */
-export function ProgramEditor({ programs }: { programs: EditableProgram[] }) {
+export function ProgramEditor({
+  programs,
+  catalog,
+}: {
+  programs: EditableProgram[];
+  catalog: CatalogExercise[];
+}) {
   return (
     <details className="rounded-xl border border-border p-3">
       <summary className="cursor-pointer text-sm font-medium">
@@ -139,15 +294,21 @@ export function ProgramEditor({ programs }: { programs: EditableProgram[] }) {
                           Save changes
                         </SubmitButton>
                       </form>
-                      <form action={deleteProgram}>
+                      <ProgramExercises program={p} catalog={catalog} />
+                      <form
+                        action={deleteProgram}
+                        className="flex flex-wrap items-center gap-2 border-t border-border pt-3"
+                      >
                         <input type="hidden" name="program_id" value={p.id} />
                         <SubmitButton
-                          pendingText="…"
-                          className="text-xs text-text-muted hover:text-rose-400 disabled:opacity-50"
+                          pendingText="Deleting…"
+                          className="rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-500/20 disabled:opacity-50 dark:text-rose-300"
                         >
-                          Delete this program (also stops it for anyone
-                          following it)
+                          Delete program
                         </SubmitButton>
+                        <span className="text-[11px] text-text-muted">
+                          Also stops it for anyone following it.
+                        </span>
                       </form>
                     </div>
                   </details>

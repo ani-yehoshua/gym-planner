@@ -50,7 +50,9 @@ export default async function ProgramsPage({
   const [{ data: programs }, { data: mine }, admin] = await Promise.all([
     supabase
       .from("programs")
-      .select("id, name, description, weeks, program_targets(category, sets)")
+      .select(
+        "id, name, description, weeks, program_targets(category, sets), program_exercises(id, sort, sets, rep_min, rep_max, exercises(id, name, category))",
+      )
       .order("created_at"),
     supabase
       .from("user_programs")
@@ -60,6 +62,14 @@ export default async function ProgramsPage({
     isAdmin(supabase),
   ]);
   const all = programs ?? [];
+  // the exercise picker in the admin editor — only admins need the catalog
+  const { data: catalog } = admin
+    ? await supabase
+        .from("exercises")
+        .select("id, name, category")
+        .is("archived_at", null)
+        .order("name")
+    : { data: [] };
   const active = mine ? all.find((p) => p.id === mine.program_id) : undefined;
 
   // ---- tracker for the program being followed ------------------------------
@@ -333,7 +343,7 @@ export default async function ProgramsPage({
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold">Programs</h1>
 
-      {admin && <ProgramEditor programs={all} />}
+      {admin && <ProgramEditor programs={all} catalog={catalog ?? []} />}
 
       {tracker}
 

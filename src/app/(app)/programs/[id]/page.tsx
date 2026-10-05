@@ -8,7 +8,13 @@ import { targetChips } from "@/components/program-card";
 import { addDays, formatRangeNumeric } from "@/lib/date";
 import { getUserToday } from "@/lib/user-today";
 import { CATEGORY_LABEL } from "@/lib/labels";
-import { clampWeek, programWeekNo, programWeekStart } from "@/lib/programs";
+import {
+  clampWeek,
+  formatRx,
+  groupProgramExercises,
+  programWeekNo,
+  programWeekStart,
+} from "@/lib/programs";
 
 export default async function ProgramDetailPage({
   params,
@@ -26,7 +32,9 @@ export default async function ProgramDetailPage({
   const [{ data: program }, { data: mine }] = await Promise.all([
     supabase
       .from("programs")
-      .select("id, name, description, weeks, program_targets(category, sets)")
+      .select(
+        "id, name, description, weeks, program_targets(category, sets), program_exercises(id, sort, sets, rep_min, rep_max, exercises(id, name, category))",
+      )
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -39,6 +47,8 @@ export default async function ProgramDetailPage({
 
   const chips = targetChips(program);
   const weeklyTotal = chips.reduce((a, c) => a + c.sets, 0);
+  const targetByGroup = new Map(chips.map((c) => [c.category, c.sets]));
+  const exerciseGroups = groupProgramExercises(program.program_exercises);
   const following = mine?.program_id === program.id;
   const followingOther = mine && !following;
   const currentWeek = following
@@ -82,6 +92,42 @@ export default async function ProgramDetailPage({
           </ul>
         )}
       </section>
+
+      {exerciseGroups.length > 0 && (
+        <section className="rounded-xl border border-border p-4">
+          <h2 className="mb-3 text-sm font-medium">Exercises</h2>
+          <div className="flex flex-col gap-4">
+            {exerciseGroups.map((g) => (
+              <div key={g.category}>
+                <div className="mb-1 flex items-baseline justify-between text-sm">
+                  <span className="font-medium">{CATEGORY_LABEL[g.category]}</span>
+                  {targetByGroup.has(g.category) && (
+                    <span className="text-xs text-text-muted">
+                      <span className="text-text">
+                        {targetByGroup.get(g.category)}
+                      </span>{" "}
+                      sets / week
+                    </span>
+                  )}
+                </div>
+                <ul className="flex flex-col divide-y divide-border text-sm">
+                  {g.rows.map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex items-center justify-between gap-2 py-1.5"
+                    >
+                      <span>{r.exercises?.name}</span>
+                      <span className="shrink-0 text-xs text-text-muted">
+                        {formatRx(r.sets, r.rep_min, r.rep_max)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="rounded-xl border border-border p-4">
         <h2 className="mb-2 text-sm font-medium">The whole program</h2>

@@ -1325,6 +1325,75 @@ export async function deleteProgram(formData: FormData) {
   revalidatePath("/programs");
 }
 
+function revalidateProgram(programId: string) {
+  revalidatePath("/programs");
+  revalidatePath(`/programs/${programId}`);
+}
+
+export async function addProgramExercise(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const programId = String(formData.get("program_id"));
+  const exerciseId = String(formData.get("exercise_id"));
+  if (!programId || !exerciseId) return;
+  const { data: maxRow } = await supabase
+    .from("program_exercises")
+    .select("sort")
+    .eq("program_id", programId)
+    .order("sort", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  check(
+    await supabase.from("program_exercises").upsert(
+      {
+        program_id: programId,
+        exercise_id: exerciseId,
+        sort: (maxRow?.sort ?? -1) + 1,
+      },
+      { onConflict: "program_id,exercise_id", ignoreDuplicates: true },
+    ),
+    "add program exercise",
+  );
+  revalidateProgram(programId);
+}
+
+/** Sets and the rep range are optional notes — blank saves as "not specified". */
+export async function updateProgramExercise(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const id = String(formData.get("id"));
+  const programId = String(formData.get("program_id"));
+  const n = (k: string) => {
+    const v = formData.get(k);
+    return v === null || v === ""
+      ? null
+      : Math.max(1, Math.min(999, Math.round(Number(v)) || 1));
+  };
+  const sets = n("sets");
+  let repMin = n("rep_min");
+  let repMax = n("rep_max");
+  if (repMin !== null && repMax !== null && repMin > repMax) {
+    [repMin, repMax] = [repMax, repMin];
+  }
+  check(
+    await supabase
+      .from("program_exercises")
+      .update({ sets, rep_min: repMin, rep_max: repMax })
+      .eq("id", id),
+    "update program exercise",
+  );
+  revalidateProgram(programId);
+}
+
+export async function removeProgramExercise(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const id = String(formData.get("id"));
+  const programId = String(formData.get("program_id"));
+  check(
+    await supabase.from("program_exercises").delete().eq("id", id),
+    "remove program exercise",
+  );
+  revalidateProgram(programId);
+}
+
 export async function startProgram(formData: FormData) {
   const { supabase, user } = await requireUser();
   const programId = String(formData.get("program_id"));
