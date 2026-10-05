@@ -11,10 +11,11 @@ import { ExerciseDetailBody } from "@/components/exercise-detail";
 import { ExercisePrefForm } from "@/components/exercise-pref-form";
 import { ExerciseForm } from "@/components/exercise-form";
 import { ExerciseSearch } from "@/components/exercise-search";
+import { SavePillHost } from "@/components/save-pill";
 import { SubmitButton } from "@/components/submit-button";
 import { recommendedReps, isCompound, type Goal } from "@/lib/targets";
 import { isAdmin } from "@/lib/admin";
-import { type Unit } from "@/lib/units";
+import { distanceUnitLabel, type Unit } from "@/lib/units";
 import type { Enums } from "@/lib/supabase/database.types";
 
 const inp = "rounded-lg border border-border bg-surface px-3 py-2 text-sm";
@@ -64,7 +65,11 @@ export default async function ExercisesPage() {
             .select("id, name, note, status, created_at")
             .eq("status", "open")
             .order("created_at", { ascending: false }),
-        supabase.from("profiles").select("units").eq("id", user.id).maybeSingle(),
+        supabase
+            .from("profiles")
+            .select("units, distance_unit")
+            .eq("id", user.id)
+            .maybeSingle(),
     ]);
 
     const exercises = (allExercises ?? []).filter(e => !e.archived_at);
@@ -85,6 +90,7 @@ export default async function ExercisesPage() {
 
     return (
         <div className='flex flex-col gap-2'>
+            <SavePillHost />
             <h1 className='text-lg font-semibold'>Exercises</h1>
 
             {admin ? (
@@ -192,6 +198,14 @@ export default async function ExercisesPage() {
                 </a>
             )}
 
+            {admin && (
+                <a
+                    href='/admin/programs'
+                    className='rounded-xl border border-border px-3 py-2 text-sm font-medium hover:bg-surface'>
+                    Edit programs →
+                </a>
+            )}
+
             {admin && archived.length > 0 && (
                 <details className='rounded-xl border border-border p-3'>
                     <summary className='cursor-pointer text-sm font-medium'>
@@ -290,10 +304,18 @@ export default async function ExercisesPage() {
                                                     key={`${e.id}:${p?.default_sets ?? ""}:${p?.default_rep_min ?? ""}:${p?.default_rep_max ?? ""}:${p?.default_weight ?? ""}:${p?.default_1rm ?? ""}:${p?.default_distance ?? ""}:${p?.default_log_mode ?? ""}`}
                                                     exerciseId={e.id}
                                                     pref={p}
+                                                    // what you'd get with no personal default:
+                                                    // the exercise's own catalog default first,
+                                                    // goal suggestion only if it has none
                                                     fallback={{
-                                                        sets: 2,
-                                                        repMin: rMin,
-                                                        repMax: rMax,
+                                                        sets:
+                                                            e.default_sets ?? 2,
+                                                        repMin:
+                                                            e.default_rep_min ??
+                                                            rMin,
+                                                        repMax:
+                                                            e.default_rep_max ??
+                                                            rMax,
                                                     }}
                                                     timeBased={e.time_based}
                                                     weighted={e.weighted}
@@ -302,6 +324,9 @@ export default async function ExercisesPage() {
                                                         (profile?.units as Unit) ??
                                                         "lb"
                                                     }
+                                                    distanceUnit={distanceUnitLabel(
+                                                        profile?.distance_unit,
+                                                    )}
                                                 />
                                             );
                                         })()}

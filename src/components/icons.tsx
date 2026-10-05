@@ -45,6 +45,13 @@ export const UserIcon = ({ className }: P) => (
   </svg>
 );
 
+export const ProgramsIcon = ({ className }: P) => (
+  <svg {...svg(className)}>
+    <rect x="5" y="3" width="14" height="18" rx="2" />
+    <path d="M9 3v2h6V3M9 11l2 2 4-4M9 17h6" />
+  </svg>
+);
+
 export const ChevronLeftIcon = ({ className }: P) => (
   <svg {...svg(className ?? "h-4 w-4")}>
     <path d="M15 18l-6-6 6-6" />

@@ -512,11 +512,73 @@ export type Database = {
           },
         ]
       }
+      program_targets: {
+        Row: {
+          category: Database["public"]["Enums"]["muscle_category"]
+          program_id: string
+          sets: number
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["muscle_category"]
+          program_id: string
+          sets: number
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["muscle_category"]
+          program_id?: string
+          sets?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_targets_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      programs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          weeks: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          weeks: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          weeks?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "programs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
           display_name: string | null
+          distance_unit: string
           id: string
           onboarded_at: string | null
           timezone: string
@@ -526,6 +588,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          distance_unit?: string
           id: string
           onboarded_at?: string | null
           timezone?: string
@@ -535,6 +598,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          distance_unit?: string
           id?: string
           onboarded_at?: string | null
           timezone?: string
@@ -819,6 +883,42 @@ export type Database = {
             foreignKeyName: "user_exercise_prefs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_programs: {
+        Row: {
+          created_at: string
+          program_id: string
+          start_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          program_id: string
+          start_date: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          program_id?: string
+          start_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_programs_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_programs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },

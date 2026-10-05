@@ -4,12 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { addDays } from "@/lib/date";
-import {
-  DEFAULT_SETS,
-  isCompound,
-  recommendedReps,
-  type Goal,
-} from "@/lib/targets";
+import { DEFAULT_SETS } from "@/lib/targets";
+import { distanceUnitLabel } from "@/lib/units";
+import { PROGRAM_GROUPS } from "@/lib/programs";
 import { isAdmin, notifyExerciseRequest } from "@/lib/admin";
 import { epley1rm, round5, WORKING_REPS } from "@/lib/one-rm";
 import type { Enums } from "@/lib/supabase/database.types";
@@ -39,6 +36,7 @@ export async function saveOnboarding(formData: FormData) {
 
   const displayName = String(formData.get("display_name") || "").trim();
   const units = (String(formData.get("units")) as Enums<"unit_system">) || "lb";
+  const distanceUnit = distanceUnitLabel(String(formData.get("distance_unit")));
   const experience = String(formData.get("experience") || "") as
     | Enums<"experience_level">
     | "";
@@ -55,6 +53,7 @@ export async function saveOnboarding(formData: FormData) {
       .update({
         display_name: displayName || null,
         units,
+        distance_unit: distanceUnit,
         onboarded_at: new Date().toISOString(),
       })
       .eq("id", user.id),
@@ -112,6 +111,7 @@ export async function updateAccount(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const units = (String(formData.get("units")) as Enums<"unit_system">) || "lb";
+  const distanceUnit = distanceUnitLabel(String(formData.get("distance_unit")));
   const experience = String(formData.get("experience") || "") as
     | Enums<"experience_level">
     | "";
@@ -123,7 +123,10 @@ export async function updateAccount(formData: FormData) {
   };
 
   check(
-    await supabase.from("profiles").update({ units }).eq("id", user.id),
+    await supabase
+      .from("profiles")
+      .update({ units, distance_unit: distanceUnit })
+      .eq("id", user.id),
     "update profile",
   );
 
@@ -505,11 +508,11 @@ export async function deleteDay(dayId: string) {
 export async function addExerciseToDay(dayId: string, exerciseId: string) {
   const { supabase, user } = await requireUser();
 
-  const [{ data: ex }, { data: pref }, { data: constants }, { data: maxRow }] =
+  const [{ data: ex }, { data: pref }, { data: maxRow }] =
     await Promise.all([
       supabase
         .from("exercises")
-        .select("name, primary_muscles, default_sets, default_rep_min, default_rep_max")
+        .select("default_sets, default_rep_min, default_rep_max")
         .eq("id", exerciseId)
         .single(),
       supabase
@@ -518,7 +521,6 @@ export async function addExerciseToDay(dayId: string, exerciseId: string) {
         .eq("user_id", user.id)
         .eq("exercise_id", exerciseId)
         .maybeSingle(),
-      supabase.from("user_constants").select("primary_goal").eq("user_id", user.id).maybeSingle(),
       supabase
         .from("planned_day_exercises")
         .select("sort")
@@ -528,15 +530,11 @@ export async function addExerciseToDay(dayId: string, exerciseId: string) {
         .maybeSingle(),
     ]);
 
-  const compound = ex ? isCompound(ex) : false;
-  const [recMin, recMax] = recommendedReps(
-    (constants?.primary_goal as Goal) ?? null,
-    compound,
-  );
-
-  // shared row seed = GLOBAL defaults only (catalog default -> goal recommendation).
-  // never the adder's personal numbers — weight especially is per-person and each
-  // member's own values are layered on at view time via day_exercise_user_targets.
+  // shared row seed = the exercise's catalog default, or nothing. Never the
+  // adder's personal numbers (weight especially is per-person) and never their
+  // goal-based rep suggestion — that would pin the adder's goal onto everyone
+  // else's view. Each viewer's own values and goal suggestion are layered on at
+  // view time (effectiveTarget in day/[id]/page.tsx).
   const { data: created } = await supabase
     .from("planned_day_exercises")
     .insert({
@@ -544,8 +542,8 @@ export async function addExerciseToDay(dayId: string, exerciseId: string) {
       exercise_id: exerciseId,
       sort: (maxRow?.sort ?? -1) + 1,
       target_sets: ex?.default_sets ?? DEFAULT_SETS,
-      target_rep_min: ex?.default_rep_min ?? recMin,
-      target_rep_max: ex?.default_rep_max ?? recMax,
+      target_rep_min: ex?.default_rep_min ?? null,
+      target_rep_max: ex?.default_rep_max ?? null,
       target_weight: null,
       added_by: user.id,
     })
@@ -1181,9 +1179,11 @@ export async function addSplitExercise(formData: FormData) {
       template_day_id: templateDayId,
       exercise_id: exerciseId,
       sort: (maxRow?.sort ?? -1) + 1,
-      sets: ex?.default_sets ?? 3,
-      rep_min: ex?.default_rep_min ?? 8,
-      rep_max: ex?.default_rep_max ?? 12,
+      // null = "nothing set here", resolved to the exercise's catalog default
+      // (then the viewer's goal suggestion) when a day is materialized/viewed
+      sets: ex?.default_sets ?? null,
+      rep_min: ex?.default_rep_min ?? null,
+      rep_max: ex?.default_rep_max ?? null,
     }),
     "add split exercise",
   );
@@ -1241,4 +1241,112 @@ export async function reorderSplitExercise(formData: FormData) {
     ),
   );
   revalidatePath("/admin/splits");
+}
+
+// ---------------------------------------------------------------------------
+// programs: admin-authored multi-week plans + a user following one
+// ---------------------------------------------------------------------------
+function readProgramForm(formData: FormData) {
+  const name = String(formData.get("name") || "").trim();
+  const description = String(formData.get("description") || "").trim();
+  const weeks = Math.max(
+    1,
+    Math.min(52, Math.round(Number(formData.get("weeks"))) || 8),
+  );
+  const targets = PROGRAM_GROUPS.map((category) => ({
+    category,
+    sets: Math.max(0, Math.min(99, Math.round(Number(formData.get(`target_${category}`))) || 0)),
+  }));
+  return { name, description, weeks, targets };
+}
+
+async function saveProgramTargets(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  programId: string,
+  targets: { category: Enums<"muscle_category">; sets: number }[],
+) {
+  const keep = targets.filter((t) => t.sets > 0);
+  const drop = targets.filter((t) => t.sets === 0).map((t) => t.category);
+  if (keep.length) {
+    check(
+      await supabase
+        .from("program_targets")
+        .upsert(
+          keep.map((t) => ({ program_id: programId, ...t })),
+          { onConflict: "program_id,category" },
+        ),
+      "save program targets",
+    );
+  }
+  if (drop.length) {
+    await supabase
+      .from("program_targets")
+      .delete()
+      .eq("program_id", programId)
+      .in("category", drop);
+  }
+}
+
+export async function createProgram(formData: FormData) {
+  const { supabase, user } = await requireAdmin();
+  const { name, description, weeks, targets } = readProgramForm(formData);
+  if (!name) return;
+  const { data: created } = await supabase
+    .from("programs")
+    .insert({ name, description: description || null, weeks, created_by: user.id })
+    .select("id")
+    .single();
+  if (created) await saveProgramTargets(supabase, created.id, targets);
+  revalidatePath("/admin/programs");
+  revalidatePath("/programs");
+}
+
+export async function updateProgram(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const id = String(formData.get("program_id"));
+  const { name, description, weeks, targets } = readProgramForm(formData);
+  if (!id || !name) return;
+  check(
+    await supabase
+      .from("programs")
+      .update({ name, description: description || null, weeks })
+      .eq("id", id),
+    "update program",
+  );
+  await saveProgramTargets(supabase, id, targets);
+  revalidatePath("/admin/programs");
+  revalidatePath("/programs");
+}
+
+export async function deleteProgram(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const id = String(formData.get("program_id"));
+  if (!id) return;
+  // cascades to program_targets and to anyone currently following it
+  check(await supabase.from("programs").delete().eq("id", id), "delete program");
+  revalidatePath("/admin/programs");
+  revalidatePath("/programs");
+}
+
+export async function startProgram(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const programId = String(formData.get("program_id"));
+  const startDate = String(formData.get("start_date"));
+  if (!programId || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return;
+  check(
+    await supabase.from("user_programs").upsert(
+      { user_id: user.id, program_id: programId, start_date: startDate },
+      { onConflict: "user_id" },
+    ),
+    "start program",
+  );
+  revalidatePath("/programs");
+  redirect("/programs");
+}
+
+export async function stopProgram() {
+  const { supabase, user } = await requireUser();
+  await supabase.from("user_programs").delete().eq("user_id", user.id);
+  revalidatePath("/programs");
+  redirect("/programs");
 }

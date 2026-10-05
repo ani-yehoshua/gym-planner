@@ -12,6 +12,7 @@ import { ReplayTourButton } from "@/components/app-tour";
 import { SplitPicker, type SplitTemplate } from "@/components/split-picker";
 import { SubmitButton } from "@/components/submit-button";
 import { GOAL_LABEL, MUSCLE_LABEL } from "@/lib/labels";
+import { distanceUnitLabel } from "@/lib/units";
 import type { Enums } from "@/lib/supabase/database.types";
 
 const EXPERIENCE: [Enums<"experience_level">, string][] = [
@@ -48,7 +49,7 @@ export default async function AccountPage() {
 
     const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name, units, timezone")
+        .select("display_name, units, distance_unit, timezone")
         .eq("id", user.id)
         .single();
 
@@ -120,12 +121,12 @@ export default async function AccountPage() {
                 action={updateAccount}
                 className='flex flex-col gap-5'>
                 <div className={field}>
-                    <span className={label}>Units</span>
+                    <span className={label}>Weight unit</span>
                     <div className='flex gap-2'>
                         {(
                             [
-                                ["lb", "Imperial", "lb, mi"],
-                                ["kg", "Metric", "kg, km"],
+                                ["lb", "Pounds", "lb"],
+                                ["kg", "Kilograms", "kg"],
                             ] as const
                         ).map(([u, name, hint]) => (
                             <label
@@ -147,6 +148,43 @@ export default async function AccountPage() {
                             </label>
                         ))}
                     </div>
+                </div>
+
+                <div className={field}>
+                    <span className={label}>Distance unit</span>
+                    <div className='flex gap-2'>
+                        {(
+                            [
+                                ["mi", "Miles"],
+                                ["km", "Kilometers"],
+                                ["m", "Meters"],
+                            ] as const
+                        ).map(([d, name]) => (
+                            <label
+                                key={d}
+                                className='flex-1 cursor-pointer rounded-lg border border-border px-3 py-2 text-center text-sm has-[:checked]:border-text has-[:checked]:bg-surface-2'>
+                                <input
+                                    type='radio'
+                                    name='distance_unit'
+                                    value={d}
+                                    defaultChecked={
+                                        distanceUnitLabel(
+                                            profile?.distance_unit,
+                                        ) === d
+                                    }
+                                    className='sr-only'
+                                />
+                                {name}
+                                <span className='block text-[11px] text-text-muted'>
+                                    {d}
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                    <span className='text-[11px] text-text-muted'>
+                        Numbers you&apos;ve already logged aren&apos;t converted
+                        — only the label changes.
+                    </span>
                 </div>
 
                 <div className={field}>

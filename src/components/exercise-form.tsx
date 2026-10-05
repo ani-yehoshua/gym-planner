@@ -188,7 +188,7 @@ export function ExerciseForm({
 
       {distanceBased && (
         <label className="flex flex-col gap-1 text-xs text-text-muted">
-          Default distance (in the member&rsquo;s unit — mi or km)
+          Default distance (in the member&rsquo;s own distance unit — mi, km or m)
           <input
             name="default_distance"
             inputMode="decimal"

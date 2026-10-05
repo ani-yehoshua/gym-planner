@@ -5,7 +5,7 @@ import {
   CalendarIcon,
   ChartIcon,
   DumbbellIcon,
-  UserIcon,
+  ProgramsIcon,
   UsersIcon,
 } from "@/components/icons";
 
@@ -34,9 +34,9 @@ const STEPS = [
     body: "Bodyweight, records, estimated 1RMs, and side-by-side session comparisons — switch views and time ranges as you like.",
   },
   {
-    Icon: UserIcon,
-    title: "Account",
-    body: "Goals, units, timezone, schedule, theme. Tweak anything here whenever — and replay this tour from the bottom of the page.",
+    Icon: ProgramsIcon,
+    title: "Programs",
+    body: "Multi-week plans with weekly set targets per muscle group. Start one and track every day, every week, and the whole program. Your account — goals, units, timezone, theme, and this tour — lives under your name at the top.",
   },
 ];
 

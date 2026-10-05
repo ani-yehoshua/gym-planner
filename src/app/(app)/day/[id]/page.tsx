@@ -5,7 +5,7 @@ import { formatLong } from "@/lib/date";
 import { isCompound, recommendedReps, type Goal } from "@/lib/targets";
 import { DeleteDayButton } from "@/components/danger-button";
 import { ChevronLeftIcon } from "@/components/icons";
-import { type Unit } from "@/lib/units";
+import { distanceUnitLabel, type Unit } from "@/lib/units";
 import DayEditor from "./DayEditor";
 
 // stable per-member accent colors
@@ -29,7 +29,7 @@ export default async function DayPage({
   const { data: day } = await supabase
     .from("planned_days")
     .select(
-      "id, date, category, label, owner_user, party_id, is_deload, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance))",
+      "id, date, category, label, owner_user, party_id, is_deload, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance, default_sets, default_rep_min, default_rep_max))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -118,7 +118,11 @@ export default async function DayPage({
           .eq("user_id", user.id)
           .in("planned_day_exercises.exercise_id", exIds)
       : Promise.resolve({ data: [] }),
-    supabase.from("profiles").select("units").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("units, distance_unit")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
 
   const targetByPde = new Map(
@@ -210,19 +214,33 @@ export default async function DayPage({
   }
 
   /** effective target for the current user. Sets/reps: my day edit -> my saved
-   *  default -> the shared (global) seed -> goal recommendation. Weight is
-   *  purely personal: my day edit -> my saved default -> nothing. */
+   *  default -> the shared (global) seed -> the exercise's own catalog
+   *  default -> goal recommendation (last resort, only when nothing was ever
+   *  set for this exercise). Weight is purely personal: my day edit -> my
+   *  saved default -> nothing. */
   function effectiveTarget(p: PdeRow) {
     const t = targetByPde.get(p.id);
     const pref = prefByExercise.get(p.exercises.id);
     const [recMin, recMax] = recommendedReps(goal, isCompound(p.exercises));
     return {
       sets:
-        t?.target_sets ?? pref?.default_sets ?? p.target_sets ?? 2,
+        t?.target_sets ??
+        pref?.default_sets ??
+        p.target_sets ??
+        p.exercises.default_sets ??
+        2,
       repMin:
-        t?.target_rep_min ?? pref?.default_rep_min ?? p.target_rep_min ?? recMin,
+        t?.target_rep_min ??
+        pref?.default_rep_min ??
+        p.target_rep_min ??
+        p.exercises.default_rep_min ??
+        recMin,
       repMax:
-        t?.target_rep_max ?? pref?.default_rep_max ?? p.target_rep_max ?? recMax,
+        t?.target_rep_max ??
+        pref?.default_rep_max ??
+        p.target_rep_max ??
+        p.exercises.default_rep_max ??
+        recMax,
       weight: t?.target_weight ?? pref?.default_weight ?? null,
       distance:
         t?.target_distance ??
@@ -299,6 +317,7 @@ export default async function DayPage({
         experience={constants?.experience ?? null}
         focusMuscles={constants?.focus_muscles ?? []}
         units={(profile?.units as Unit) ?? "lb"}
+        distanceUnit={distanceUnitLabel(profile?.distance_unit)}
       />
     </div>
   );

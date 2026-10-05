@@ -1,15 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import { setExercisePref } from "@/app/actions";
-import { SubmitButton } from "@/components/submit-button";
+import { announceSave } from "@/components/save-pill";
 import {
   epley1rm,
   round5,
   workingFrom1rm,
   WORKING_REPS,
 } from "@/lib/one-rm";
-import { unitLabel, distanceUnitLabel, type Unit, type Measurement } from "@/lib/units";
+import {
+  unitLabel,
+  distanceUnitLabel,
+  type DistanceUnit,
+  type Unit,
+  type Measurement,
+} from "@/lib/units";
 
 export type ExercisePref = {
   default_sets: number | null;
@@ -32,6 +38,7 @@ export function ExercisePrefForm({
   weighted = true,
   measurement = "reps",
   units,
+  distanceUnit,
 }: {
   exerciseId: string;
   pref: ExercisePref | null;
@@ -40,9 +47,11 @@ export function ExercisePrefForm({
   weighted?: boolean;
   measurement?: Measurement;
   units: Unit;
+  distanceUnit: DistanceUnit;
 }) {
+  const [pending, startTransition] = useTransition();
   const u = unitLabel(units);
-  const du = distanceUnitLabel(units);
+  const du = distanceUnitLabel(distanceUnit);
   const [sets, setSets] = useState(str(pref?.default_sets));
   const [repMin, setRepMin] = useState(str(pref?.default_rep_min));
   const [repMax, setRepMax] = useState(str(pref?.default_rep_max));
@@ -74,9 +83,23 @@ export function ExercisePrefForm({
       setWeight(String(round5(workingFrom1rm(o, convReps))));
   }
 
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    announceSave("saving");
+    startTransition(async () => {
+      try {
+        await setExercisePref(data);
+        announceSave("saved");
+      } catch {
+        announceSave("error");
+      }
+    });
+  }
+
   return (
     <form
-      action={setExercisePref}
+      onSubmit={onSubmit}
       className="mt-3 flex flex-wrap items-end gap-3 border-t border-border pt-3"
     >
       <input type="hidden" name="exercise_id" value={exerciseId} />
@@ -189,15 +212,17 @@ export function ExercisePrefForm({
         )}
       </div>
 
-      <SubmitButton
-        pendingText="Saving…"
+      <button
+        type="submit"
+        disabled={pending}
         className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface disabled:opacity-50"
       >
-        Save
-      </SubmitButton>
+        {pending ? "Saving…" : "Save"}
+      </button>
       <p className="w-full text-[11px] text-text-muted">
-        Prefilled whenever this exercise is added to a day. Blank fields fall back
-        to the goal-based suggestion.
+        Prefilled whenever this exercise is added to a day. Blank fields use the
+        exercise&apos;s own default (the greyed-out numbers), or your goal-based
+        suggestion if it has none.
       </p>
     </form>
   );

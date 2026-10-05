@@ -7,8 +7,8 @@ import {
   CalendarIcon,
   ChartIcon,
   DumbbellIcon,
+  ProgramsIcon,
   ResumeIcon,
-  UserIcon,
   UsersIcon,
 } from "@/components/icons";
 import { getActiveSession } from "@/lib/active-session";
@@ -19,7 +19,12 @@ const NAV = [
   { href: "/exercises", label: "Exercises", Icon: DumbbellIcon, match: (p: string) => p.startsWith("/exercises") },
   { href: "/parties", label: "Parties", Icon: UsersIcon, match: (p: string) => p.startsWith("/parties") },
   { href: "/progress", label: "Progress", Icon: ChartIcon, match: (p: string) => p.startsWith("/progress") },
-  { href: "/account", label: "Account", Icon: UserIcon, match: (p: string) => p.startsWith("/account") || p.startsWith("/admin") },
+  {
+    href: "/programs",
+    label: "Programs",
+    Icon: ProgramsIcon,
+    match: (p: string) => p.startsWith("/programs") || p.startsWith("/admin/programs"),
+  },
 ];
 
 export function NavBar() {

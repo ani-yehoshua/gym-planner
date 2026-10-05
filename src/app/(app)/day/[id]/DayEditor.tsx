@@ -37,6 +37,7 @@ import {
     unitLabel,
     distanceUnitLabel,
     type Unit,
+    type DistanceUnit,
     type Measurement,
     type LogMode,
 } from "@/lib/units";
@@ -137,6 +138,7 @@ export default function DayEditor({
     experience,
     focusMuscles,
     units,
+    distanceUnit,
 }: {
     day: {
         id: string;
@@ -157,9 +159,10 @@ export default function DayEditor({
     experience: Enums<"experience_level"> | null;
     focusMuscles: string[];
     units: Unit;
+    distanceUnit: DistanceUnit;
 }) {
     const u = unitLabel(units);
-    const du = distanceUnitLabel(units);
+    const du = distanceUnitLabel(distanceUnit);
     // Two transitions on purpose: `start` is for saves worth telling you
     // about (logging a set, a note) and drives the "Saving…" pill below.
     // `startQuiet` is for everything that's really a UI toggle even though
