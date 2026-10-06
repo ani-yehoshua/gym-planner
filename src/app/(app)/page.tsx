@@ -10,9 +10,15 @@ import {
     weekDates,
 } from "@/lib/date";
 import { getUserToday } from "@/lib/user-today";
-import { CATEGORY_LABEL, CATEGORY_STYLE, dayType } from "@/lib/labels";
+import {
+    CATEGORY_LABEL,
+    CATEGORY_STYLE,
+    PROGRAM_STYLE,
+    dayType,
+} from "@/lib/labels";
 import { ChevronLeftIcon } from "@/components/icons";
 import { AddSessionForm } from "@/components/add-session-form";
+import { ProgramEndPrompt } from "@/components/program-end-prompt";
 
 export default async function CalendarPage({
     searchParams,
@@ -34,7 +40,7 @@ export default async function CalendarPage({
         supabase
             .from("planned_days")
             .select(
-                "id, date, category, label, owner_user, party_id, parties(name), planned_day_exercises(id)",
+                "id, date, category, label, owner_user, party_id, program_day_number, parties(name), programs(name), planned_day_exercises(id)",
             )
             .gte("date", dates[0])
             .lte("date", dates[6])
@@ -55,6 +61,7 @@ export default async function CalendarPage({
 
     return (
         <div className='flex flex-col gap-4'>
+            <ProgramEndPrompt userId={user.id} todayISO={todayISO} />
             <div className='flex items-center justify-between'>
                 <h1 className='text-lg font-semibold'>
                     {formatRange(dates[0], dates[6])}
@@ -103,34 +110,63 @@ export default async function CalendarPage({
                                 </div>
 
                                 <div className='flex flex-1 flex-col gap-1.5'>
-                                    {dayList.map(d => (
-                                        <Link
-                                            key={d.id}
-                                            href={`/day/${d.id}`}
-                                            className='flex items-center justify-between rounded-lg bg-surface-2/60 px-3 py-2 hover:bg-surface-2'>
-                                            <span className='flex items-center gap-2'>
-                                                <span
-                                                    className={`rounded-md border px-2 py-0.5 text-xs ${CATEGORY_STYLE[dayType(d.category)]}`}>
-                                                    {
-                                                        CATEGORY_LABEL[
-                                                            dayType(d.category)
-                                                        ]
-                                                    }
-                                                </span>
-                                                {d.party_id && (
-                                                    <span className='text-xs text-text-muted'>
-                                                        ·{" "}
-                                                        {d.parties?.name ??
-                                                            "Party"}
+                                    {dayList.map(d => {
+                                        // a day planned from a program has no
+                                        // session type: it gets its own "Program"
+                                        // pill, then where it falls in the program
+                                        const isProgramDay =
+                                            !!d.programs &&
+                                            !!d.program_day_number;
+                                        return (
+                                            <Link
+                                                key={d.id}
+                                                href={`/day/${d.id}`}
+                                                className='flex items-center justify-between rounded-lg bg-surface-2/60 px-3 py-2 hover:bg-surface-2'>
+                                                <span className='flex items-center gap-2'>
+                                                    <span
+                                                        className={`rounded-md border px-2 py-0.5 text-xs ${
+                                                            isProgramDay
+                                                                ? PROGRAM_STYLE
+                                                                : CATEGORY_STYLE[
+                                                                      dayType(
+                                                                          d.category,
+                                                                      )
+                                                                  ]
+                                                        }`}>
+                                                        {isProgramDay
+                                                            ? "Program"
+                                                            : d.category ||
+                                                                !d.label
+                                                              ? CATEGORY_LABEL[
+                                                                    dayType(
+                                                                        d.category,
+                                                                    )
+                                                                ]
+                                                              : d.label}
                                                     </span>
-                                                )}
-                                            </span>
-                                            <span className='text-xs text-text-muted'>
-                                                {d.planned_day_exercises.length}{" "}
-                                                exercises
-                                            </span>
-                                        </Link>
-                                    ))}
+                                                    {isProgramDay && (
+                                                        <span className='text-xs text-text-muted'>
+                                                            · Day{" "}
+                                                            {d.program_day_number}
+                                                            {d.label &&
+                                                                ` - ${d.label}`}
+                                                        </span>
+                                                    )}
+                                                    {d.party_id && (
+                                                        <span className='text-xs text-text-muted'>
+                                                            ·{" "}
+                                                            {d.parties?.name ??
+                                                                "Party"}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                <span className='text-xs text-text-muted'>
+                                                    {d.planned_day_exercises.length}{" "}
+                                                    exercises
+                                                </span>
+                                            </Link>
+                                        );
+                                    })}
 
                                     <AddSessionForm
                                         date={date}

@@ -74,6 +74,11 @@ export const CATEGORY_STYLE: Record<Enums<"muscle_category">, string> = {
   rest: "bg-surface-2 text-text-muted border-border",
 };
 
+// The "Program" pill on a day loaded from a program — its own color, distinct
+// from every session type above. Used on both the Calendar and the day page.
+export const PROGRAM_STYLE =
+  "bg-lime-500/15 text-lime-700 dark:text-lime-300 border-lime-500/30";
+
 // solid dot colors matching CATEGORY_STYLE's color family — for small
 // indicators (nav badges) where the tinted/bordered chip look doesn't fit
 export const CATEGORY_DOT: Record<Enums<"muscle_category">, string> = {

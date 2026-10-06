@@ -19,6 +19,7 @@ import {
 } from "@/app/actions";
 import { formatShort } from "@/lib/date";
 import { formatDuration, parseDuration } from "@/lib/duration";
+import { formatRepRange } from "@/lib/programs";
 import {
     CATEGORY_LABEL,
     CATEGORY_ORDER,
@@ -72,6 +73,9 @@ type DayEx = {
     targetDistance: number | null;
     logMode: LogMode;
     addedBy: string | null;
+    /** came from a program: its sets and reps are the program's, so they're
+     *  shown but locked for the member following along */
+    fromProgram: boolean;
     exercise: CatalogItem;
 };
 type LogRow = {
@@ -718,6 +722,16 @@ export default function DayEditor({
                         ex.exercise.weighted ||
                         !!ex.targetWeight ||
                         weightOverride[ex.id];
+                    // from a program: sets and reps are shown as plain text
+                    // instead of controls, so nothing looks editable
+                    const locked = ex.fromProgram;
+                    const repRange = formatRepRange(
+                        ex.targetRepMin,
+                        ex.targetRepMax,
+                    );
+                    const gridCols = showWeight
+                        ? "grid-cols-[1.5rem_1fr_1fr]"
+                        : "grid-cols-[1.5rem_1fr]";
                     const last = lastByExercise[ex.exercise.id];
                     const fmtLastSet = (s: {
                         weight: number;
@@ -1028,44 +1042,57 @@ export default function DayEditor({
 
                             {/* targets */}
                             <div className='mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs'>
-                                <div className='flex items-center gap-1.5'>
-                                    <span className='text-text-muted'>
-                                        Sets
-                                    </span>
-                                    <button
-                                        className={stepBtn}
-                                        disabled={ex.targetSets <= 1}
-                                        onClick={() =>
-                                            setTarget(ex.id, {
-                                                sets: ex.targetSets - 1,
-                                            })
-                                        }>
-                                        −
-                                    </button>
-                                    <span className='w-4 text-center text-sm'>
-                                        {ex.targetSets}
-                                    </span>
-                                    <button
-                                        className={stepBtn}
-                                        onClick={() =>
-                                            setTarget(ex.id, {
-                                                sets: ex.targetSets + 1,
-                                            })
-                                        }>
-                                        +
-                                    </button>
-                                    {ex.targetSets < suggested && (
+                                {locked ? (
+                                    // from a program: just tell them the sets —
+                                    // plain text, nothing that looks editable
+                                    <div className='flex items-center gap-1.5'>
+                                        <span className='text-text-muted'>
+                                            Sets
+                                        </span>
+                                        <span className='text-sm font-semibold'>
+                                            {ex.targetSets}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className='flex items-center gap-1.5'>
+                                        <span className='text-text-muted'>
+                                            Sets
+                                        </span>
                                         <button
+                                            className={stepBtn}
+                                            disabled={ex.targetSets <= 1}
                                             onClick={() =>
                                                 setTarget(ex.id, {
-                                                    sets: suggested,
+                                                    sets: ex.targetSets - 1,
                                                 })
-                                            }
-                                            className='ml-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-text-muted hover:text-text'>
-                                            suggested {suggested}
+                                            }>
+                                            −
                                         </button>
-                                    )}
-                                </div>
+                                        <span className='w-4 text-center text-sm'>
+                                            {ex.targetSets}
+                                        </span>
+                                        <button
+                                            className={stepBtn}
+                                            onClick={() =>
+                                                setTarget(ex.id, {
+                                                    sets: ex.targetSets + 1,
+                                                })
+                                            }>
+                                            +
+                                        </button>
+                                        {ex.targetSets < suggested && (
+                                            <button
+                                                onClick={() =>
+                                                    setTarget(ex.id, {
+                                                        sets: suggested,
+                                                    })
+                                                }
+                                                className='ml-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-text-muted hover:text-text'>
+                                                suggested {suggested}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
 
                                 {dual && (
                                     <div className='flex rounded-md border border-border p-0.5'>
@@ -1094,7 +1121,18 @@ export default function DayEditor({
                                     </div>
                                 )}
 
-                                {mode === "reps" && (
+                                {mode === "reps" && locked && repRange && (
+                                    <div className='flex items-center gap-1.5'>
+                                        <span className='text-text-muted'>
+                                            Reps
+                                        </span>
+                                        <span className='text-sm font-semibold'>
+                                            {repRange}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {mode === "reps" && !locked && (
                                     <div className='flex items-center gap-1.5'>
                                         <span className='text-text-muted'>
                                             Reps
@@ -1134,6 +1172,7 @@ export default function DayEditor({
                                 {mode === "time" && (
                                     <ExerciseTimer
                                         targetSeconds={ex.targetRepMin ?? 30}
+                                        lockTarget={locked}
                                         onChangeTarget={secs => {
                                             setTarget(ex.id, {
                                                 repMin: secs,
@@ -1325,11 +1364,7 @@ export default function DayEditor({
                             {/* set log grid */}
                             <div className='mt-3 flex flex-col gap-1.5'>
                                 <div
-                                    className={`grid items-center gap-2 text-[11px] uppercase text-text-muted ${
-                                        showWeight
-                                            ? "grid-cols-[1.5rem_1fr_1fr]"
-                                            : "grid-cols-[1.5rem_1fr]"
-                                    }`}>
+                                    className={`grid items-center gap-2 text-[11px] uppercase text-text-muted ${gridCols}`}>
                                     <span>Set</span>
                                     {showWeight && (
                                         <span className='text-center'>
@@ -1352,11 +1387,7 @@ export default function DayEditor({
                                     return (
                                         <div
                                             key={s}
-                                            className={`grid items-center gap-2 ${
-                                                showWeight
-                                                    ? "grid-cols-[1.5rem_1fr_1fr]"
-                                                    : "grid-cols-[1.5rem_1fr]"
-                                            }`}>
+                                            className={`grid items-center gap-2 ${gridCols}`}>
                                             <span className='text-sm text-text-muted'>
                                                 {s}
                                             </span>

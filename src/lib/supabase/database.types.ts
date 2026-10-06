@@ -392,6 +392,7 @@ export type Database = {
           added_by: string | null
           created_at: string
           exercise_id: string
+          from_program: boolean
           id: string
           log_mode: string | null
           planned_day_id: string
@@ -406,6 +407,7 @@ export type Database = {
           added_by?: string | null
           created_at?: string
           exercise_id: string
+          from_program?: boolean
           id?: string
           log_mode?: string | null
           planned_day_id: string
@@ -420,6 +422,7 @@ export type Database = {
           added_by?: string | null
           created_at?: string
           exercise_id?: string
+          from_program?: boolean
           id?: string
           log_mode?: string | null
           planned_day_id?: string
@@ -465,6 +468,8 @@ export type Database = {
           label: string | null
           owner_user: string | null
           party_id: string | null
+          program_day_number: number | null
+          program_id: string | null
         }
         Insert: {
           category?: Database["public"]["Enums"]["muscle_category"] | null
@@ -476,6 +481,8 @@ export type Database = {
           label?: string | null
           owner_user?: string | null
           party_id?: string | null
+          program_day_number?: number | null
+          program_id?: string | null
         }
         Update: {
           category?: Database["public"]["Enums"]["muscle_category"] | null
@@ -487,6 +494,8 @@ export type Database = {
           label?: string | null
           owner_user?: string | null
           party_id?: string | null
+          program_day_number?: number | null
+          program_id?: string | null
         }
         Relationships: [
           {
@@ -510,13 +519,52 @@ export type Database = {
             referencedRelation: "parties"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "planned_days_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      program_days: {
+        Row: {
+          id: string
+          is_rest: boolean
+          name: string
+          position: number
+          program_id: string
+        }
+        Insert: {
+          id?: string
+          is_rest?: boolean
+          name?: string
+          position?: number
+          program_id: string
+        }
+        Update: {
+          id?: string
+          is_rest?: boolean
+          name?: string
+          position?: number
+          program_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_days_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
         ]
       }
       program_exercises: {
         Row: {
           exercise_id: string
           id: string
-          program_id: string
+          program_day_id: string
           rep_max: number | null
           rep_min: number | null
           sets: number | null
@@ -525,7 +573,7 @@ export type Database = {
         Insert: {
           exercise_id: string
           id?: string
-          program_id: string
+          program_day_id: string
           rep_max?: number | null
           rep_min?: number | null
           sets?: number | null
@@ -534,7 +582,7 @@ export type Database = {
         Update: {
           exercise_id?: string
           id?: string
-          program_id?: string
+          program_day_id?: string
           rep_max?: number | null
           rep_min?: number | null
           sets?: number | null
@@ -549,36 +597,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "program_exercises_program_id_fkey"
-            columns: ["program_id"]
+            foreignKeyName: "program_exercises_program_day_id_fkey"
+            columns: ["program_day_id"]
             isOneToOne: false
-            referencedRelation: "programs"
+            referencedRelation: "program_days"
             referencedColumns: ["id"]
           },
         ]
       }
       programs: {
         Row: {
-          category: Database["public"]["Enums"]["muscle_category"] | null
           created_at: string
           created_by: string | null
           description: string | null
+          duration_count: number
+          duration_unit: string
           id: string
           name: string
         }
         Insert: {
-          category?: Database["public"]["Enums"]["muscle_category"] | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          duration_count?: number
+          duration_unit?: string
           id?: string
           name: string
         }
         Update: {
-          category?: Database["public"]["Enums"]["muscle_category"] | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          duration_count?: number
+          duration_unit?: string
           id?: string
           name?: string
         }
@@ -902,6 +953,45 @@ export type Database = {
             foreignKeyName: "user_exercise_prefs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_programs: {
+        Row: {
+          created_at: string
+          end_date: string
+          program_id: string
+          start_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          program_id: string
+          start_date: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          program_id?: string
+          start_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_programs_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_programs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },

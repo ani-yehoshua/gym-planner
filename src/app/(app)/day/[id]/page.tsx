@@ -2,9 +2,11 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong } from "@/lib/date";
+import { PROGRAM_STYLE } from "@/lib/labels";
 import { isCompound, recommendedReps, type Goal } from "@/lib/targets";
 import { DeleteDayButton } from "@/components/danger-button";
 import { ChevronLeftIcon } from "@/components/icons";
+import { StopProgramButton } from "@/components/stop-program-button";
 import { distanceUnitLabel, type Unit } from "@/lib/units";
 import DayEditor from "./DayEditor";
 
@@ -29,12 +31,22 @@ export default async function DayPage({
   const { data: day } = await supabase
     .from("planned_days")
     .select(
-      "id, date, category, label, owner_user, party_id, is_deload, parties(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance, default_sets, default_rep_min, default_rep_max))",
+      "id, date, category, label, owner_user, party_id, is_deload, program_id, program_day_number, parties(name), programs(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, from_program, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance, default_sets, default_rep_min, default_rep_max))",
     )
     .eq("id", id)
     .maybeSingle();
 
   if (!day) notFound();
+
+  // the Stop button only shows on days of the program you're currently following
+  const { data: run } = day.program_id
+    ? await supabase
+        .from("user_programs")
+        .select("program_id")
+        .eq("user_id", user.id)
+        .maybeSingle()
+    : { data: null };
+  const followingThisProgram = !!run && run.program_id === day.program_id;
 
   const pdeRows = day.planned_day_exercises;
   type PdeRow = (typeof pdeRows)[number];
@@ -268,6 +280,29 @@ export default async function DayPage({
       </div>
       <div>
         <h1 className="text-lg font-semibold">{formatLong(day.date)}</h1>
+        {/* a day loaded from a program: its name, where it falls in the
+            program, and a way out for the member following it */}
+        {day.programs && day.program_day_number ? (
+          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+            {/* same pill + "Day # - name" as on the Calendar */}
+            <p className="flex items-center gap-2 text-sm">
+              <span
+                title={`${day.programs.name} Program`}
+                className={`rounded-md border px-2 py-0.5 text-xs ${PROGRAM_STYLE}`}
+              >
+                Program
+              </span>
+              <span className="text-text-muted">
+                Day {day.program_day_number}
+                {day.label && ` - ${day.label}`}
+              </span>
+            </p>
+            {followingThisProgram && <StopProgramButton redirectTo="/" />}
+          </div>
+        ) : (
+          day.label &&
+          !day.category && <p className="text-sm font-medium">{day.label}</p>
+        )}
         {day.party_id && (
           <p className="text-sm text-text-muted">
             Shared with{" "}
@@ -299,6 +334,7 @@ export default async function DayPage({
                 targetDistance: e.distance,
                 logMode: e.logMode,
                 addedBy: p.added_by,
+                fromProgram: p.from_program,
                 exercise: {
                   ...p.exercises,
                   timeBased: p.exercises.time_based,

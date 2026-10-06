@@ -6,8 +6,14 @@ import { createClient } from "@/lib/supabase/server";
 import { addDays } from "@/lib/date";
 import { DEFAULT_SETS } from "@/lib/targets";
 import { distanceUnitLabel } from "@/lib/units";
-import { parseProgramChoice } from "@/lib/programs";
-import { DAY_PLAN_CHOICES } from "@/lib/labels";
+import { getUserToday } from "@/lib/user-today";
+import {
+  clampDuration,
+  programEndDate,
+  programTotalDays,
+  type DurationUnit,
+  type ProgramInput,
+} from "@/lib/programs";
 import { isAdmin, notifyExerciseRequest } from "@/lib/admin";
 import { epley1rm, round5, WORKING_REPS } from "@/lib/one-rm";
 import type { Enums } from "@/lib/supabase/database.types";
@@ -465,21 +471,8 @@ export async function deleteExercise(formData: FormData) {
 export async function createDay(formData: FormData) {
   const { supabase, user } = await requireUser();
   const date = String(formData.get("date"));
-  const choice = String(formData.get("category") || "");
+  const category = String(formData.get("category") || "") as Enums<"muscle_category"> | "";
   if (!date) redirect("/");
-
-  // the select holds either a session type or "program:<id>"
-  const programId = parseProgramChoice(choice);
-  let category = (programId ? "" : choice) as Enums<"muscle_category"> | "";
-  if (programId) {
-    const { data: program } = await supabase
-      .from("programs")
-      .select("category")
-      .eq("id", programId)
-      .maybeSingle();
-    if (!program) redirect("/");
-    category = program.category ?? "";
-  }
 
   const { data: created } = await supabase
     .from("planned_days")
@@ -492,9 +485,6 @@ export async function createDay(formData: FormData) {
     .select("id")
     .single();
 
-  if (created && programId) {
-    await applyProgramToDay(supabase, user.id, created.id, programId);
-  }
   if (created) redirect(`/day/${created.id}`);
   redirect("/");
 }
@@ -1050,29 +1040,14 @@ export async function createPartyDay(formData: FormData) {
   const { supabase, user } = await requireUser();
   const partyId = String(formData.get("party_id"));
   const date = String(formData.get("date"));
-  const choice = String(formData.get("category") || "");
+  const category = String(formData.get("category") || "") as Enums<"muscle_category"> | "";
   if (!partyId || !date) redirect("/parties");
-
-  const programId = parseProgramChoice(choice);
-  let category = (programId ? "" : choice) as Enums<"muscle_category"> | "";
-  if (programId) {
-    const { data: program } = await supabase
-      .from("programs")
-      .select("category")
-      .eq("id", programId)
-      .maybeSingle();
-    if (!program) redirect(`/parties/${partyId}`);
-    category = program.category ?? "";
-  }
 
   const { data: created } = await supabase
     .from("planned_days")
     .insert({ party_id: partyId, date, category: category || null, created_by: user.id })
     .select("id")
     .single();
-  if (created && programId) {
-    await applyProgramToDay(supabase, user.id, created.id, programId);
-  }
   if (created) redirect(`/day/${created.id}`);
   redirect(`/parties/${partyId}`);
 }
@@ -1276,52 +1251,105 @@ export async function reorderSplitExercise(formData: FormData) {
 }
 
 // ---------------------------------------------------------------------------
-// programs: admin-built single-day sessions ("Push Day") that a member can pick
-// when planning a day
+// programs: admin-built multi-day plans a member loads from a start date
 // ---------------------------------------------------------------------------
 function revalidatePrograms(programId?: string) {
   revalidatePath("/programs");
+  revalidatePath("/");
   if (programId) revalidatePath(`/programs/${programId}`);
 }
 
-function readProgramForm(formData: FormData) {
-  const name = String(formData.get("name") || "").trim();
-  const description = String(formData.get("description") || "").trim();
-  const raw = String(formData.get("category") || "");
-  const category = (DAY_PLAN_CHOICES as readonly string[]).includes(raw)
-    ? (raw as Enums<"muscle_category">)
-    : null;
-  return { name, description: description || null, category };
+function chunk<T>(items: T[], size = 400): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }
 
-export async function createProgram(formData: FormData) {
+/** Create a program, or replace an existing one's days wholesale. Days already
+ *  planned from it are copies, so they're untouched. */
+export async function saveProgram(input: ProgramInput): Promise<{ id: string }> {
   const { supabase, user } = await requireAdmin();
-  const { name, description, category } = readProgramForm(formData);
-  if (!name) return;
-  check(
-    await supabase
-      .from("programs")
-      .insert({ name, description, category, created_by: user.id }),
-    "create program",
-  );
-  revalidatePrograms();
-}
 
-export async function updateProgram(formData: FormData) {
-  const { supabase } = await requireAdmin();
-  const id = String(formData.get("program_id"));
-  const { name, description, category } = readProgramForm(formData);
-  if (!id || !name) return;
-  // the session type is changed from the builder's chips, not this form, so
-  // only touch it if the form actually sent one
-  const patch = formData.has("category")
-    ? { name, description, category }
-    : { name, description };
-  check(
-    await supabase.from("programs").update(patch).eq("id", id),
-    "update program",
+  const name = input.name.trim();
+  if (!name) throw new Error("Give the program a name.");
+  if (!input.days.some((d) => !d.isRest && d.exercises.length > 0)) {
+    throw new Error("Add at least one training day with an exercise.");
+  }
+  const unit: DurationUnit = input.durationUnit === "days" ? "days" : "weeks";
+  const meta = {
+    name,
+    description: input.description.trim() || null,
+    duration_unit: unit,
+    duration_count: clampDuration(unit, input.durationCount),
+  };
+
+  let programId = input.id;
+  if (programId) {
+    check(
+      await supabase.from("programs").update(meta).eq("id", programId),
+      "update program",
+    );
+    // cascades to the old days' exercises
+    check(
+      await supabase.from("program_days").delete().eq("program_id", programId),
+      "clear program days",
+    );
+  } else {
+    const { data: created, error } = await supabase
+      .from("programs")
+      .insert({ ...meta, created_by: user.id })
+      .select("id")
+      .single();
+    if (error || !created) throw new Error(`create program: ${error?.message}`);
+    programId = created.id;
+  }
+
+  const { data: days, error: dayErr } = await supabase
+    .from("program_days")
+    .insert(
+      input.days.map((d, position) => ({
+        program_id: programId!,
+        position,
+        // the "Day N" number comes from where a day lands on the calendar, so a
+        // blank name just falls back to a plain label
+        name: d.name.trim() || (d.isRest ? "Rest" : "Training day"),
+        is_rest: d.isRest,
+      })),
+    )
+    .select("id, position");
+  if (dayErr || !days) throw new Error(`save program days: ${dayErr?.message}`);
+  const idByPosition = new Map(days.map((d) => [d.position, d.id]));
+
+  const clamp = (n: number | null) =>
+    n == null || Number.isNaN(n) ? null : Math.max(1, Math.min(999, Math.round(n)));
+  const exerciseRows = input.days.flatMap((d, position) =>
+    d.isRest
+      ? []
+      : d.exercises.map((e, sort) => {
+          let repMin = clamp(e.repMin);
+          let repMax = clamp(e.repMax);
+          if (repMin !== null && repMax !== null && repMin > repMax) {
+            [repMin, repMax] = [repMax, repMin];
+          }
+          return {
+            program_day_id: idByPosition.get(position)!,
+            exercise_id: e.exerciseId,
+            sort,
+            sets: clamp(e.sets),
+            rep_min: repMin,
+            rep_max: repMax,
+          };
+        }),
   );
-  revalidatePrograms(id);
+  for (const part of chunk(exerciseRows)) {
+    check(
+      await supabase.from("program_exercises").insert(part),
+      "save program exercises",
+    );
+  }
+
+  revalidatePrograms(programId);
+  return { id: programId! };
 }
 
 export async function deleteProgram(formData: FormData) {
@@ -1333,155 +1361,181 @@ export async function deleteProgram(formData: FormData) {
   revalidatePrograms();
 }
 
-export async function setProgramCategory(
-  programId: string,
-  category: Enums<"muscle_category">,
-) {
-  const { supabase } = await requireAdmin();
-  await supabase.from("programs").update({ category }).eq("id", programId);
-  revalidatePrograms(programId);
-}
+/** Load a program onto the calendar: its day list repeats on consecutive dates
+ *  from the start date until the duration is filled, with a planned day (and its
+ *  exercises) for every training day and nothing for rest days. */
+export async function startProgram(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const programId = String(formData.get("program_id"));
+  const start = String(formData.get("start_date"));
+  if (!programId || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return;
 
-export async function addProgramExercise(programId: string, exerciseId: string) {
-  const { supabase } = await requireAdmin();
-  const { data: maxRow } = await supabase
-    .from("program_exercises")
-    .select("sort")
-    .eq("program_id", programId)
-    .order("sort", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  check(
-    await supabase.from("program_exercises").upsert(
-      {
-        program_id: programId,
-        exercise_id: exerciseId,
-        sort: (maxRow?.sort ?? -1) + 1,
-      },
-      { onConflict: "program_id,exercise_id", ignoreDuplicates: true },
-    ),
-    "add program exercise",
-  );
-  revalidatePrograms(programId);
-}
-
-/** Sets and the rep range are optional — null means "not specified", and an
- *  undefined field is left as it is. */
-export async function updateProgramExercise(input: {
-  id: string;
-  programId: string;
-  sets?: number | null;
-  repMin?: number | null;
-  repMax?: number | null;
-}) {
-  const { supabase } = await requireAdmin();
-  const clamp = (n: number | null | undefined) =>
-    n == null || Number.isNaN(n) ? null : Math.max(1, Math.min(999, Math.round(n)));
-  const patch: { sets?: number | null; rep_min?: number | null; rep_max?: number | null } = {};
-  if (input.sets !== undefined) patch.sets = clamp(input.sets);
-  if (input.repMin !== undefined) patch.rep_min = clamp(input.repMin);
-  if (input.repMax !== undefined) patch.rep_max = clamp(input.repMax);
-  if (Object.keys(patch).length === 0) return;
-  check(
-    await supabase.from("program_exercises").update(patch).eq("id", input.id),
-    "update program exercise",
-  );
-  revalidatePrograms(input.programId);
-}
-
-export async function removeProgramExercise(id: string, programId: string) {
-  const { supabase } = await requireAdmin();
-  check(
-    await supabase.from("program_exercises").delete().eq("id", id),
-    "remove program exercise",
-  );
-  revalidatePrograms(programId);
-}
-
-export async function reorderProgramExercise(
-  id: string,
-  programId: string,
-  dir: -1 | 1,
-) {
-  const { supabase } = await requireAdmin();
-  const { data: rows } = await supabase
-    .from("program_exercises")
-    .select("id, sort")
-    .eq("program_id", programId)
-    .order("sort")
-    .order("id");
-  if (!rows) return;
-  const i = rows.findIndex((r) => r.id === id);
-  const j = i + dir;
-  if (i < 0 || j < 0 || j >= rows.length) return;
-  // renumber 0..n-1 so equal or gapped sort values can't make a move a no-op
-  const [moved] = rows.splice(i, 1);
-  rows.splice(j, 0, moved);
-  await Promise.all(
-    rows.map((r, idx) =>
-      r.sort === idx
-        ? Promise.resolve()
-        : supabase.from("program_exercises").update({ sort: idx }).eq("id", r.id),
-    ),
-  );
-  revalidatePrograms(programId);
-}
-
-/** Fill a freshly created day with a program's exercises. The day gets a copy,
- *  so editing or deleting the program later doesn't touch days already planned. */
-async function applyProgramToDay(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  dayId: string,
-  programId: string,
-) {
-  const { data: rows } = await supabase
-    .from("program_exercises")
+  const { data: program } = await supabase
+    .from("programs")
     .select(
-      "exercise_id, sort, sets, rep_min, rep_max, exercises(default_sets, default_rep_min, default_rep_max)",
+      "id, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(exercise_id, sort, sets, rep_min, rep_max, exercises(default_sets, default_rep_min, default_rep_max)))",
     )
-    .eq("program_id", programId)
-    .order("sort")
-    .order("id");
-  if (!rows?.length) return;
+    .eq("id", programId)
+    .maybeSingle();
+  if (!program) return;
+  const days = [...program.program_days].sort((a, b) => a.position - b.position);
+  if (days.length === 0) return;
 
-  // shared seed: the program's numbers, else the exercise's catalog default
-  const { data: created } = await supabase
-    .from("planned_day_exercises")
-    .insert(
-      rows.map((r, i) => ({
-        planned_day_id: dayId,
-        exercise_id: r.exercise_id,
-        sort: i,
-        target_sets: r.sets ?? r.exercises?.default_sets ?? DEFAULT_SETS,
-        target_rep_min: r.rep_min ?? r.exercises?.default_rep_min ?? null,
-        target_rep_max: r.rep_max ?? r.exercises?.default_rep_max ?? null,
+  const unit: DurationUnit = program.duration_unit === "days" ? "days" : "weeks";
+  const total = programTotalDays(unit, program.duration_count);
+
+  // `number` is the day's place in the program counting rest days, so a Tuesday
+  // that's the third day of the program reads "Day 3" on the calendar
+  const plan: { date: string; number: number; day: (typeof days)[number] }[] = [];
+  for (let i = 0; i < total; i++) {
+    const day = days[i % days.length];
+    if (!day.is_rest) plan.push({ date: addDays(start, i), number: i + 1, day });
+  }
+
+  // one planned day per training date (a date appears once in the plan)
+  const dayIdByDate = new Map<string, string>();
+  for (const part of chunk(plan)) {
+    const { data: created, error } = await supabase
+      .from("planned_days")
+      .insert(
+        part.map((p) => ({
+          owner_user: user.id,
+          date: p.date,
+          category: null,
+          label: p.day.name,
+          program_id: programId,
+          program_day_number: p.number,
+          created_by: user.id,
+        })),
+      )
+      .select("id, date");
+    if (error) throw new Error(`plan program days: ${error.message}`);
+    for (const c of created ?? []) dayIdByDate.set(c.date, c.id);
+  }
+
+  // copy each program day's exercises onto the dates it lands on. They're
+  // flagged from_program so the day page locks their sets and reps for the
+  // member following along.
+  type Seed = {
+    planned_day_id: string;
+    exercise_id: string;
+    sort: number;
+    target_sets: number;
+    target_rep_min: number | null;
+    target_rep_max: number | null;
+    target_weight: null;
+    from_program: true;
+    added_by: string;
+  };
+  const seeds: Seed[] = [];
+  const peByDayExercise = new Map<
+    string,
+    { sets: number | null; rep_min: number | null; rep_max: number | null }
+  >();
+  for (const p of plan) {
+    const plannedId = dayIdByDate.get(p.date);
+    if (!plannedId) continue;
+    const exercises = [...p.day.program_exercises].sort((a, b) => a.sort - b.sort);
+    exercises.forEach((e, j) => {
+      peByDayExercise.set(`${plannedId}:${e.exercise_id}`, e);
+      seeds.push({
+        planned_day_id: plannedId,
+        exercise_id: e.exercise_id,
+        sort: j,
+        target_sets: e.sets ?? e.exercises?.default_sets ?? DEFAULT_SETS,
+        target_rep_min: e.rep_min ?? e.exercises?.default_rep_min ?? null,
+        target_rep_max: e.rep_max ?? e.exercises?.default_rep_max ?? null,
         target_weight: null,
-        added_by: userId,
-      })),
-    )
-    .select("id, exercise_id");
-  if (!created) return;
+        from_program: true,
+        added_by: user.id,
+      });
+    });
+  }
 
-  // The planner's own targets win over any personal exercise default, so what
-  // the program prescribes is what shows up for them. Fields it leaves blank
-  // stay null and fall through to their usual defaults.
-  const mine = created.flatMap((c) => {
-    const r = rows.find((x) => x.exercise_id === c.exercise_id);
-    if (!r || (r.sets == null && r.rep_min == null && r.rep_max == null)) return [];
-    return [
-      {
-        planned_day_exercise_id: c.id,
-        user_id: userId,
-        target_sets: r.sets,
-        target_rep_min: r.rep_min,
-        target_rep_max: r.rep_max,
-      },
-    ];
-  });
-  if (mine.length) {
+  const mine: {
+    planned_day_exercise_id: string;
+    user_id: string;
+    target_sets: number | null;
+    target_rep_min: number | null;
+    target_rep_max: number | null;
+  }[] = [];
+  for (const part of chunk(seeds)) {
+    const { data: created, error } = await supabase
+      .from("planned_day_exercises")
+      .insert(part)
+      .select("id, planned_day_id, exercise_id");
+    if (error) throw new Error(`plan program exercises: ${error.message}`);
+    for (const c of created ?? []) {
+      const e = peByDayExercise.get(`${c.planned_day_id}:${c.exercise_id}`);
+      // the loader's own targets win over a personal exercise default, so the
+      // program's numbers are what they see; blanks fall through as usual
+      if (e && (e.sets != null || e.rep_min != null || e.rep_max != null)) {
+        mine.push({
+          planned_day_exercise_id: c.id,
+          user_id: user.id,
+          target_sets: e.sets,
+          target_rep_min: e.rep_min,
+          target_rep_max: e.rep_max,
+        });
+      }
+    }
+  }
+  for (const part of chunk(mine)) {
     await supabase
       .from("day_exercise_user_targets")
-      .upsert(mine, { onConflict: "planned_day_exercise_id,user_id" });
+      .upsert(part, { onConflict: "planned_day_exercise_id,user_id" });
   }
+
+  check(
+    await supabase.from("user_programs").upsert(
+      {
+        user_id: user.id,
+        program_id: programId,
+        start_date: start,
+        end_date: programEndDate(start, unit, program.duration_count),
+      },
+      { onConflict: "user_id" },
+    ),
+    "start program",
+  );
+
+  revalidatePath("/");
+  revalidatePath("/programs");
+  redirect(`/?week=${start}`);
+}
+
+/** Stop following the current program. Every day it put on the calendar comes
+ *  off — past and upcoming — except the ones you've logged sets on, which stay
+ *  as history. Once a program has already finished there's nothing to take off:
+ *  this just clears it (that's how the end-of-program prompt is dismissed). */
+export async function stopProgram() {
+  const { supabase, user } = await requireUser();
+  const { data: run } = await supabase
+    .from("user_programs")
+    .select("program_id, start_date, end_date")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (run && run.end_date >= (await getUserToday())) {
+    // only this run's days, not an earlier run of the same program
+    const { data: days } = await supabase
+      .from("planned_days")
+      .select("id, planned_day_exercises(id, set_logs(id))")
+      .eq("owner_user", user.id)
+      .eq("program_id", run.program_id)
+      .gte("date", run.start_date)
+      .lte("date", run.end_date);
+    const removable = (days ?? [])
+      .filter((d) =>
+        d.planned_day_exercises.every((e) => e.set_logs.length === 0),
+      )
+      .map((d) => d.id);
+    for (const part of chunk(removable)) {
+      await supabase.from("planned_days").delete().in("id", part);
+    }
+  }
+
+  await supabase.from("user_programs").delete().eq("user_id", user.id);
+  revalidatePath("/");
+  revalidatePath("/programs");
 }

@@ -13,6 +13,7 @@ export function StopwatchModal({
     elapsedMs,
     running,
     targetSeconds,
+    lockTarget = false,
     onToggleRun,
     onStopLog,
     onReset,
@@ -22,6 +23,7 @@ export function StopwatchModal({
     elapsedMs: number;
     running: boolean;
     targetSeconds: number;
+    lockTarget?: boolean;
     onToggleRun: () => void;
     onStopLog: () => void;
     onReset: () => void;
@@ -47,13 +49,21 @@ export function StopwatchModal({
                 className='w-full max-w-xs rounded-2xl border border-border bg-bg p-6 text-center shadow-xl'
                 onClick={e => e.stopPropagation()}>
                 <div className='flex items-center justify-between'>
-                    <button
-                        type='button'
-                        onClick={() => idle && setPickerOpen(true)}
-                        disabled={!idle}
-                        className='text-xs text-text-muted enabled:hover:text-text disabled:opacity-40'>
-                        target {formatDuration(targetSeconds)}
-                    </button>
+                    {lockTarget ? (
+                        // from a program: the target is just stated, not a
+                        // control that looks like it should work
+                        <span className='text-xs font-medium text-text'>
+                            target {formatDuration(targetSeconds)}
+                        </span>
+                    ) : (
+                        <button
+                            type='button'
+                            onClick={() => idle && setPickerOpen(true)}
+                            disabled={!idle}
+                            className='text-xs text-text-muted enabled:hover:text-text disabled:opacity-40'>
+                            target {formatDuration(targetSeconds)}
+                        </button>
+                    )}
                     <button
                         type='button'
                         onClick={onClose}

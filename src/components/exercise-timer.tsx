@@ -36,10 +36,13 @@ function beep() {
  *  so the centisecond readout doesn't drift. */
 export function ExerciseTimer({
     targetSeconds,
+    lockTarget = false,
     onChangeTarget,
     onFinish,
 }: {
     targetSeconds: number;
+    /** the target came from a program, so it's shown but can't be changed */
+    lockTarget?: boolean;
     onChangeTarget: (seconds: number) => void;
     onFinish: (elapsedSeconds: number) => void;
 }) {
@@ -103,6 +106,7 @@ export function ExerciseTimer({
                     elapsedMs={elapsedMs}
                     running={running}
                     targetSeconds={targetSeconds}
+                    lockTarget={lockTarget}
                     onToggleRun={toggleRun}
                     onReset={reset}
                     onStopLog={() => {

@@ -14,7 +14,6 @@ import {
     dayType,
 } from "@/lib/labels";
 import { formatLong } from "@/lib/date";
-import { programChoiceValue } from "@/lib/programs";
 import { getUserToday } from "@/lib/user-today";
 
 const MEMBER_COLORS = [
@@ -42,13 +41,8 @@ export default async function PartyPage({
 
     const todayISO = await getUserToday();
 
-    const [
-        { data: party },
-        { data: members },
-        { data: invites },
-        { data: days },
-        { data: programs },
-    ] = await Promise.all([
+    const [{ data: party }, { data: members }, { data: invites }, { data: days }] =
+        await Promise.all([
             supabase
                 .from("parties")
                 .select("id, name, created_by")
@@ -71,7 +65,6 @@ export default async function PartyPage({
                 .gte("date", todayISO)
                 .order("date")
                 .limit(10),
-            supabase.from("programs").select("id, name").order("name"),
         ]);
     if (!party) notFound();
 
@@ -198,26 +191,13 @@ export default async function PartyPage({
                         name='category'
                         className='rounded-lg border border-border bg-surface px-3 py-2 text-sm'>
                         <option value=''>Category…</option>
-                        <optgroup label='Build your own'>
-                            {DAY_PLAN_CHOICES.map(c => (
-                                <option
-                                    key={c}
-                                    value={c}>
-                                    {CATEGORY_LABEL[c]}
-                                </option>
-                            ))}
-                        </optgroup>
-                        {(programs ?? []).length > 0 && (
-                            <optgroup label='Programs'>
-                                {programs!.map(p => (
-                                    <option
-                                        key={p.id}
-                                        value={programChoiceValue(p.id)}>
-                                        {p.name}
-                                    </option>
-                                ))}
-                            </optgroup>
-                        )}
+                        {DAY_PLAN_CHOICES.map(c => (
+                            <option
+                                key={c}
+                                value={c}>
+                                {CATEGORY_LABEL[c]}
+                            </option>
+                        ))}
                     </select>
                     <SubmitButton
                         pendingText='Opening…'
