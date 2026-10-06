@@ -5,7 +5,11 @@ import {
   type InitialProgram,
 } from "@/components/program-builder";
 import { SubmitButton } from "@/components/submit-button";
-import { durationLabel, type DurationUnit } from "@/lib/programs";
+import {
+  durationLabel,
+  parseSetReps,
+  type DurationUnit,
+} from "@/lib/programs";
 
 export type EditableProgram = {
   id: string;
@@ -24,6 +28,7 @@ export type EditableProgram = {
       sets: number | null;
       rep_min: number | null;
       rep_max: number | null;
+      set_reps: unknown;
       exercises: BuilderExercise | null;
     }[];
   }[];
@@ -49,8 +54,12 @@ function toInitial(p: EditableProgram): InitialProgram {
                   {
                     exercise: e.exercises,
                     sets: e.sets,
-                    repMin: e.rep_min,
-                    repMax: e.rep_max,
+                    // older rows only have one overall range: it applies to every set
+                    setReps: parseSetReps(e.set_reps).length
+                      ? parseSetReps(e.set_reps)
+                      : e.rep_min != null || e.rep_max != null
+                        ? [{ min: e.rep_min, max: e.rep_max }]
+                        : [],
                   },
                 ]
               : [],

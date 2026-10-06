@@ -9,8 +9,10 @@ import { distanceUnitLabel } from "@/lib/units";
 import { getUserToday } from "@/lib/user-today";
 import {
   clampDuration,
+  parseSetReps,
   programEndDate,
   programTotalDays,
+  summarizeSetReps,
   type DurationUnit,
   type ProgramInput,
 } from "@/lib/programs";
@@ -1326,18 +1328,24 @@ export async function saveProgram(input: ProgramInput): Promise<{ id: string }> 
     d.isRest
       ? []
       : d.exercises.map((e, sort) => {
-          let repMin = clamp(e.repMin);
-          let repMax = clamp(e.repMax);
-          if (repMin !== null && repMax !== null && repMin > repMax) {
-            [repMin, repMax] = [repMax, repMin];
-          }
+          // a range for each set; rep_min / rep_max keep the overall range
+          // (lowest min, highest max) for everything that wants just one
+          const setReps = e.setReps.map((r) => {
+            let min = clamp(r.min);
+            let max = clamp(r.max);
+            if (min !== null && max !== null && min > max) [min, max] = [max, min];
+            return { min, max };
+          });
+          const overall = summarizeSetReps(setReps);
+          const hasReps = setReps.some((r) => r.min !== null || r.max !== null);
           return {
             program_day_id: idByPosition.get(position)!,
             exercise_id: e.exerciseId,
             sort,
             sets: clamp(e.sets),
-            rep_min: repMin,
-            rep_max: repMax,
+            rep_min: overall.min,
+            rep_max: overall.max,
+            set_reps: hasReps ? setReps : null,
           };
         }),
   );
@@ -1373,7 +1381,7 @@ export async function startProgram(formData: FormData) {
   const { data: program } = await supabase
     .from("programs")
     .select(
-      "id, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(exercise_id, sort, sets, rep_min, rep_max, exercises(default_sets, default_rep_min, default_rep_max)))",
+      "id, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(exercise_id, sort, sets, rep_min, rep_max, set_reps, exercises(default_sets, default_rep_min, default_rep_max)))",
     )
     .eq("id", programId)
     .maybeSingle();
@@ -1425,6 +1433,8 @@ export async function startProgram(formData: FormData) {
     target_rep_max: number | null;
     target_weight: null;
     from_program: true;
+    /** each set's own rep range, stated on the day page (null = none given) */
+    program_set_reps: { min: number | null; max: number | null }[] | null;
     added_by: string;
   };
   const seeds: Seed[] = [];
@@ -1447,6 +1457,9 @@ export async function startProgram(formData: FormData) {
         target_rep_max: e.rep_max ?? e.exercises?.default_rep_max ?? null,
         target_weight: null,
         from_program: true,
+        program_set_reps: parseSetReps(e.set_reps).length
+          ? parseSetReps(e.set_reps)
+          : null,
         added_by: user.id,
       });
     });
@@ -1508,13 +1521,17 @@ export async function startProgram(formData: FormData) {
  *  off — past and upcoming — except the ones you've logged sets on, which stay
  *  as history. Once a program has already finished there's nothing to take off:
  *  this just clears it (that's how the end-of-program prompt is dismissed). */
-export async function stopProgram() {
+export async function stopProgram(): Promise<{ removedDayIds: string[] }> {
   const { supabase, user } = await requireUser();
   const { data: run } = await supabase
     .from("user_programs")
     .select("program_id, start_date, end_date")
     .eq("user_id", user.id)
     .maybeSingle();
+
+  // returned so the browser can forget a "resume session" pointing at a day
+  // that no longer exists
+  const removedDayIds: string[] = [];
 
   if (run && run.end_date >= (await getUserToday())) {
     // only this run's days, not an earlier run of the same program
@@ -1533,9 +1550,11 @@ export async function stopProgram() {
     for (const part of chunk(removable)) {
       await supabase.from("planned_days").delete().in("id", part);
     }
+    removedDayIds.push(...removable);
   }
 
   await supabase.from("user_programs").delete().eq("user_id", user.id);
   revalidatePath("/");
   revalidatePath("/programs");
+  return { removedDayIds };
 }

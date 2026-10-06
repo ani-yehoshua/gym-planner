@@ -25,7 +25,7 @@ export default async function ProgramsPage() {
     supabase
       .from("programs")
       .select(
-        `id, name, description, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(id, sort, sets, rep_min, rep_max, exercises(${EXERCISE_FIELDS})))`,
+        `id, name, description, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(id, sort, sets, rep_min, rep_max, set_reps, exercises(${EXERCISE_FIELDS})))`,
       )
       .order("name"),
     supabase

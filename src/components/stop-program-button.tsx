@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { stopProgram } from "@/app/actions";
+import { clearActiveSession } from "@/lib/active-session";
 
 /** Leave the program you're following. Its days with nothing logged come off the
  *  calendar (anything you've logged stays), so it asks first. `redirectTo` is for use on
@@ -31,7 +32,10 @@ export function StopProgramButton({
         )
           return;
         start(async () => {
-          await stopProgram();
+          const { removedDayIds } = await stopProgram();
+          // the nav's "Resume" shortcut remembers the last day you had open;
+          // if that day just went away, forget it rather than link to a 404
+          for (const id of removedDayIds) clearActiveSession(id);
           if (redirectTo) router.push(redirectTo);
         });
       }}

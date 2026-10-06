@@ -396,6 +396,7 @@ export type Database = {
           id: string
           log_mode: string | null
           planned_day_id: string
+          program_set_reps: Json | null
           sort: number
           target_distance: number | null
           target_rep_max: number | null
@@ -411,6 +412,7 @@ export type Database = {
           id?: string
           log_mode?: string | null
           planned_day_id: string
+          program_set_reps?: Json | null
           sort?: number
           target_distance?: number | null
           target_rep_max?: number | null
@@ -426,6 +428,7 @@ export type Database = {
           id?: string
           log_mode?: string | null
           planned_day_id?: string
+          program_set_reps?: Json | null
           sort?: number
           target_distance?: number | null
           target_rep_max?: number | null
@@ -567,6 +570,7 @@ export type Database = {
           program_day_id: string
           rep_max: number | null
           rep_min: number | null
+          set_reps: Json | null
           sets: number | null
           sort: number
         }
@@ -576,6 +580,7 @@ export type Database = {
           program_day_id: string
           rep_max?: number | null
           rep_min?: number | null
+          set_reps?: Json | null
           sets?: number | null
           sort?: number
         }
@@ -585,6 +590,7 @@ export type Database = {
           program_day_id?: string
           rep_max?: number | null
           rep_min?: number | null
+          set_reps?: Json | null
           sets?: number | null
           sort?: number
         }

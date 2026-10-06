@@ -21,6 +21,12 @@ export async function ProgramEndPrompt({
     .maybeSingle();
   if (!run || run.end_date >= todayISO) return null;
 
+  // the program's already over, so dismissing removes no days
+  async function dismiss() {
+    "use server";
+    await stopProgram();
+  }
+
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4">
       <div>
@@ -55,7 +61,7 @@ export async function ProgramEndPrompt({
         <Link href="/programs" className="font-medium text-accent hover:underline">
           Choose a new program
         </Link>
-        <form action={stopProgram}>
+        <form action={dismiss}>
           <SubmitButton
             pendingText="…"
             className="text-xs text-text-muted hover:text-text disabled:opacity-50"

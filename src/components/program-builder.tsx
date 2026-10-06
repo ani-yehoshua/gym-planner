@@ -12,7 +12,9 @@ import {
 import {
   clampDuration,
   programTotalDays,
+  repsForSet,
   type DurationUnit,
+  type SetRep,
 } from "@/lib/programs";
 import { DEFAULT_SETS } from "@/lib/targets";
 import type { Measurement } from "@/lib/units";
@@ -45,8 +47,7 @@ export type InitialProgram = {
     exercises: {
       exercise: BuilderExercise;
       sets: number | null;
-      repMin: number | null;
-      repMax: number | null;
+      setReps: SetRep[];
     }[];
   }[];
 };
@@ -55,8 +56,8 @@ type DraftExercise = {
   key: string;
   exercise: BuilderExercise;
   sets: number | null;
-  repMin: number | null;
-  repMax: number | null;
+  /** a rep range per set; fewer entries than sets means the last one repeats */
+  setReps: SetRep[];
 };
 type DraftDay = {
   key: string;
@@ -128,6 +129,36 @@ export function ProgramBuilder({
             },
       ),
     );
+  // Changing the set count keeps the ranges lined up with the sets: new sets
+  // start as a copy of the last one, removed sets drop off the end.
+  function changeSets(dayKey: string, e: DraftExercise, n: number) {
+    patchExercise(dayKey, e.key, {
+      sets: n,
+      setReps:
+        e.setReps.length === 0
+          ? []
+          : Array.from({ length: n }, (_, i) => ({ ...repsForSet(e.setReps, i) })),
+    });
+  }
+  function editSetRep(
+    dayKey: string,
+    e: DraftExercise,
+    n: number,
+    i: number,
+    patch: Partial<SetRep>,
+  ) {
+    const list = Array.from({ length: n }, (_, k) => ({ ...repsForSet(e.setReps, k) }));
+    list[i] = { ...list[i], ...patch };
+    // giving a set its own range makes the set count explicit too
+    patchExercise(dayKey, e.key, { sets: n, setReps: list });
+  }
+  function copyFirstToAll(dayKey: string, e: DraftExercise, n: number) {
+    const first = repsForSet(e.setReps, 0);
+    patchExercise(dayKey, e.key, {
+      sets: n,
+      setReps: Array.from({ length: n }, () => ({ ...first })),
+    });
+  }
   const move = <T,>(arr: T[], i: number, dir: -1 | 1): T[] => {
     const j = i + dir;
     if (j < 0 || j >= arr.length) return arr;
@@ -162,7 +193,7 @@ export function ProgramBuilder({
               ...d,
               exercises: [
                 ...d.exercises,
-                { key: nextKey(), exercise: ex, sets: null, repMin: null, repMax: null },
+                { key: nextKey(), exercise: ex, sets: null, setReps: [] },
               ],
             },
       ),
@@ -197,8 +228,7 @@ export function ProgramBuilder({
             exercises: d.exercises.map((e) => ({
               exerciseId: e.exercise.id,
               sets: e.sets,
-              repMin: e.repMin,
-              repMax: e.repMax,
+              setReps: e.setReps,
             })),
           })),
         });
@@ -402,7 +432,7 @@ export function ProgramBuilder({
                             </div>
                           </div>
 
-                          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                          <div className="mt-3 flex flex-col gap-2.5 text-xs">
                             <div className="flex items-center gap-1.5">
                               <span className="text-text-muted">Sets</span>
                               <button
@@ -410,9 +440,7 @@ export function ProgramBuilder({
                                 className={stepBtn}
                                 disabled={effectiveSets <= 1}
                                 onClick={() =>
-                                  patchExercise(d.key, e.key, {
-                                    sets: effectiveSets - 1,
-                                  })
+                                  changeSets(d.key, e, effectiveSets - 1)
                                 }
                               >
                                 −
@@ -433,9 +461,7 @@ export function ProgramBuilder({
                                 type="button"
                                 className={stepBtn}
                                 onClick={() =>
-                                  patchExercise(d.key, e.key, {
-                                    sets: effectiveSets + 1,
-                                  })
+                                  changeSets(d.key, e, effectiveSets + 1)
                                 }
                               >
                                 +
@@ -453,34 +479,59 @@ export function ProgramBuilder({
                               )}
                             </div>
 
+                            {/* a rep range for each set */}
                             {ex.measurement !== "distance" && (
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-text-muted">
-                                  {ex.time_based ? "Sec" : "Reps"}
-                                </span>
-                                <input
-                                  inputMode="numeric"
-                                  value={e.repMin ?? ""}
-                                  placeholder={ex.default_rep_min?.toString() ?? ""}
-                                  onChange={(ev) =>
-                                    patchExercise(d.key, e.key, {
-                                      repMin: toNum(ev.target.value),
-                                    })
-                                  }
-                                  className="w-10 rounded-md border border-border bg-surface px-1 py-1 text-center"
-                                />
-                                <span className="text-text-muted">–</span>
-                                <input
-                                  inputMode="numeric"
-                                  value={e.repMax ?? ""}
-                                  placeholder={ex.default_rep_max?.toString() ?? ""}
-                                  onChange={(ev) =>
-                                    patchExercise(d.key, e.key, {
-                                      repMax: toNum(ev.target.value),
-                                    })
-                                  }
-                                  className="w-10 rounded-md border border-border bg-surface px-1 py-1 text-center"
-                                />
+                              <div className="flex flex-col gap-1.5">
+                                {Array.from({ length: effectiveSets }, (_, i) => {
+                                  const r = repsForSet(e.setReps, i);
+                                  return (
+                                    <div
+                                      key={i}
+                                      className="flex items-center gap-1.5"
+                                    >
+                                      <span className="w-11 shrink-0 text-text-muted">
+                                        Set {i + 1}
+                                      </span>
+                                      <input
+                                        inputMode="numeric"
+                                        value={r.min ?? ""}
+                                        placeholder={ex.default_rep_min?.toString() ?? ""}
+                                        aria-label={`Set ${i + 1} minimum`}
+                                        onChange={(ev) =>
+                                          editSetRep(d.key, e, effectiveSets, i, {
+                                            min: toNum(ev.target.value),
+                                          })
+                                        }
+                                        className="w-12 rounded-md border border-border bg-surface px-1 py-1 text-center"
+                                      />
+                                      <span className="text-text-muted">–</span>
+                                      <input
+                                        inputMode="numeric"
+                                        value={r.max ?? ""}
+                                        placeholder={ex.default_rep_max?.toString() ?? ""}
+                                        aria-label={`Set ${i + 1} maximum`}
+                                        onChange={(ev) =>
+                                          editSetRep(d.key, e, effectiveSets, i, {
+                                            max: toNum(ev.target.value),
+                                          })
+                                        }
+                                        className="w-12 rounded-md border border-border bg-surface px-1 py-1 text-center"
+                                      />
+                                      <span className="text-text-muted">
+                                        {ex.time_based ? "sec" : "reps"}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                                {effectiveSets > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => copyFirstToAll(d.key, e, effectiveSets)}
+                                    className="self-start text-[11px] text-text-muted hover:text-text"
+                                  >
+                                    Use set 1 for every set
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>

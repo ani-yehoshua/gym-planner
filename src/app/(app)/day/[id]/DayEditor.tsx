@@ -19,7 +19,12 @@ import {
 } from "@/app/actions";
 import { formatShort } from "@/lib/date";
 import { formatDuration, parseDuration } from "@/lib/duration";
-import { formatRepRange } from "@/lib/programs";
+import {
+    formatRepRange,
+    formatSetReps,
+    repsForSet,
+    type SetRep,
+} from "@/lib/programs";
 import {
     CATEGORY_LABEL,
     CATEGORY_ORDER,
@@ -76,6 +81,8 @@ type DayEx = {
     /** came from a program: its sets and reps are the program's, so they're
      *  shown but locked for the member following along */
     fromProgram: boolean;
+    /** the program's rep range for each set (empty if it gave none) */
+    programSetReps: SetRep[];
     exercise: CatalogItem;
 };
 type LogRow = {
@@ -725,10 +732,16 @@ export default function DayEditor({
                     // from a program: sets and reps are shown as plain text
                     // instead of controls, so nothing looks editable
                     const locked = ex.fromProgram;
-                    const repRange = formatRepRange(
-                        ex.targetRepMin,
-                        ex.targetRepMax,
-                    );
+                    // "12–15 · 10–12 · 8–10", or one range if every set matches
+                    const repRange = ex.programSetReps.length
+                        ? formatSetReps(ex.programSetReps, ex.targetSets)
+                        : formatRepRange(ex.targetRepMin, ex.targetRepMax);
+                    // each set's own range, shown in that set's reps box
+                    const setRangeHint = (s: number) => {
+                        if (!ex.programSetReps.length) return "";
+                        const r = repsForSet(ex.programSetReps, s - 1);
+                        return formatRepRange(r.min, r.max);
+                    };
                     const gridCols = showWeight
                         ? "grid-cols-[1.5rem_1fr_1fr]"
                         : "grid-cols-[1.5rem_1fr]";
@@ -1169,6 +1182,20 @@ export default function DayEditor({
                                     </div>
                                 )}
 
+                                {mode === "time" &&
+                                    locked &&
+                                    ex.programSetReps.length > 0 &&
+                                    repRange && (
+                                        <div className='flex items-center gap-1.5'>
+                                            <span className='text-text-muted'>
+                                                Sec
+                                            </span>
+                                            <span className='text-sm font-semibold'>
+                                                {repRange}
+                                            </span>
+                                        </div>
+                                    )}
+
                                 {mode === "time" && (
                                     <ExerciseTimer
                                         targetSeconds={ex.targetRepMin ?? 30}
@@ -1452,13 +1479,16 @@ export default function DayEditor({
                                                     }
                                                     className={inputCls}
                                                     placeholder={
-                                                        mode === "time" &&
+                                                        // a program's range for this set, else the
+                                                        // usual first-set hint for timed exercises
+                                                        setRangeHint(s) ||
+                                                        (mode === "time" &&
                                                         s === 1 &&
                                                         ex.targetRepMin != null
                                                             ? formatDuration(
                                                                   ex.targetRepMin,
                                                               )
-                                                            : ""
+                                                            : "")
                                                     }
                                                     value={c.reps}
                                                     onChange={e =>

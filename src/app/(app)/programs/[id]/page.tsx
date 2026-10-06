@@ -6,7 +6,12 @@ import { SubmitButton } from "@/components/submit-button";
 import { ChevronLeftIcon } from "@/components/icons";
 import { getUserToday } from "@/lib/user-today";
 import { muscleList } from "@/lib/labels";
-import { durationLabel, formatRx, programTotalDays } from "@/lib/programs";
+import {
+  describeSets,
+  durationLabel,
+  parseSetReps,
+  programTotalDays,
+} from "@/lib/programs";
 
 export default async function ProgramDetailPage({
   params,
@@ -28,7 +33,7 @@ export default async function ProgramDetailPage({
     supabase
       .from("programs")
       .select(
-        "id, name, description, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(id, sort, sets, rep_min, rep_max, exercises(id, name, primary_muscles, time_based, default_sets, default_rep_min, default_rep_max)))",
+        "id, name, description, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(id, sort, sets, rep_min, rep_max, set_reps, exercises(id, name, primary_muscles, time_based, default_sets, default_rep_min, default_rep_max)))",
       )
       .eq("id", id)
       .maybeSingle(),
@@ -118,9 +123,10 @@ export default async function ProgramDetailPage({
                             </span>
                           </span>
                         </span>
-                        <span className="shrink-0 text-xs text-text-muted">
-                          {formatRx(
+                        <span className="shrink-0 text-right text-xs text-text-muted">
+                          {describeSets(
                             e.sets ?? e.ex.default_sets,
+                            parseSetReps(e.set_reps),
                             e.rep_min ?? e.ex.default_rep_min,
                             e.rep_max ?? e.ex.default_rep_max,
                             e.ex.time_based ? "sec" : "reps",
