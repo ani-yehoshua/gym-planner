@@ -398,6 +398,7 @@ export type Database = {
           planned_day_id: string
           program_set_reps: Json | null
           sort: number
+          superset_group: number | null
           target_distance: number | null
           target_rep_max: number | null
           target_rep_min: number | null
@@ -414,6 +415,7 @@ export type Database = {
           planned_day_id: string
           program_set_reps?: Json | null
           sort?: number
+          superset_group?: number | null
           target_distance?: number | null
           target_rep_max?: number | null
           target_rep_min?: number | null
@@ -430,6 +432,7 @@ export type Database = {
           planned_day_id?: string
           program_set_reps?: Json | null
           sort?: number
+          superset_group?: number | null
           target_distance?: number | null
           target_rep_max?: number | null
           target_rep_min?: number | null
@@ -573,6 +576,7 @@ export type Database = {
           set_reps: Json | null
           sets: number | null
           sort: number
+          superset_group: number | null
         }
         Insert: {
           exercise_id: string
@@ -583,6 +587,7 @@ export type Database = {
           set_reps?: Json | null
           sets?: number | null
           sort?: number
+          superset_group?: number | null
         }
         Update: {
           exercise_id?: string
@@ -593,6 +598,7 @@ export type Database = {
           set_reps?: Json | null
           sets?: number | null
           sort?: number
+          superset_group?: number | null
         }
         Relationships: [
           {

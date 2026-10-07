@@ -29,6 +29,7 @@ export type EditableProgram = {
       rep_min: number | null;
       rep_max: number | null;
       set_reps: unknown;
+      superset_group: number | null;
       exercises: BuilderExercise | null;
     }[];
   }[];
@@ -60,6 +61,7 @@ function toInitial(p: EditableProgram): InitialProgram {
                       : e.rep_min != null || e.rep_max != null
                         ? [{ min: e.rep_min, max: e.rep_max }]
                         : [],
+                    supersetGroup: e.superset_group,
                   },
                 ]
               : [],

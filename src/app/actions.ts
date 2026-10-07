@@ -1324,31 +1324,40 @@ export async function saveProgram(input: ProgramInput): Promise<{ id: string }> 
 
   const clamp = (n: number | null) =>
     n == null || Number.isNaN(n) ? null : Math.max(1, Math.min(999, Math.round(n)));
-  const exerciseRows = input.days.flatMap((d, position) =>
-    d.isRest
-      ? []
-      : d.exercises.map((e, sort) => {
-          // a range for each set; rep_min / rep_max keep the overall range
-          // (lowest min, highest max) for everything that wants just one
-          const setReps = e.setReps.map((r) => {
-            let min = clamp(r.min);
-            let max = clamp(r.max);
-            if (min !== null && max !== null && min > max) [min, max] = [max, min];
-            return { min, max };
-          });
-          const overall = summarizeSetReps(setReps);
-          const hasReps = setReps.some((r) => r.min !== null || r.max !== null);
-          return {
-            program_day_id: idByPosition.get(position)!,
-            exercise_id: e.exerciseId,
-            sort,
-            sets: clamp(e.sets),
-            rep_min: overall.min,
-            rep_max: overall.max,
-            set_reps: hasReps ? setReps : null,
-          };
-        }),
-  );
+  const exerciseRows = input.days.flatMap((d, position) => {
+    if (d.isRest) return [];
+    // a superset needs at least two exercises, and its members sit together —
+    // anything else is stored as not being in one
+    const groupSizes = new Map<number, number>();
+    d.exercises.forEach((e) => {
+      if (e.supersetGroup != null)
+        groupSizes.set(e.supersetGroup, (groupSizes.get(e.supersetGroup) ?? 0) + 1);
+    });
+    return d.exercises.map((e, sort) => {
+      // a range for each set; rep_min / rep_max keep the overall range
+      // (lowest min, highest max) for everything that wants just one
+      const setReps = e.setReps.map((r) => {
+        let min = clamp(r.min);
+        let max = clamp(r.max);
+        if (min !== null && max !== null && min > max) [min, max] = [max, min];
+        return { min, max };
+      });
+      const overall = summarizeSetReps(setReps);
+      const hasReps = setReps.some((r) => r.min !== null || r.max !== null);
+      const inSuperset =
+        e.supersetGroup != null && (groupSizes.get(e.supersetGroup) ?? 0) >= 2;
+      return {
+        program_day_id: idByPosition.get(position)!,
+        exercise_id: e.exerciseId,
+        sort,
+        sets: clamp(e.sets),
+        rep_min: overall.min,
+        rep_max: overall.max,
+        set_reps: hasReps ? setReps : null,
+        superset_group: inSuperset ? e.supersetGroup : null,
+      };
+    });
+  });
   for (const part of chunk(exerciseRows)) {
     check(
       await supabase.from("program_exercises").insert(part),
@@ -1381,7 +1390,7 @@ export async function startProgram(formData: FormData) {
   const { data: program } = await supabase
     .from("programs")
     .select(
-      "id, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(exercise_id, sort, sets, rep_min, rep_max, set_reps, exercises(default_sets, default_rep_min, default_rep_max)))",
+      "id, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(exercise_id, sort, sets, rep_min, rep_max, set_reps, superset_group, exercises(default_sets, default_rep_min, default_rep_max)))",
     )
     .eq("id", programId)
     .maybeSingle();
@@ -1435,6 +1444,8 @@ export async function startProgram(formData: FormData) {
     from_program: true;
     /** each set's own rep range, stated on the day page (null = none given) */
     program_set_reps: { min: number | null; max: number | null }[] | null;
+    /** exercises sharing a number are a superset (shown with a gold outline) */
+    superset_group: number | null;
     added_by: string;
   };
   const seeds: Seed[] = [];
@@ -1460,6 +1471,7 @@ export async function startProgram(formData: FormData) {
         program_set_reps: parseSetReps(e.set_reps).length
           ? parseSetReps(e.set_reps)
           : null,
+        superset_group: e.superset_group,
         added_by: user.id,
       });
     });

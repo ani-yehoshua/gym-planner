@@ -19,6 +19,7 @@ import {
 } from "@/app/actions";
 import { formatShort } from "@/lib/date";
 import { formatDuration, parseDuration } from "@/lib/duration";
+import { toBlocks } from "@/lib/supersets";
 import {
     formatRepRange,
     formatSetReps,
@@ -83,6 +84,8 @@ type DayEx = {
     fromProgram: boolean;
     /** the program's rep range for each set (empty if it gave none) */
     programSetReps: SetRep[];
+    /** exercises sharing a number (and next to each other) are a superset */
+    supersetGroup: number | null;
     exercise: CatalogItem;
 };
 type LogRow = {
@@ -640,7 +643,9 @@ export default function DayEditor({
                         : "border-dashed border-border text-text-muted hover:border-amber-500/50 hover:text-amber-600"
                 }`}>
                 <span aria-hidden>⚡</span>
-                {day.isDeload ? "Deload day — tap to undo" : "Mark as deload day"}
+                {day.isDeload
+                    ? "Deload day — tap to undo"
+                    : "Mark as deload day"}
             </button>
 
             <div className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
@@ -701,416 +706,435 @@ export default function DayEditor({
 
             {/* exercises */}
             <ul className='flex flex-col gap-4'>
-                {day.exercises.map((ex, idx) => {
-                    const mine = myStats(ex);
-                    const others = members.filter(
-                        m => m.user_id !== currentUserId,
-                    );
-                    const isOpen = expanded[ex.id];
-                    const mismatched = !dayAcceptsExercise(
-                        day.category,
-                        ex.exercise.category,
-                    );
-                    const addedByMe = ex.addedBy === currentUserId;
-                    const adder = ex.addedBy
-                        ? memberById.get(ex.addedBy)
-                        : undefined;
-                    const suggested = suggestedSets(
-                        (goal as Goal) ?? null,
-                        experience,
-                        isCompound(ex.exercise),
-                        ex.exercise.primary_muscles,
-                        focusMuscles,
-                    );
-                    const rows = rowsFor(ex);
-                    const mode = modeFor(ex);
-                    const dual = ex.exercise.measurement === "time_or_distance";
-                    const showWeight =
-                        ex.exercise.weighted ||
-                        !!ex.targetWeight ||
-                        weightOverride[ex.id];
-                    // from a program: sets and reps are shown as plain text
-                    // instead of controls, so nothing looks editable
-                    const locked = ex.fromProgram;
-                    // "12–15 · 10–12 · 8–10", or one range if every set matches
-                    const repRange = ex.programSetReps.length
-                        ? formatSetReps(ex.programSetReps, ex.targetSets)
-                        : formatRepRange(ex.targetRepMin, ex.targetRepMax);
-                    // each set's own range, shown in that set's reps box
-                    const setRangeHint = (s: number) => {
-                        if (!ex.programSetReps.length) return "";
-                        const r = repsForSet(ex.programSetReps, s - 1);
-                        return formatRepRange(r.min, r.max);
-                    };
-                    const gridCols = showWeight
-                        ? "grid-cols-[1.5rem_1fr_1fr]"
-                        : "grid-cols-[1.5rem_1fr]";
-                    const last = lastByExercise[ex.exercise.id];
-                    const fmtLastSet = (s: {
-                        weight: number;
-                        reps: number;
-                        distance: number | null;
-                    }) => {
-                        if (s.distance != null) {
-                            return s.weight
-                                ? `${s.weight} ${u} / ${s.distance} ${du}`
-                                : `${s.distance} ${du}`;
-                        }
-                        if (ex.exercise.timeBased) {
-                            return s.weight
-                                ? `${s.weight} ${u} / ${formatDuration(s.reps)}`
-                                : formatDuration(s.reps);
-                        }
-                        return `${s.weight}×${s.reps}`;
-                    };
-                    const swapLogged = hasAnyLog(ex.id);
-                    // the owner can always swap (confirming past any logged
-                    // sets); a member can swap their own add too, logged
-                    // sets or not — they just get the same confirm prompt
-                    const canSwap = canManageAll || addedByMe;
-                    return (
-                        <li
-                            key={ex.id}
-                            ref={el => {
-                                if (el) itemRefs.current.set(ex.id, el);
-                                else itemRefs.current.delete(ex.id);
-                            }}
-                            data-ex-id={ex.id}
-                            className='rounded-xl border border-border p-3'>
-                            <div className='flex items-start justify-between gap-2'>
-                                <button
-                                    onClick={() =>
-                                        setExpanded(p => ({
-                                            ...p,
-                                            [ex.id]: !p[ex.id],
-                                        }))
-                                    }
-                                    className='flex-1 text-left'>
-                                    <div className='flex items-center gap-2 font-medium'>
-                                        {ex.exercise.name}
-                                        <span className='text-xs text-text-muted'>
-                                            {isOpen ? "▴" : "▾"}
-                                        </span>
-                                    </div>
-                                    <div className='text-xs text-text-muted'>
-                                        {muscleList(
-                                            ex.exercise.primary_muscles,
-                                        )}
-                                    </div>
-                                    {mismatched && (
-                                        <div className='mt-1 text-xs text-amber-600 dark:text-amber-400'>
-                                            {
-                                                CATEGORY_LABEL[
-                                                    ex.exercise.category
-                                                ]
-                                            }{" "}
-                                            exercise on a{" "}
-                                            {day.category
-                                                ? CATEGORY_LABEL[day.category]
-                                                : ""}{" "}
-                                            day
+                {toBlocks(
+                    day.exercises.map(e => ({ group: e.supersetGroup, e })),
+                ).map(block => {
+                    const cards = block.items.map(({ item, index: idx }) => {
+                        const ex = item.e;
+                        const mine = myStats(ex);
+                        const others = members.filter(
+                            m => m.user_id !== currentUserId,
+                        );
+                        const isOpen = expanded[ex.id];
+                        const mismatched = !dayAcceptsExercise(
+                            day.category,
+                            ex.exercise.category,
+                        );
+                        const addedByMe = ex.addedBy === currentUserId;
+                        const adder = ex.addedBy
+                            ? memberById.get(ex.addedBy)
+                            : undefined;
+                        const suggested = suggestedSets(
+                            (goal as Goal) ?? null,
+                            experience,
+                            isCompound(ex.exercise),
+                            ex.exercise.primary_muscles,
+                            focusMuscles,
+                        );
+                        const rows = rowsFor(ex);
+                        const mode = modeFor(ex);
+                        const dual =
+                            ex.exercise.measurement === "time_or_distance";
+                        const showWeight =
+                            ex.exercise.weighted ||
+                            !!ex.targetWeight ||
+                            weightOverride[ex.id];
+                        // from a program: sets and reps are shown as plain text
+                        // instead of controls, so nothing looks editable
+                        const locked = ex.fromProgram;
+                        // "12–15 · 10–12 · 8–10", or one range if every set matches
+                        const repRange = ex.programSetReps.length
+                            ? formatSetReps(ex.programSetReps, ex.targetSets)
+                            : formatRepRange(ex.targetRepMin, ex.targetRepMax);
+                        // each set's own range, shown in that set's reps box
+                        const setRangeHint = (s: number) => {
+                            if (!ex.programSetReps.length) return "";
+                            const r = repsForSet(ex.programSetReps, s - 1);
+                            return formatRepRange(r.min, r.max);
+                        };
+                        const gridCols = showWeight
+                            ? "grid-cols-[1.5rem_1fr_1fr]"
+                            : "grid-cols-[1.5rem_1fr]";
+                        const last = lastByExercise[ex.exercise.id];
+                        const fmtLastSet = (s: {
+                            weight: number;
+                            reps: number;
+                            distance: number | null;
+                        }) => {
+                            if (s.distance != null) {
+                                return s.weight
+                                    ? `${s.weight} ${u} / ${s.distance} ${du}`
+                                    : `${s.distance} ${du}`;
+                            }
+                            if (ex.exercise.timeBased) {
+                                return s.weight
+                                    ? `${s.weight} ${u} / ${formatDuration(s.reps)}`
+                                    : formatDuration(s.reps);
+                            }
+                            return `${s.weight}×${s.reps}`;
+                        };
+                        const swapLogged = hasAnyLog(ex.id);
+                        // the owner can always swap (confirming past any logged
+                        // sets); a member can swap their own add too, logged
+                        // sets or not — they just get the same confirm prompt
+                        const canSwap = canManageAll || addedByMe;
+                        return (
+                            <li
+                                key={ex.id}
+                                ref={el => {
+                                    if (el) itemRefs.current.set(ex.id, el);
+                                    else itemRefs.current.delete(ex.id);
+                                }}
+                                data-ex-id={ex.id}
+                                className='rounded-xl border border-border p-3'>
+                                <div className='flex items-start justify-between gap-2'>
+                                    <button
+                                        onClick={() =>
+                                            setExpanded(p => ({
+                                                ...p,
+                                                [ex.id]: !p[ex.id],
+                                            }))
+                                        }
+                                        className='flex-1 text-left'>
+                                        <div className='flex items-center gap-2 font-medium'>
+                                            {ex.exercise.name}
+                                            <span className='text-xs text-text-muted'>
+                                                {isOpen ? "▴" : "▾"}
+                                            </span>
                                         </div>
-                                    )}
-                                </button>
-                                <div className='flex shrink-0 gap-1'>
-                                    <button
-                                        aria-label='Move up'
-                                        onClick={() =>
-                                            startQuiet(() =>
-                                                reorderDayExercise(
-                                                    ex.id,
-                                                    day.id,
-                                                    -1,
-                                                ),
-                                            )
-                                        }
-                                        disabled={idx === 0}
-                                        className={stepBtn}>
-                                        ↑
+                                        <div className='text-xs text-text-muted'>
+                                            {muscleList(
+                                                ex.exercise.primary_muscles,
+                                            )}
+                                        </div>
+                                        {mismatched && (
+                                            <div className='mt-1 text-xs text-amber-600 dark:text-amber-400'>
+                                                {
+                                                    CATEGORY_LABEL[
+                                                        ex.exercise.category
+                                                    ]
+                                                }{" "}
+                                                exercise on a{" "}
+                                                {day.category
+                                                    ? CATEGORY_LABEL[
+                                                          day.category
+                                                      ]
+                                                    : ""}{" "}
+                                                day
+                                            </div>
+                                        )}
                                     </button>
-                                    <button
-                                        aria-label='Move down'
-                                        onClick={() =>
-                                            startQuiet(() =>
-                                                reorderDayExercise(
-                                                    ex.id,
-                                                    day.id,
-                                                    1,
-                                                ),
-                                            )
-                                        }
-                                        disabled={
-                                            idx === day.exercises.length - 1
-                                        }
-                                        className={stepBtn}>
-                                        ↓
-                                    </button>
-                                    {canSwap && (
+                                    <div className='flex shrink-0 gap-1'>
                                         <button
-                                            aria-label='Swap exercise'
-                                            title='Swap exercise'
-                                            onClick={() => {
-                                                setSwapId(p =>
-                                                    p === ex.id ? null : ex.id,
-                                                );
-                                                setSwapQuery("");
-                                            }}
-                                            className={`${stepBtn} ${
-                                                swapId === ex.id
-                                                    ? "border-text text-text"
-                                                    : "text-text-muted hover:border-text-muted"
-                                            }`}>
-                                            <SwapIcon className='h-3.5 w-3.5' />
-                                        </button>
-                                    )}
-                                    {(canManageAll || addedByMe) && (
-                                        <button
-                                            aria-label='Remove exercise'
+                                            aria-label='Move up'
                                             onClick={() =>
                                                 startQuiet(() =>
-                                                    removeDayExercise(
+                                                    reorderDayExercise(
                                                         ex.id,
                                                         day.id,
+                                                        -1,
                                                     ),
                                                 )
                                             }
-                                            className={`${stepBtn} text-text-muted hover:border-rose-400 hover:text-rose-400`}>
-                                            <TrashIcon />
+                                            disabled={idx === 0}
+                                            className={stepBtn}>
+                                            ↑
                                         </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {swapId === ex.id && (
-                                <div className='mt-2 rounded-lg border border-border p-2'>
-                                    <div className='flex items-center justify-between'>
-                                        <span className='text-xs font-medium'>
-                                            Swap for…
-                                        </span>
                                         <button
-                                            onClick={() => setSwapId(null)}
-                                            className='text-xs text-text-muted hover:text-text'>
-                                            Cancel
+                                            aria-label='Move down'
+                                            onClick={() =>
+                                                startQuiet(() =>
+                                                    reorderDayExercise(
+                                                        ex.id,
+                                                        day.id,
+                                                        1,
+                                                    ),
+                                                )
+                                            }
+                                            disabled={
+                                                idx === day.exercises.length - 1
+                                            }
+                                            className={stepBtn}>
+                                            ↓
                                         </button>
+                                        {canSwap && (
+                                            <button
+                                                aria-label='Swap exercise'
+                                                title='Swap exercise'
+                                                onClick={() => {
+                                                    setSwapId(p =>
+                                                        p === ex.id
+                                                            ? null
+                                                            : ex.id,
+                                                    );
+                                                    setSwapQuery("");
+                                                }}
+                                                className={`${stepBtn} ${
+                                                    swapId === ex.id
+                                                        ? "border-text text-text"
+                                                        : "text-text-muted hover:border-text-muted"
+                                                }`}>
+                                                <SwapIcon className='h-3.5 w-3.5' />
+                                            </button>
+                                        )}
+                                        {(canManageAll || addedByMe) && (
+                                            <button
+                                                aria-label='Remove exercise'
+                                                onClick={() =>
+                                                    startQuiet(() =>
+                                                        removeDayExercise(
+                                                            ex.id,
+                                                            day.id,
+                                                        ),
+                                                    )
+                                                }
+                                                className={`${stepBtn} text-text-muted hover:border-rose-400 hover:text-rose-400`}>
+                                                <TrashIcon />
+                                            </button>
+                                        )}
                                     </div>
-                                    {swapLogged && (
-                                        <p className='mt-1 text-[11px] text-amber-600 dark:text-amber-400'>
-                                            Sets are already logged here —
-                                            swapping keeps them attached to the
-                                            new exercise.
-                                        </p>
-                                    )}
-                                    <input
-                                        placeholder='Search…'
-                                        value={swapQuery}
-                                        onChange={e =>
-                                            setSwapQuery(e.target.value)
-                                        }
-                                        className='mt-1.5 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-text-muted'
-                                    />
-                                    <div className='mt-1.5 max-h-64 overflow-y-auto'>
-                                        {swapAcceptedGroups.map(g => (
-                                            <details
-                                                key={g.category}
-                                                open={swapQuery.length > 0}
-                                                className='mb-1 rounded-md border border-border'>
-                                                <summary className='flex cursor-pointer list-none items-center justify-between px-2 py-1.5 text-xs font-medium'>
-                                                    {CATEGORY_LABEL[g.category]}
-                                                    <span className='font-normal text-text-muted'>
-                                                        {g.items.length} ▾
-                                                    </span>
-                                                </summary>
-                                                <ul className='border-t border-border p-1'>
-                                                    {g.items.map(c => (
-                                                        <li key={c.id}>
-                                                            <button
-                                                                onClick={() =>
-                                                                    trySwap(
-                                                                        ex.id,
-                                                                        c,
-                                                                        swapLogged,
-                                                                    )
-                                                                }
-                                                                className='flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2'>
-                                                                <span>
-                                                                    {c.name}
-                                                                </span>
-                                                                <span className='text-xs text-text-muted'>
-                                                                    {muscleList(
-                                                                        c.primary_muscles,
-                                                                    )}
-                                                                </span>
-                                                            </button>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </details>
-                                        ))}
-                                        {swapAcceptedGroups.length === 0 && (
-                                            <p className='px-2 py-2 text-xs text-text-muted'>
-                                                No{" "}
-                                                {
-                                                    CATEGORY_LABEL[
-                                                        dayType(day.category)
-                                                    ]
-                                                }{" "}
-                                                matches.
+                                </div>
+
+                                {swapId === ex.id && (
+                                    <div className='mt-2 rounded-lg border border-border p-2'>
+                                        <div className='flex items-center justify-between'>
+                                            <span className='text-xs font-medium'>
+                                                Swap for…
+                                            </span>
+                                            <button
+                                                onClick={() => setSwapId(null)}
+                                                className='text-xs text-text-muted hover:text-text'>
+                                                Cancel
+                                            </button>
+                                        </div>
+                                        {swapLogged && (
+                                            <p className='mt-1 text-[11px] text-amber-600 dark:text-amber-400'>
+                                                Sets are already logged here —
+                                                swapping keeps them attached to
+                                                the new exercise.
                                             </p>
                                         )}
-
-                                        {swapOffCategoryGroups.length > 0 && (
-                                            <>
-                                                <p className='px-1 pb-1 pt-2 text-[10px] uppercase text-text-muted'>
-                                                    Other categories
+                                        <input
+                                            placeholder='Search…'
+                                            value={swapQuery}
+                                            onChange={e =>
+                                                setSwapQuery(e.target.value)
+                                            }
+                                            className='mt-1.5 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-text-muted'
+                                        />
+                                        <div className='mt-1.5 max-h-64 overflow-y-auto'>
+                                            {swapAcceptedGroups.map(g => (
+                                                <details
+                                                    key={g.category}
+                                                    open={swapQuery.length > 0}
+                                                    className='mb-1 rounded-md border border-border'>
+                                                    <summary className='flex cursor-pointer list-none items-center justify-between px-2 py-1.5 text-xs font-medium'>
+                                                        {
+                                                            CATEGORY_LABEL[
+                                                                g.category
+                                                            ]
+                                                        }
+                                                        <span className='font-normal text-text-muted'>
+                                                            {g.items.length} ▾
+                                                        </span>
+                                                    </summary>
+                                                    <ul className='border-t border-border p-1'>
+                                                        {g.items.map(c => (
+                                                            <li key={c.id}>
+                                                                <button
+                                                                    onClick={() =>
+                                                                        trySwap(
+                                                                            ex.id,
+                                                                            c,
+                                                                            swapLogged,
+                                                                        )
+                                                                    }
+                                                                    className='flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2'>
+                                                                    <span>
+                                                                        {c.name}
+                                                                    </span>
+                                                                    <span className='text-xs text-text-muted'>
+                                                                        {muscleList(
+                                                                            c.primary_muscles,
+                                                                        )}
+                                                                    </span>
+                                                                </button>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </details>
+                                            ))}
+                                            {swapAcceptedGroups.length ===
+                                                0 && (
+                                                <p className='px-2 py-2 text-xs text-text-muted'>
+                                                    No{" "}
+                                                    {
+                                                        CATEGORY_LABEL[
+                                                            dayType(
+                                                                day.category,
+                                                            )
+                                                        ]
+                                                    }{" "}
+                                                    matches.
                                                 </p>
-                                                {swapOffCategoryGroups.map(
-                                                    g => (
-                                                        <details
-                                                            key={g.category}
-                                                            open={
-                                                                swapQuery.length >
-                                                                0
-                                                            }
-                                                            className='mb-1 rounded-md border border-border'>
-                                                            <summary className='flex cursor-pointer list-none items-center justify-between px-2 py-1.5 text-xs font-medium text-text-muted'>
-                                                                {
-                                                                    CATEGORY_LABEL[
-                                                                        g
-                                                                            .category
-                                                                    ]
+                                            )}
+
+                                            {swapOffCategoryGroups.length >
+                                                0 && (
+                                                <>
+                                                    <p className='px-1 pb-1 pt-2 text-[10px] uppercase text-text-muted'>
+                                                        Other categories
+                                                    </p>
+                                                    {swapOffCategoryGroups.map(
+                                                        g => (
+                                                            <details
+                                                                key={g.category}
+                                                                open={
+                                                                    swapQuery.length >
+                                                                    0
                                                                 }
-                                                                <span className='font-normal'>
+                                                                className='mb-1 rounded-md border border-border'>
+                                                                <summary className='flex cursor-pointer list-none items-center justify-between px-2 py-1.5 text-xs font-medium text-text-muted'>
                                                                     {
-                                                                        g.items
-                                                                            .length
-                                                                    }{" "}
-                                                                    ▾
-                                                                </span>
-                                                            </summary>
-                                                            <ul className='border-t border-border p-1'>
-                                                                {g.items.map(
-                                                                    c => (
-                                                                        <li
-                                                                            key={
-                                                                                c.id
-                                                                            }>
-                                                                            <button
-                                                                                onClick={() =>
-                                                                                    trySwap(
-                                                                                        ex.id,
-                                                                                        c,
-                                                                                        swapLogged,
-                                                                                    )
-                                                                                }
-                                                                                className='flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm text-text-muted hover:bg-surface-2'>
-                                                                                <span>
-                                                                                    {
-                                                                                        c.name
+                                                                        CATEGORY_LABEL[
+                                                                            g
+                                                                                .category
+                                                                        ]
+                                                                    }
+                                                                    <span className='font-normal'>
+                                                                        {
+                                                                            g
+                                                                                .items
+                                                                                .length
+                                                                        }{" "}
+                                                                        ▾
+                                                                    </span>
+                                                                </summary>
+                                                                <ul className='border-t border-border p-1'>
+                                                                    {g.items.map(
+                                                                        c => (
+                                                                            <li
+                                                                                key={
+                                                                                    c.id
+                                                                                }>
+                                                                                <button
+                                                                                    onClick={() =>
+                                                                                        trySwap(
+                                                                                            ex.id,
+                                                                                            c,
+                                                                                            swapLogged,
+                                                                                        )
                                                                                     }
-                                                                                </span>
-                                                                                <span className='text-xs'>
-                                                                                    {muscleList(
-                                                                                        c.primary_muscles,
-                                                                                    )}
-                                                                                </span>
-                                                                            </button>
-                                                                        </li>
-                                                                    ),
-                                                                )}
-                                                            </ul>
-                                                        </details>
-                                                    ),
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {last && last.sets.length > 0 && (
-                                <div className='mt-2 rounded-md bg-surface px-2 py-1.5 text-xs'>
-                                    <div className='flex flex-wrap items-baseline gap-x-3 gap-y-1'>
-                                        <span className='text-[10px] uppercase tracking-wide text-text-muted'>
-                                            Last · {formatShort(last.date)}
-                                        </span>
-                                        <span className='text-text'>
-                                            {last.sets
-                                                .map(fmtLastSet)
-                                                .join("  ·  ")}
-                                        </span>
-                                    </div>
-                                    {last.note && (
-                                        <div className='mt-1 italic text-text-muted'>
-                                            “{last.note}”
+                                                                                    className='flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm text-text-muted hover:bg-surface-2'>
+                                                                                    <span>
+                                                                                        {
+                                                                                            c.name
+                                                                                        }
+                                                                                    </span>
+                                                                                    <span className='text-xs'>
+                                                                                        {muscleList(
+                                                                                            c.primary_muscles,
+                                                                                        )}
+                                                                                    </span>
+                                                                                </button>
+                                                                            </li>
+                                                                        ),
+                                                                    )}
+                                                                </ul>
+                                                            </details>
+                                                        ),
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {isOpen && (
-                                <div className='mt-3 rounded-lg bg-surface p-3'>
-                                    <ExerciseDetailBody ex={ex.exercise} />
-                                </div>
-                            )}
-
-                            {/* targets */}
-                            <div className='mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs'>
-                                {locked ? (
-                                    // from a program: just tell them the sets —
-                                    // plain text, nothing that looks editable
-                                    <div className='flex items-center gap-1.5'>
-                                        <span className='text-text-muted'>
-                                            Sets
-                                        </span>
-                                        <span className='text-sm font-semibold'>
-                                            {ex.targetSets}
-                                        </span>
                                     </div>
-                                ) : (
-                                    <div className='flex items-center gap-1.5'>
-                                        <span className='text-text-muted'>
-                                            Sets
-                                        </span>
-                                        <button
-                                            className={stepBtn}
-                                            disabled={ex.targetSets <= 1}
-                                            onClick={() =>
-                                                setTarget(ex.id, {
-                                                    sets: ex.targetSets - 1,
-                                                })
-                                            }>
-                                            −
-                                        </button>
-                                        <span className='w-4 text-center text-sm'>
-                                            {ex.targetSets}
-                                        </span>
-                                        <button
-                                            className={stepBtn}
-                                            onClick={() =>
-                                                setTarget(ex.id, {
-                                                    sets: ex.targetSets + 1,
-                                                })
-                                            }>
-                                            +
-                                        </button>
-                                        {ex.targetSets < suggested && (
-                                            <button
-                                                onClick={() =>
-                                                    setTarget(ex.id, {
-                                                        sets: suggested,
-                                                    })
-                                                }
-                                                className='ml-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-text-muted hover:text-text'>
-                                                suggested {suggested}
-                                            </button>
+                                )}
+
+                                {last && last.sets.length > 0 && (
+                                    <div className='mt-2 rounded-md bg-surface px-2 py-1.5 text-xs'>
+                                        <div className='flex flex-wrap items-baseline gap-x-3 gap-y-1'>
+                                            <span className='text-[10px] uppercase tracking-wide text-text-muted'>
+                                                Last · {formatShort(last.date)}
+                                            </span>
+                                            <span className='text-text'>
+                                                {last.sets
+                                                    .map(fmtLastSet)
+                                                    .join("  ·  ")}
+                                            </span>
+                                        </div>
+                                        {last.note && (
+                                            <div className='mt-1 italic text-text-muted'>
+                                                “{last.note}”
+                                            </div>
                                         )}
                                     </div>
                                 )}
 
-                                {dual && (
-                                    <div className='flex rounded-md border border-border p-0.5'>
-                                        {(["time", "distance"] as const).map(
-                                            m => (
+                                {isOpen && (
+                                    <div className='mt-3 rounded-lg bg-surface p-3'>
+                                        <ExerciseDetailBody ex={ex.exercise} />
+                                    </div>
+                                )}
+
+                                {/* targets */}
+                                <div className='mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs'>
+                                    {locked ? (
+                                        // from a program: just tell them the sets —
+                                        // plain text, nothing that looks editable
+                                        <div className='flex items-center gap-1.5'>
+                                            <span className='text-text-muted'>
+                                                Sets
+                                            </span>
+                                            <span className='text-sm font-semibold'>
+                                                {ex.targetSets}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className='flex items-center gap-1.5'>
+                                            <span className='text-text-muted'>
+                                                Sets
+                                            </span>
+                                            <button
+                                                className={stepBtn}
+                                                disabled={ex.targetSets <= 1}
+                                                onClick={() =>
+                                                    setTarget(ex.id, {
+                                                        sets: ex.targetSets - 1,
+                                                    })
+                                                }>
+                                                −
+                                            </button>
+                                            <span className='w-4 text-center text-sm'>
+                                                {ex.targetSets}
+                                            </span>
+                                            <button
+                                                className={stepBtn}
+                                                onClick={() =>
+                                                    setTarget(ex.id, {
+                                                        sets: ex.targetSets + 1,
+                                                    })
+                                                }>
+                                                +
+                                            </button>
+                                            {ex.targetSets < suggested && (
+                                                <button
+                                                    onClick={() =>
+                                                        setTarget(ex.id, {
+                                                            sets: suggested,
+                                                        })
+                                                    }
+                                                    className='ml-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-text-muted hover:text-text'>
+                                                    suggested {suggested}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {dual && (
+                                        <div className='flex rounded-md border border-border p-0.5'>
+                                            {(
+                                                ["time", "distance"] as const
+                                            ).map(m => (
                                                 <button
                                                     key={m}
                                                     onClick={() =>
@@ -1129,66 +1153,14 @@ export default function DayEditor({
                                                     }`}>
                                                     {m}
                                                 </button>
-                                            ),
-                                        )}
-                                    </div>
-                                )}
+                                            ))}
+                                        </div>
+                                    )}
 
-                                {mode === "reps" && locked && repRange && (
-                                    <div className='flex items-center gap-1.5'>
-                                        <span className='text-text-muted'>
-                                            Reps
-                                        </span>
-                                        <span className='text-sm font-semibold'>
-                                            {repRange}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {mode === "reps" && !locked && (
-                                    <div className='flex items-center gap-1.5'>
-                                        <span className='text-text-muted'>
-                                            Reps
-                                        </span>
-                                        <input
-                                            key={`rmin-${ex.id}-${ex.targetRepMin ?? ""}`}
-                                            inputMode='numeric'
-                                            defaultValue={ex.targetRepMin ?? ""}
-                                            onBlur={e =>
-                                                setTarget(ex.id, {
-                                                    repMin: e.target.value
-                                                        ? Number(e.target.value)
-                                                        : undefined,
-                                                })
-                                            }
-                                            className='w-10 rounded-md border border-border bg-surface px-1 py-1 text-center'
-                                        />
-                                        <span className='text-text-muted'>
-                                            –
-                                        </span>
-                                        <input
-                                            key={`rmax-${ex.id}-${ex.targetRepMax ?? ""}`}
-                                            inputMode='numeric'
-                                            defaultValue={ex.targetRepMax ?? ""}
-                                            onBlur={e =>
-                                                setTarget(ex.id, {
-                                                    repMax: e.target.value
-                                                        ? Number(e.target.value)
-                                                        : undefined,
-                                                })
-                                            }
-                                            className='w-10 rounded-md border border-border bg-surface px-1 py-1 text-center'
-                                        />
-                                    </div>
-                                )}
-
-                                {mode === "time" &&
-                                    locked &&
-                                    ex.programSetReps.length > 0 &&
-                                    repRange && (
+                                    {mode === "reps" && locked && repRange && (
                                         <div className='flex items-center gap-1.5'>
                                             <span className='text-text-muted'>
-                                                Sec
+                                                Reps
                                             </span>
                                             <span className='text-sm font-semibold'>
                                                 {repRange}
@@ -1196,444 +1168,542 @@ export default function DayEditor({
                                         </div>
                                     )}
 
-                                {mode === "time" && (
-                                    <ExerciseTimer
-                                        targetSeconds={ex.targetRepMin ?? 30}
-                                        lockTarget={locked}
-                                        onChangeTarget={secs => {
-                                            setTarget(ex.id, {
-                                                repMin: secs,
-                                                repMax: secs,
-                                            });
-                                            startQuiet(() =>
-                                                setExerciseDefaultSeconds({
-                                                    exerciseId: ex.exercise.id,
-                                                    dayId: day.id,
-                                                    seconds: secs,
-                                                }),
-                                            );
-                                        }}
-                                        onFinish={elapsed =>
-                                            logTimerResult(ex, elapsed)
-                                        }
-                                    />
-                                )}
+                                    {mode === "reps" && !locked && (
+                                        <div className='flex items-center gap-1.5'>
+                                            <span className='text-text-muted'>
+                                                Reps
+                                            </span>
+                                            <input
+                                                key={`rmin-${ex.id}-${ex.targetRepMin ?? ""}`}
+                                                inputMode='numeric'
+                                                defaultValue={
+                                                    ex.targetRepMin ?? ""
+                                                }
+                                                onBlur={e =>
+                                                    setTarget(ex.id, {
+                                                        repMin: e.target.value
+                                                            ? Number(
+                                                                  e.target
+                                                                      .value,
+                                                              )
+                                                            : undefined,
+                                                    })
+                                                }
+                                                className='w-10 rounded-md border border-border bg-surface px-1 py-1 text-center'
+                                            />
+                                            <span className='text-text-muted'>
+                                                –
+                                            </span>
+                                            <input
+                                                key={`rmax-${ex.id}-${ex.targetRepMax ?? ""}`}
+                                                inputMode='numeric'
+                                                defaultValue={
+                                                    ex.targetRepMax ?? ""
+                                                }
+                                                onBlur={e =>
+                                                    setTarget(ex.id, {
+                                                        repMax: e.target.value
+                                                            ? Number(
+                                                                  e.target
+                                                                      .value,
+                                                              )
+                                                            : undefined,
+                                                    })
+                                                }
+                                                className='w-10 rounded-md border border-border bg-surface px-1 py-1 text-center'
+                                            />
+                                        </div>
+                                    )}
 
-                                {mode === "distance" && (
-                                    <div className='flex items-center gap-1.5'>
-                                        <span className='text-text-muted'>
-                                            Target
-                                        </span>
-                                        <input
-                                            key={`d-${ex.id}-${ex.targetDistance ?? ""}`}
-                                            inputMode='decimal'
-                                            defaultValue={
-                                                ex.targetDistance ?? ""
+                                    {mode === "time" &&
+                                        locked &&
+                                        ex.programSetReps.length > 0 &&
+                                        repRange && (
+                                            <div className='flex items-center gap-1.5'>
+                                                <span className='text-text-muted'>
+                                                    Sec
+                                                </span>
+                                                <span className='text-sm font-semibold'>
+                                                    {repRange}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                    {mode === "time" && (
+                                        <ExerciseTimer
+                                            targetSeconds={
+                                                ex.targetRepMin ?? 30
                                             }
-                                            onBlur={e => {
-                                                const val = e.target.value
-                                                    ? Number(e.target.value)
-                                                    : null;
+                                            lockTarget={locked}
+                                            onChangeTarget={secs => {
                                                 setTarget(ex.id, {
-                                                    distance: val,
+                                                    repMin: secs,
+                                                    repMax: secs,
                                                 });
-                                                if (val != null)
-                                                    startQuiet(() =>
-                                                        setExerciseDefaultDistance(
-                                                            {
-                                                                exerciseId:
-                                                                    ex.exercise
-                                                                        .id,
-                                                                dayId: day.id,
-                                                                distance: val,
-                                                            },
-                                                        ),
-                                                    );
+                                                startQuiet(() =>
+                                                    setExerciseDefaultSeconds({
+                                                        exerciseId:
+                                                            ex.exercise.id,
+                                                        dayId: day.id,
+                                                        seconds: secs,
+                                                    }),
+                                                );
                                             }}
-                                            className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
-                                        />
-                                        <span className='text-text-muted'>
-                                            {du}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {showWeight ? (
-                                    <div className='flex items-center gap-1.5'>
-                                        <span className='text-text-muted'>
-                                            Current weight ({u})
-                                        </span>
-                                        <input
-                                            key={`w-${ex.id}-${ex.targetWeight ?? ""}`}
-                                            ref={el => {
-                                                if (el)
-                                                    weightInputRefs.current.set(
-                                                        ex.id,
-                                                        el,
-                                                    );
-                                                else
-                                                    weightInputRefs.current.delete(
-                                                        ex.id,
-                                                    );
-                                            }}
-                                            inputMode='decimal'
-                                            defaultValue={ex.targetWeight ?? ""}
-                                            onBlur={e =>
-                                                setTarget(ex.id, {
-                                                    weight: e.target.value
-                                                        ? Number(e.target.value)
-                                                        : null,
-                                                })
+                                            onFinish={elapsed =>
+                                                logTimerResult(ex, elapsed)
                                             }
-                                            className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
                                         />
+                                    )}
+
+                                    {mode === "distance" && (
+                                        <div className='flex items-center gap-1.5'>
+                                            <span className='text-text-muted'>
+                                                Target
+                                            </span>
+                                            <input
+                                                key={`d-${ex.id}-${ex.targetDistance ?? ""}`}
+                                                inputMode='decimal'
+                                                defaultValue={
+                                                    ex.targetDistance ?? ""
+                                                }
+                                                onBlur={e => {
+                                                    const val = e.target.value
+                                                        ? Number(e.target.value)
+                                                        : null;
+                                                    setTarget(ex.id, {
+                                                        distance: val,
+                                                    });
+                                                    if (val != null)
+                                                        startQuiet(() =>
+                                                            setExerciseDefaultDistance(
+                                                                {
+                                                                    exerciseId:
+                                                                        ex
+                                                                            .exercise
+                                                                            .id,
+                                                                    dayId: day.id,
+                                                                    distance:
+                                                                        val,
+                                                                },
+                                                            ),
+                                                        );
+                                                }}
+                                                className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
+                                            />
+                                            <span className='text-text-muted'>
+                                                {du}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {showWeight ? (
+                                        <div className='flex items-center gap-1.5'>
+                                            <span className='text-text-muted'>
+                                                Current weight ({u})
+                                            </span>
+                                            <input
+                                                key={`w-${ex.id}-${ex.targetWeight ?? ""}`}
+                                                ref={el => {
+                                                    if (el)
+                                                        weightInputRefs.current.set(
+                                                            ex.id,
+                                                            el,
+                                                        );
+                                                    else
+                                                        weightInputRefs.current.delete(
+                                                            ex.id,
+                                                        );
+                                                }}
+                                                inputMode='decimal'
+                                                defaultValue={
+                                                    ex.targetWeight ?? ""
+                                                }
+                                                onBlur={e =>
+                                                    setTarget(ex.id, {
+                                                        weight: e.target.value
+                                                            ? Number(
+                                                                  e.target
+                                                                      .value,
+                                                              )
+                                                            : null,
+                                                    })
+                                                }
+                                                className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
+                                            />
+                                            <button
+                                                type='button'
+                                                onClick={() =>
+                                                    saveDefaultWeight(
+                                                        ex.id,
+                                                        ex.exercise.id,
+                                                    )
+                                                }
+                                                className='rounded-md border border-border px-1.5 py-1 text-[11px] text-text-muted enabled:hover:text-text disabled:opacity-50'
+                                                disabled={pending}>
+                                                {savedDefault === ex.id
+                                                    ? "Saved ✓"
+                                                    : "Set default"}
+                                            </button>
+                                        </div>
+                                    ) : (
                                         <button
                                             type='button'
                                             onClick={() =>
-                                                saveDefaultWeight(
-                                                    ex.id,
-                                                    ex.exercise.id,
-                                                )
+                                                setWeightOverride(p => ({
+                                                    ...p,
+                                                    [ex.id]: true,
+                                                }))
                                             }
-                                            className='rounded-md border border-border px-1.5 py-1 text-[11px] text-text-muted enabled:hover:text-text disabled:opacity-50'
-                                            disabled={pending}>
-                                            {savedDefault === ex.id
-                                                ? "Saved ✓"
-                                                : "Set default"}
+                                            className='text-[11px] text-accent hover:underline'>
+                                            + Track weight
                                         </button>
-                                    </div>
-                                ) : (
-                                    <button
-                                        type='button'
-                                        onClick={() =>
-                                            setWeightOverride(p => ({
-                                                ...p,
-                                                [ex.id]: true,
-                                            }))
-                                        }
-                                        className='text-[11px] text-accent hover:underline'>
-                                        + Track weight
-                                    </button>
-                                )}
+                                    )}
 
-                                {day.isDeload &&
-                                    showWeight &&
-                                    (() => {
-                                        // priority: this exercise's default
-                                        // working weight, then the last
-                                        // logged top set, then nothing to
-                                        // calculate off of — ask for one
-                                        const lastLogged = last?.sets.length
-                                            ? Math.max(
-                                                  ...last.sets.map(
-                                                      s => s.weight,
-                                                  ),
-                                              )
-                                            : null;
-                                        const base =
-                                            ex.targetWeight ?? lastLogged;
-                                        const pct = Number(
-                                            deloadPct[ex.id] || "",
-                                        );
-                                        const deloaded =
-                                            pct && base
-                                                ? roundToPlate(
-                                                      base * (1 - pct / 100),
-                                                      units,
+                                    {day.isDeload &&
+                                        showWeight &&
+                                        (() => {
+                                            // priority: this exercise's default
+                                            // working weight, then the last
+                                            // logged top set, then nothing to
+                                            // calculate off of — ask for one
+                                            const lastLogged = last?.sets.length
+                                                ? Math.max(
+                                                      ...last.sets.map(
+                                                          s => s.weight,
+                                                      ),
                                                   )
                                                 : null;
-                                        return (
-                                            <div className='flex items-center gap-1.5 text-xs'>
-                                                <span className='text-amber-600 dark:text-amber-300'>
-                                                    Deload %
-                                                </span>
-                                                <input
-                                                    inputMode='numeric'
-                                                    placeholder='e.g. 40'
-                                                    value={
-                                                        deloadPct[ex.id] ?? ""
-                                                    }
-                                                    onChange={e =>
-                                                        setDeloadPct(p => ({
-                                                            ...p,
-                                                            [ex.id]:
-                                                                e.target.value,
-                                                        }))
-                                                    }
-                                                    className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
-                                                />
-                                                {!base ? (
-                                                    <span className='text-text-muted text-sm'>
-                                                        enter a current weight
-                                                        above to calculate a
-                                                        deload
+                                            const base =
+                                                ex.targetWeight ?? lastLogged;
+                                            const pct = Number(
+                                                deloadPct[ex.id] || "",
+                                            );
+                                            const deloaded =
+                                                pct && base
+                                                    ? roundToPlate(
+                                                          base *
+                                                              (1 - pct / 100),
+                                                          units,
+                                                      )
+                                                    : null;
+                                            return (
+                                                <div className='flex items-center gap-1.5 text-xs'>
+                                                    <span className='text-amber-600 dark:text-amber-300'>
+                                                        Deload %
                                                     </span>
-                                                ) : (
-                                                    deloaded != null && (
+                                                    <input
+                                                        inputMode='numeric'
+                                                        placeholder='e.g. 40'
+                                                        value={
+                                                            deloadPct[ex.id] ??
+                                                            ""
+                                                        }
+                                                        onChange={e =>
+                                                            setDeloadPct(p => ({
+                                                                ...p,
+                                                                [ex.id]:
+                                                                    e.target
+                                                                        .value,
+                                                            }))
+                                                        }
+                                                        className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
+                                                    />
+                                                    {!base ? (
                                                         <span className='text-text-muted text-sm'>
-                                                            off {base} {u}{" "}
-                                                            {ex.targetWeight ==
-                                                            null
-                                                                ? "(last logged)"
-                                                                : ""}{" "}
-                                                            →{" "}
-                                                            <span className='font-medium text-text'>
-                                                                {deloaded} {u}
-                                                            </span>
+                                                            enter a current
+                                                            weight above to
+                                                            calculate a deload
                                                         </span>
-                                                    )
+                                                    ) : (
+                                                        deloaded != null && (
+                                                            <span className='text-text-muted text-sm'>
+                                                                off {base} {u}{" "}
+                                                                {ex.targetWeight ==
+                                                                null
+                                                                    ? "(last logged)"
+                                                                    : ""}{" "}
+                                                                →{" "}
+                                                                <span className='font-medium text-text'>
+                                                                    {deloaded}{" "}
+                                                                    {u}
+                                                                </span>
+                                                            </span>
+                                                        )
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+                                </div>
+
+                                {/* set log grid */}
+                                <div className='mt-3 flex flex-col gap-1.5'>
+                                    <div
+                                        className={`grid items-center gap-2 text-[11px] uppercase text-text-muted ${gridCols}`}>
+                                        <span>Set</span>
+                                        {showWeight && (
+                                            <span className='text-center'>
+                                                Weight ({u})
+                                            </span>
+                                        )}
+                                        <span className='text-center'>
+                                            {mode === "distance"
+                                                ? `Distance (${du})`
+                                                : mode === "time"
+                                                  ? "Sec"
+                                                  : "Reps"}
+                                        </span>
+                                    </div>
+                                    {Array.from(
+                                        { length: rows },
+                                        (_, i) => i + 1,
+                                    ).map(s => {
+                                        const c = cell(ex.id, s);
+                                        return (
+                                            <div
+                                                key={s}
+                                                className={`grid items-center gap-2 ${gridCols}`}>
+                                                <span className='text-sm text-text-muted'>
+                                                    {s}
+                                                </span>
+                                                {showWeight && (
+                                                    <input
+                                                        inputMode='decimal'
+                                                        className={inputCls}
+                                                        placeholder={
+                                                            s === 1 &&
+                                                            ex.targetWeight !=
+                                                                null
+                                                                ? String(
+                                                                      ex.targetWeight,
+                                                                  )
+                                                                : ""
+                                                        }
+                                                        value={c.weight}
+                                                        onChange={e =>
+                                                            update(
+                                                                ex.id,
+                                                                s,
+                                                                "weight",
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        onBlur={() =>
+                                                            persist(ex.id, s)
+                                                        }
+                                                    />
+                                                )}
+                                                {mode === "distance" ? (
+                                                    <input
+                                                        inputMode='decimal'
+                                                        className={inputCls}
+                                                        placeholder={
+                                                            s === 1 &&
+                                                            ex.targetDistance !=
+                                                                null
+                                                                ? String(
+                                                                      ex.targetDistance,
+                                                                  )
+                                                                : ""
+                                                        }
+                                                        value={c.distance}
+                                                        onChange={e =>
+                                                            update(
+                                                                ex.id,
+                                                                s,
+                                                                "distance",
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        onBlur={() =>
+                                                            persist(ex.id, s)
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <input
+                                                        inputMode={
+                                                            mode === "time"
+                                                                ? "text"
+                                                                : "numeric"
+                                                        }
+                                                        className={inputCls}
+                                                        placeholder={
+                                                            // a program's range for this set, else the
+                                                            // usual first-set hint for timed exercises
+                                                            setRangeHint(s) ||
+                                                            (mode === "time" &&
+                                                            s === 1 &&
+                                                            ex.targetRepMin !=
+                                                                null
+                                                                ? formatDuration(
+                                                                      ex.targetRepMin,
+                                                                  )
+                                                                : "")
+                                                        }
+                                                        value={c.reps}
+                                                        onChange={e =>
+                                                            update(
+                                                                ex.id,
+                                                                s,
+                                                                "reps",
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        onBlur={() =>
+                                                            mode === "time"
+                                                                ? persistTimeField(
+                                                                      ex.id,
+                                                                      s,
+                                                                  )
+                                                                : persist(
+                                                                      ex.id,
+                                                                      s,
+                                                                  )
+                                                        }
+                                                    />
                                                 )}
                                             </div>
                                         );
-                                    })()}
-                            </div>
+                                    })}
+                                </div>
 
-                            {/* set log grid */}
-                            <div className='mt-3 flex flex-col gap-1.5'>
-                                <div
-                                    className={`grid items-center gap-2 text-[11px] uppercase text-text-muted ${gridCols}`}>
-                                    <span>Set</span>
-                                    {showWeight && (
-                                        <span className='text-center'>
-                                            Weight ({u})
+                                <div className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted'>
+                                    <span>
+                                        Your top set{" "}
+                                        <span className='text-text'>
+                                            {mine.top || "—"}
                                         </span>
-                                    )}
-                                    <span className='text-center'>
-                                        {mode === "distance"
-                                            ? `Distance (${du})`
-                                            : mode === "time"
-                                              ? "Sec"
-                                              : "Reps"}
+                                    </span>
+                                    <span>
+                                        Your volume{" "}
+                                        <span className='text-text'>
+                                            {mine.volume || "—"}
+                                        </span>
                                     </span>
                                 </div>
-                                {Array.from(
-                                    { length: rows },
-                                    (_, i) => i + 1,
-                                ).map(s => {
-                                    const c = cell(ex.id, s);
+
+                                {/* notes */}
+                                <textarea
+                                    key={`note-${ex.id}`}
+                                    defaultValue={myNote(ex.id)}
+                                    placeholder='Notes — how it felt, what to change next time…'
+                                    rows={2}
+                                    onBlur={e =>
+                                        start(() =>
+                                            saveExerciseNote({
+                                                pdeId: ex.id,
+                                                dayId: day.id,
+                                                note: e.target.value,
+                                            }),
+                                        )
+                                    }
+                                    className='mt-2 w-full resize-y rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-text-muted'
+                                />
+                                {otherNotes(ex.id).map(n => {
+                                    const who = memberById.get(n.user_id);
                                     return (
                                         <div
-                                            key={s}
-                                            className={`grid items-center gap-2 ${gridCols}`}>
-                                            <span className='text-sm text-text-muted'>
-                                                {s}
+                                            key={n.user_id}
+                                            className='mt-1 flex gap-1.5 text-xs text-text-muted'>
+                                            <span
+                                                className='mt-1 inline-block h-2 w-2 shrink-0 rounded-full'
+                                                style={{
+                                                    background:
+                                                        who?.color ??
+                                                        "var(--text-muted)",
+                                                }}
+                                            />
+                                            <span>
+                                                <span className='text-text'>
+                                                    {who?.display_name ||
+                                                        "Member"}
+                                                    :
+                                                </span>{" "}
+                                                {n.note}
                                             </span>
-                                            {showWeight && (
-                                                <input
-                                                    inputMode='decimal'
-                                                    className={inputCls}
-                                                    placeholder={
-                                                        s === 1 &&
-                                                        ex.targetWeight != null
-                                                            ? String(
-                                                                  ex.targetWeight,
-                                                              )
-                                                            : ""
-                                                    }
-                                                    value={c.weight}
-                                                    onChange={e =>
-                                                        update(
-                                                            ex.id,
-                                                            s,
-                                                            "weight",
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    onBlur={() =>
-                                                        persist(ex.id, s)
-                                                    }
-                                                />
-                                            )}
-                                            {mode === "distance" ? (
-                                                <input
-                                                    inputMode='decimal'
-                                                    className={inputCls}
-                                                    placeholder={
-                                                        s === 1 &&
-                                                        ex.targetDistance !=
-                                                            null
-                                                            ? String(
-                                                                  ex.targetDistance,
-                                                              )
-                                                            : ""
-                                                    }
-                                                    value={c.distance}
-                                                    onChange={e =>
-                                                        update(
-                                                            ex.id,
-                                                            s,
-                                                            "distance",
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    onBlur={() =>
-                                                        persist(ex.id, s)
-                                                    }
-                                                />
-                                            ) : (
-                                                <input
-                                                    inputMode={
-                                                        mode === "time"
-                                                            ? "text"
-                                                            : "numeric"
-                                                    }
-                                                    className={inputCls}
-                                                    placeholder={
-                                                        // a program's range for this set, else the
-                                                        // usual first-set hint for timed exercises
-                                                        setRangeHint(s) ||
-                                                        (mode === "time" &&
-                                                        s === 1 &&
-                                                        ex.targetRepMin != null
-                                                            ? formatDuration(
-                                                                  ex.targetRepMin,
-                                                              )
-                                                            : "")
-                                                    }
-                                                    value={c.reps}
-                                                    onChange={e =>
-                                                        update(
-                                                            ex.id,
-                                                            s,
-                                                            "reps",
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    onBlur={() =>
-                                                        mode === "time"
-                                                            ? persistTimeField(
-                                                                  ex.id,
-                                                                  s,
-                                                              )
-                                                            : persist(ex.id, s)
-                                                    }
-                                                />
-                                            )}
                                         </div>
                                     );
                                 })}
-                            </div>
 
-                            <div className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted'>
-                                <span>
-                                    Your top set{" "}
-                                    <span className='text-text'>
-                                        {mine.top || "—"}
-                                    </span>
-                                </span>
-                                <span>
-                                    Your volume{" "}
-                                    <span className='text-text'>
-                                        {mine.volume || "—"}
-                                    </span>
-                                </span>
-                            </div>
-
-                            {/* notes */}
-                            <textarea
-                                key={`note-${ex.id}`}
-                                defaultValue={myNote(ex.id)}
-                                placeholder='Notes — how it felt, what to change next time…'
-                                rows={2}
-                                onBlur={e =>
-                                    start(() =>
-                                        saveExerciseNote({
-                                            pdeId: ex.id,
-                                            dayId: day.id,
-                                            note: e.target.value,
-                                        }),
-                                    )
-                                }
-                                className='mt-2 w-full resize-y rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-text-muted'
-                            />
-                            {otherNotes(ex.id).map(n => {
-                                const who = memberById.get(n.user_id);
-                                return (
-                                    <div
-                                        key={n.user_id}
-                                        className='mt-1 flex gap-1.5 text-xs text-text-muted'>
+                                {day.partyId && (
+                                    <div className='mt-1 flex items-center gap-1.5 text-xs text-text-muted'>
                                         <span
-                                            className='mt-1 inline-block h-2 w-2 shrink-0 rounded-full'
+                                            className='inline-block h-2 w-2 shrink-0 rounded-full'
                                             style={{
                                                 background:
-                                                    who?.color ??
+                                                    adder?.color ??
                                                     "var(--text-muted)",
                                             }}
                                         />
-                                        <span>
-                                            <span className='text-text'>
-                                                {who?.display_name || "Member"}:
-                                            </span>{" "}
-                                            {n.note}
+                                        Added by{" "}
+                                        <span className='text-text'>
+                                            {addedByMe
+                                                ? "you"
+                                                : (adder?.display_name ??
+                                                  "someone")}
                                         </span>
                                     </div>
-                                );
-                            })}
+                                )}
 
-                            {day.partyId && (
-                                <div className='mt-1 flex items-center gap-1.5 text-xs text-text-muted'>
-                                    <span
-                                        className='inline-block h-2 w-2 shrink-0 rounded-full'
-                                        style={{
-                                            background:
-                                                adder?.color ??
-                                                "var(--text-muted)",
-                                        }}
-                                    />
-                                    Added by{" "}
-                                    <span className='text-text'>
-                                        {addedByMe
-                                            ? "you"
-                                            : (adder?.display_name ??
-                                              "someone")}
-                                    </span>
-                                </div>
-                            )}
-
-                            {day.partyId &&
-                                (() => {
-                                    const logged = others
-                                        .map(m => ({
-                                            m,
-                                            o: otherStats(ex.id, m.user_id),
-                                        }))
-                                        .filter(
-                                            ({ o }) =>
-                                                o.top > 0 || o.volume > 0,
-                                        );
-                                    if (logged.length === 0) return null;
-                                    return (
-                                        <div className='mt-2 border-t border-border pt-2 text-xs text-text-muted'>
-                                            <div className='mb-1 uppercase tracking-wide text-[10px]'>
-                                                Party — sets logged on this
-                                                exercise
-                                            </div>
-                                            {logged.map(({ m, o }) => (
-                                                <div
-                                                    key={m.user_id}
-                                                    className='flex items-center gap-2'>
-                                                    <span
-                                                        className='inline-block h-2 w-2 rounded-full'
-                                                        style={{
-                                                            background: m.color,
-                                                        }}
-                                                    />
-                                                    <span className='text-text'>
-                                                        {m.display_name ||
-                                                            "Member"}
-                                                    </span>
-                                                    <span>
-                                                        top {o.top || "—"}
-                                                    </span>
-                                                    <span>
-                                                        vol {o.volume || "—"}
-                                                    </span>
+                                {day.partyId &&
+                                    (() => {
+                                        const logged = others
+                                            .map(m => ({
+                                                m,
+                                                o: otherStats(ex.id, m.user_id),
+                                            }))
+                                            .filter(
+                                                ({ o }) =>
+                                                    o.top > 0 || o.volume > 0,
+                                            );
+                                        if (logged.length === 0) return null;
+                                        return (
+                                            <div className='mt-2 border-t border-border pt-2 text-xs text-text-muted'>
+                                                <div className='mb-1 uppercase tracking-wide text-[10px]'>
+                                                    Party — sets logged on this
+                                                    exercise
                                                 </div>
-                                            ))}
-                                        </div>
-                                    );
-                                })()}
+                                                {logged.map(({ m, o }) => (
+                                                    <div
+                                                        key={m.user_id}
+                                                        className='flex items-center gap-2'>
+                                                        <span
+                                                            className='inline-block h-2 w-2 rounded-full'
+                                                            style={{
+                                                                background:
+                                                                    m.color,
+                                                            }}
+                                                        />
+                                                        <span className='text-text'>
+                                                            {m.display_name ||
+                                                                "Member"}
+                                                        </span>
+                                                        <span>
+                                                            top {o.top || "—"}
+                                                        </span>
+                                                        <span>
+                                                            vol{" "}
+                                                            {o.volume || "—"}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+                            </li>
+                        );
+                    });
+                    // a superset: back-to-back exercises, outlined together in gold
+                    return block.group != null && block.items.length >= 2 ? (
+                        <li
+                            key={`superset-${block.group}-${block.items[0].item.e.id}`}
+                            className='rounded-2xl border-2 border-amber-400/70 bg-amber-400/5 p-2'>
+                            <div className='mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300'>
+                                Superset · do these back to back
+                            </div>
+                            <ul className='flex flex-col gap-3'>{cards}</ul>
                         </li>
+                    ) : (
+                        cards
                     );
                 })}
             </ul>

@@ -21,6 +21,8 @@ export type ProgramInput = {
       exerciseId: string;
       sets: number | null;
       setReps: SetRep[];
+      /** exercises sharing a number (and next to each other) are a superset */
+      supersetGroup: number | null;
     }[];
   }[];
 };

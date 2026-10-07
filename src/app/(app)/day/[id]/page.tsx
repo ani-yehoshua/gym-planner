@@ -32,7 +32,7 @@ export default async function DayPage({
   const { data: day } = await supabase
     .from("planned_days")
     .select(
-      "id, date, category, label, owner_user, party_id, is_deload, program_id, program_day_number, parties(name), programs(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, from_program, program_set_reps, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance, default_sets, default_rep_min, default_rep_max))",
+      "id, date, category, label, owner_user, party_id, is_deload, program_id, program_day_number, parties(name), programs(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, from_program, program_set_reps, superset_group, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance, default_sets, default_rep_min, default_rep_max))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -337,6 +337,7 @@ export default async function DayPage({
                 addedBy: p.added_by,
                 fromProgram: p.from_program,
                 programSetReps: parseSetReps(p.program_set_reps),
+                supersetGroup: p.superset_group,
                 exercise: {
                   ...p.exercises,
                   timeBased: p.exercises.time_based,
