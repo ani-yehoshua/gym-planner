@@ -1,93 +1,103 @@
 // All calendar dates are handled as plain YYYY-MM-DD strings in the user's local sense.
 
 export function toISODate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
 }
 
 export function parseISODate(s: string): Date {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
 }
 
 export function addDays(s: string, n: number): string {
-  const d = parseISODate(s);
-  d.setDate(d.getDate() + n);
-  return toISODate(d);
+    const d = parseISODate(s);
+    d.setDate(d.getDate() + n);
+    return toISODate(d);
 }
 
 // Sunday-start week containing `s`
 export function startOfWeek(s: string): string {
-  const d = parseISODate(s);
-  d.setDate(d.getDate() - d.getDay()); // getDay(): 0 = Sunday
-  return toISODate(d);
+    const d = parseISODate(s);
+    d.setDate(d.getDate() - d.getDay()); // getDay(): 0 = Sunday
+    return toISODate(d);
 }
 
 export function weekDates(weekStart: string): string[] {
-  return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 }
 
 export function today(): string {
-  return toISODate(new Date());
+    return toISODate(new Date());
 }
 
 /** Calendar date (YYYY-MM-DD) for an instant, in a specific IANA timezone. */
 export function isoDateInTz(d: Date, tz: string): string {
-  try {
-    // en-CA formats as YYYY-MM-DD
-    return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
-  } catch {
-    return toISODate(d);
-  }
+    try {
+        // en-CA formats as YYYY-MM-DD
+        return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+    } catch {
+        return toISODate(d);
+    }
 }
 
 /** Current calendar date (YYYY-MM-DD) in a specific IANA timezone. Server code
  *  runs in UTC on Vercel, so "today" must be resolved in the user's zone. */
 export function todayInTz(tz: string): string {
-  return isoDateInTz(new Date(), tz);
+    return isoDateInTz(new Date(), tz);
 }
 
-const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MON = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
 ];
 
 export function dowShort(s: string): string {
-  return DOW[parseISODate(s).getDay()];
+    return DOW[parseISODate(s).getDay()];
 }
 
 export function dayOfMonth(s: string): number {
-  return parseISODate(s).getDate();
+    return parseISODate(s).getDate();
 }
 
 export function formatLong(s: string): string {
-  const d = parseISODate(s);
-  return `${DOW[d.getDay()]}, ${MON[d.getMonth()]} ${d.getDate()}`;
+    const d = parseISODate(s);
+    return `${DOW[d.getDay()]}, ${MON[d.getMonth()]} ${d.getDate()}`;
 }
 
 // "Sep 1"
 export function formatShort(s: string): string {
-  const d = parseISODate(s);
-  return `${MON[d.getMonth()]} ${d.getDate()}`;
+    const d = parseISODate(s);
+    return `${MON[d.getMonth()]} ${d.getDate()}`;
 }
 
 export function formatRange(startS: string, endS: string): string {
-  const a = parseISODate(startS);
-  const b = parseISODate(endS);
-  const left = `${MON[a.getMonth()]} ${a.getDate()}`;
-  const right =
-    a.getMonth() === b.getMonth()
-      ? `${b.getDate()}`
-      : `${MON[b.getMonth()]} ${b.getDate()}`;
-  return `${left} – ${right}`;
+    const a = parseISODate(startS);
+    const b = parseISODate(endS);
+    const left = `${MON[a.getMonth()]} ${a.getDate()}`;
+    const right =
+        a.getMonth() === b.getMonth()
+            ? `${b.getDate()}`
+            : `${MON[b.getMonth()]} ${b.getDate()}`;
+    return `${left} – ${right}`;
 }
 
 // "8/23 – 8/29"
 export function formatRangeNumeric(startS: string, endS: string): string {
-  const a = parseISODate(startS);
-  const b = parseISODate(endS);
-  return `${a.getMonth() + 1}/${a.getDate()} – ${b.getMonth() + 1}/${b.getDate()}`;
+    const a = parseISODate(startS);
+    const b = parseISODate(endS);
+    return `${a.getMonth() + 1}/${a.getDate()} – ${b.getMonth() + 1}/${b.getDate()}`;
 }

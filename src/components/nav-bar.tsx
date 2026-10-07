@@ -4,105 +4,127 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  CalendarIcon,
-  ChartIcon,
-  DumbbellIcon,
-  ProgramsIcon,
-  ResumeIcon,
-  UsersIcon,
+    CalendarIcon,
+    ChartIcon,
+    DumbbellIcon,
+    ProgramsIcon,
+    ResumeIcon,
+    UsersIcon,
 } from "@/components/icons";
 import { getActiveSession } from "@/lib/active-session";
 import { CATEGORY_DOT } from "@/lib/labels";
 import type { Enums } from "@/lib/supabase/database.types";
 
 const NAV = [
-  { href: "/exercises", label: "Exercises", Icon: DumbbellIcon, match: (p: string) => p.startsWith("/exercises") },
-  { href: "/parties", label: "Parties", Icon: UsersIcon, match: (p: string) => p.startsWith("/parties") },
-  { href: "/progress", label: "Progress", Icon: ChartIcon, match: (p: string) => p.startsWith("/progress") },
-  {
-    href: "/programs",
-    label: "Programs",
-    Icon: ProgramsIcon,
-    match: (p: string) => p.startsWith("/programs"),
-  },
+    {
+        href: "/exercises",
+        label: "Exercises",
+        Icon: DumbbellIcon,
+        match: (p: string) => p.startsWith("/exercises"),
+    },
+    {
+        href: "/parties",
+        label: "Parties",
+        Icon: UsersIcon,
+        match: (p: string) => p.startsWith("/parties"),
+    },
+    {
+        href: "/progress",
+        label: "Progress",
+        Icon: ChartIcon,
+        match: (p: string) => p.startsWith("/progress"),
+    },
+    {
+        href: "/programs",
+        label: "Programs",
+        Icon: ProgramsIcon,
+        match: (p: string) => p.startsWith("/programs"),
+    },
 ];
 
 export function NavBar() {
-  const pathname = usePathname();
-  const [resume, setResume] = useState<{ dayId: string; category: string | null } | null>(null);
+    const pathname = usePathname();
+    const [resume, setResume] = useState<{
+        dayId: string;
+        category: string | null;
+    } | null>(null);
 
-  useEffect(() => {
-    const check = () => {
-      const s = getActiveSession();
-      const suppressed =
-        !s || pathname === "/" || pathname.startsWith(`/day/${s.dayId}`);
-      setResume(suppressed ? null : { dayId: s.dayId, category: s.category });
-    };
-    check();
-    window.addEventListener("storage", check);
-    window.addEventListener("focus", check);
-    return () => {
-      window.removeEventListener("storage", check);
-      window.removeEventListener("focus", check);
-    };
-  }, [pathname]);
+    useEffect(() => {
+        const check = () => {
+            const s = getActiveSession();
+            const suppressed =
+                !s ||
+                pathname === "/" ||
+                pathname.startsWith(`/day/${s.dayId}`);
+            setResume(
+                suppressed ? null : { dayId: s.dayId, category: s.category },
+            );
+        };
+        check();
+        window.addEventListener("storage", check);
+        window.addEventListener("focus", check);
+        return () => {
+            window.removeEventListener("storage", check);
+            window.removeEventListener("focus", check);
+        };
+    }, [pathname]);
 
-  const dotClass = resume
-    ? CATEGORY_DOT[(resume.category ?? "custom") as Enums<"muscle_category">]
-    : "bg-accent";
+    const dotClass = resume
+        ? CATEGORY_DOT[
+              (resume.category ?? "custom") as Enums<"muscle_category">
+          ]
+        : "bg-accent";
 
-  const onCalendarTab = pathname === "/" || pathname.startsWith("/day");
-  const calendarTab = resume
-    ? {
-        href: `/day/${resume.dayId}`,
-        label: "Resume",
-        Icon: ResumeIcon,
-        active: false,
-        badge: true,
-      }
-    : {
-        href: "/",
-        label: "Calendar",
-        Icon: CalendarIcon,
-        active: onCalendarTab,
-        badge: false,
-      };
+    const onCalendarTab = pathname === "/" || pathname.startsWith("/day");
+    const calendarTab = resume
+        ? {
+              href: `/day/${resume.dayId}`,
+              label: "Resume",
+              Icon: ResumeIcon,
+              active: false,
+              badge: true,
+          }
+        : {
+              href: "/",
+              label: "Calendar",
+              Icon: CalendarIcon,
+              active: onCalendarTab,
+              badge: false,
+          };
 
-  const tabs = [
-    calendarTab,
-    ...NAV.map((n) => ({ ...n, active: n.match(pathname), badge: false })),
-  ];
+    const tabs = [
+        calendarTab,
+        ...NAV.map(n => ({ ...n, active: n.match(pathname), badge: false })),
+    ];
 
-  return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-10 mx-auto grid w-full max-w-2xl grid-cols-5 border-t border-border bg-bg/95 backdrop-blur"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      {tabs.map(({ href, label, Icon, active, badge }) => (
-        <Link
-          key={label}
-          href={href}
-          // The nav bar sits in view the whole time, so Next's viewport
-          // prefetch would cache each tab's data as soon as a day loads —
-          // long before you actually switch tabs, making things like this
-          // day's "Set default" writes look like they never landed on the
-          // Exercises tab. Always fetch fresh on tap instead.
-          prefetch={false}
-          className={`relative flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 text-center text-[11px] font-medium ${
-            active ? "text-text" : "text-text-muted hover:text-text"
-          } ${badge ? "text-accent" : ""}`}
-        >
-          <span className="relative">
-            <Icon className="h-5 w-5" />
-            {badge && (
-              <span
-                className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${dotClass}`}
-              />
-            )}
-          </span>
-          {label}
-        </Link>
-      ))}
-    </nav>
-  );
+    return (
+        <nav
+            className='fixed inset-x-0 bottom-0 z-10 mx-auto grid w-full max-w-2xl grid-cols-5 border-t border-border bg-bg/95 backdrop-blur'
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+            {tabs.map(({ href, label, Icon, active, badge }) => (
+                <Link
+                    key={label}
+                    href={href}
+                    // The nav bar sits in view the whole time, so Next's viewport
+                    // prefetch would cache each tab's data as soon as a day loads —
+                    // long before you actually switch tabs, making things like this
+                    // day's "Set default" writes look like they never landed on the
+                    // Exercises tab. Always fetch fresh on tap instead.
+                    prefetch={false}
+                    className={`relative flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 text-center text-[11px] font-medium ${
+                        active ? "text-text" : "text-text-muted hover:text-text"
+                    } ${badge ? "text-accent" : ""}`}>
+                    <span className='relative'>
+                        <Icon className='h-5 w-5' />
+                        {badge && (
+                            <span
+                                className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${dotClass}`}
+                            />
+                        )}
+                    </span>
+                    {label}
+                </Link>
+            ))}
+        </nav>
+    );
 }

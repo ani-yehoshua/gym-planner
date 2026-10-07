@@ -252,136 +252,150 @@ export default async function ExercisesPage() {
             )}
 
             <ExerciseSearch>
-            {[...CATEGORY_ORDER]
-                .filter(c => grouped.has(c))
-                .sort((a, b) => CATEGORY_LABEL[a].localeCompare(CATEGORY_LABEL[b]))
-                .map(c => (
-                <details
-                    key={c}
-                    data-exercise-group
-                    className='rounded-xl border border-border'>
-                    <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold'>
-                        {CATEGORY_LABEL[c]}
-                        <span className='text-xs font-normal text-text-muted'>
-                            {grouped.get(c)!.length} ▾
-                        </span>
-                    </summary>
-                    <ul className='flex flex-col gap-1 border-t border-border p-2'>
-                        {grouped.get(c)!.map(e => (
-                            <li
-                                key={e.id}
-                                data-exercise-name={e.name}
-                                className='rounded-lg border border-border'>
-                                <details className='group'>
-                                    <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm'>
-                                        <span>{e.name}</span>
-                                        <span className='text-xs text-text-muted group-open:hidden'>
-                                            {muscleList(e.primary_muscles)}
-                                        </span>
-                                    </summary>
-                                    <div className='border-t border-border px-3 py-3'>
-                                        <ExerciseDetailBody ex={e} />
-                                        {(() => {
-                                            const [rMin, rMax] =
-                                                recommendedReps(
-                                                    goal,
-                                                    isCompound(e),
-                                                );
-                                            const p = prefs.get(e.id) ?? null;
-                                            return (
-                                                <ExercisePrefForm
-                                                    // remount when the saved pref changes (e.g. via the
-                                                    // day page's "Set default") so stale client state
-                                                    // from an earlier navigation doesn't stick around
-                                                    key={`${e.id}:${p?.default_sets ?? ""}:${p?.default_rep_min ?? ""}:${p?.default_rep_max ?? ""}:${p?.default_weight ?? ""}:${p?.default_1rm ?? ""}:${p?.default_distance ?? ""}:${p?.default_log_mode ?? ""}`}
-                                                    exerciseId={e.id}
-                                                    pref={p}
-                                                    // what you'd get with no personal default:
-                                                    // the exercise's own catalog default first,
-                                                    // goal suggestion only if it has none
-                                                    fallback={{
-                                                        sets:
-                                                            e.default_sets ?? 2,
-                                                        repMin:
-                                                            e.default_rep_min ??
-                                                            rMin,
-                                                        repMax:
-                                                            e.default_rep_max ??
-                                                            rMax,
-                                                    }}
-                                                    timeBased={e.time_based}
-                                                    weighted={e.weighted}
-                                                    measurement={e.measurement}
-                                                    units={
-                                                        (profile?.units as Unit) ??
-                                                        "lb"
-                                                    }
-                                                    distanceUnit={distanceUnitLabel(
-                                                        profile?.distance_unit,
+                {[...CATEGORY_ORDER]
+                    .filter(c => grouped.has(c))
+                    .sort((a, b) =>
+                        CATEGORY_LABEL[a].localeCompare(CATEGORY_LABEL[b]),
+                    )
+                    .map(c => (
+                        <details
+                            key={c}
+                            data-exercise-group
+                            className='rounded-xl border border-border'>
+                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold'>
+                                {CATEGORY_LABEL[c]}
+                                <span className='text-xs font-normal text-text-muted'>
+                                    {grouped.get(c)!.length} ▾
+                                </span>
+                            </summary>
+                            <ul className='flex flex-col gap-1 border-t border-border p-2'>
+                                {grouped.get(c)!.map(e => (
+                                    <li
+                                        key={e.id}
+                                        data-exercise-name={e.name}
+                                        className='rounded-lg border border-border'>
+                                        <details className='group'>
+                                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm'>
+                                                <span>{e.name}</span>
+                                                <span className='text-xs text-text-muted group-open:hidden'>
+                                                    {muscleList(
+                                                        e.primary_muscles,
                                                     )}
-                                                />
-                                            );
-                                        })()}
-                                        {admin && (
-                                            <div className='mt-3 border-t border-border pt-3'>
-                                                <details>
-                                                    <summary className='cursor-pointer text-xs font-medium text-text-muted'>
-                                                        Edit exercise
-                                                    </summary>
-                                                    <div className='mt-3'>
-                                                        <ExerciseForm
-                                                            exercise={e}
+                                                </span>
+                                            </summary>
+                                            <div className='border-t border-border px-3 py-3'>
+                                                <ExerciseDetailBody ex={e} />
+                                                {(() => {
+                                                    const [rMin, rMax] =
+                                                        recommendedReps(
+                                                            goal,
+                                                            isCompound(e),
+                                                        );
+                                                    const p =
+                                                        prefs.get(e.id) ?? null;
+                                                    return (
+                                                        <ExercisePrefForm
+                                                            // remount when the saved pref changes (e.g. via the
+                                                            // day page's "Set default") so stale client state
+                                                            // from an earlier navigation doesn't stick around
+                                                            key={`${e.id}:${p?.default_sets ?? ""}:${p?.default_rep_min ?? ""}:${p?.default_rep_max ?? ""}:${p?.default_weight ?? ""}:${p?.default_1rm ?? ""}:${p?.default_distance ?? ""}:${p?.default_log_mode ?? ""}`}
+                                                            exerciseId={e.id}
+                                                            pref={p}
+                                                            // what you'd get with no personal default:
+                                                            // the exercise's own catalog default first,
+                                                            // goal suggestion only if it has none
+                                                            fallback={{
+                                                                sets:
+                                                                    e.default_sets ??
+                                                                    2,
+                                                                repMin:
+                                                                    e.default_rep_min ??
+                                                                    rMin,
+                                                                repMax:
+                                                                    e.default_rep_max ??
+                                                                    rMax,
+                                                            }}
+                                                            timeBased={
+                                                                e.time_based
+                                                            }
+                                                            weighted={
+                                                                e.weighted
+                                                            }
+                                                            measurement={
+                                                                e.measurement
+                                                            }
+                                                            units={
+                                                                (profile?.units as Unit) ??
+                                                                "lb"
+                                                            }
+                                                            distanceUnit={distanceUnitLabel(
+                                                                profile?.distance_unit,
+                                                            )}
                                                         />
+                                                    );
+                                                })()}
+                                                {admin && (
+                                                    <div className='mt-3 border-t border-border pt-3'>
+                                                        <details>
+                                                            <summary className='cursor-pointer text-xs font-medium text-text-muted'>
+                                                                Edit exercise
+                                                            </summary>
+                                                            <div className='mt-3'>
+                                                                <ExerciseForm
+                                                                    exercise={e}
+                                                                />
+                                                            </div>
+                                                        </details>
+                                                        <div className='mt-3 flex gap-2'>
+                                                            <form
+                                                                action={
+                                                                    setExerciseArchived
+                                                                }>
+                                                                <input
+                                                                    type='hidden'
+                                                                    name='exercise_id'
+                                                                    value={e.id}
+                                                                />
+                                                                <input
+                                                                    type='hidden'
+                                                                    name='archived'
+                                                                    value='true'
+                                                                />
+                                                                <SubmitButton
+                                                                    pendingText='…'
+                                                                    className={
+                                                                        archiveBtn
+                                                                    }>
+                                                                    Archive
+                                                                </SubmitButton>
+                                                            </form>
+                                                            <form
+                                                                action={
+                                                                    deleteExercise
+                                                                }>
+                                                                <input
+                                                                    type='hidden'
+                                                                    name='exercise_id'
+                                                                    value={e.id}
+                                                                />
+                                                                <SubmitButton
+                                                                    pendingText='…'
+                                                                    className={
+                                                                        deleteBtn
+                                                                    }>
+                                                                    Delete
+                                                                </SubmitButton>
+                                                            </form>
+                                                        </div>
                                                     </div>
-                                                </details>
-                                                <div className='mt-3 flex gap-2'>
-                                                    <form
-                                                        action={
-                                                            setExerciseArchived
-                                                        }>
-                                                        <input
-                                                            type='hidden'
-                                                            name='exercise_id'
-                                                            value={e.id}
-                                                        />
-                                                        <input
-                                                            type='hidden'
-                                                            name='archived'
-                                                            value='true'
-                                                        />
-                                                        <SubmitButton
-                                                            pendingText='…'
-                                                            className={
-                                                                archiveBtn
-                                                            }>
-                                                            Archive
-                                                        </SubmitButton>
-                                                    </form>
-                                                    <form
-                                                        action={deleteExercise}>
-                                                        <input
-                                                            type='hidden'
-                                                            name='exercise_id'
-                                                            value={e.id}
-                                                        />
-                                                        <SubmitButton
-                                                            pendingText='…'
-                                                            className={
-                                                                deleteBtn
-                                                            }>
-                                                            Delete
-                                                        </SubmitButton>
-                                                    </form>
-                                                </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                </details>
-                            </li>
-                        ))}
-                    </ul>
-                </details>
-            ))}
+                                        </details>
+                                    </li>
+                                ))}
+                            </ul>
+                        </details>
+                    ))}
             </ExerciseSearch>
         </div>
     );

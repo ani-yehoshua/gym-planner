@@ -61,7 +61,10 @@ export default async function CalendarPage({
 
     return (
         <div className='flex flex-col gap-4'>
-            <ProgramEndPrompt userId={user.id} todayISO={todayISO} />
+            <ProgramEndPrompt
+                userId={user.id}
+                todayISO={todayISO}
+            />
             <div className='flex items-center justify-between'>
                 <h1 className='text-lg font-semibold'>
                     {formatRange(dates[0], dates[6])}
@@ -147,7 +150,9 @@ export default async function CalendarPage({
                                                     {isProgramDay && (
                                                         <span className='text-xs text-text-muted'>
                                                             · Day{" "}
-                                                            {d.program_day_number}
+                                                            {
+                                                                d.program_day_number
+                                                            }
                                                             {d.label &&
                                                                 ` - ${d.label}`}
                                                         </span>
@@ -161,7 +166,10 @@ export default async function CalendarPage({
                                                     )}
                                                 </span>
                                                 <span className='text-xs text-text-muted'>
-                                                    {d.planned_day_exercises.length}{" "}
+                                                    {
+                                                        d.planned_day_exercises
+                                                            .length
+                                                    }{" "}
                                                     exercises
                                                 </span>
                                             </Link>

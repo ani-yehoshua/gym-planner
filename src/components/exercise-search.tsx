@@ -43,7 +43,9 @@ export function ExerciseSearch({ children }: { children: React.ReactNode }) {
                 placeholder='Search exercises…'
                 className='w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-text-muted'
             />
-            <div ref={rootRef} className='flex flex-col gap-2'>
+            <div
+                ref={rootRef}
+                className='flex flex-col gap-2'>
                 {children}
             </div>
         </div>

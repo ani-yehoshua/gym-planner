@@ -107,7 +107,9 @@ export function PlateCalculator({ units = "lb" }: { units?: Unit }) {
                                     </span>
                                 )}
                                 {picked.map((plateIdx, pos) => (
-                                    <span key={pos} className='flex items-center'>
+                                    <span
+                                        key={pos}
+                                        className='flex items-center'>
                                         {(pos > 0 || bwNum > 0) && (
                                             <span className='mx-1 text-text-muted'>
                                                 +

@@ -5,7 +5,10 @@ import { createPartyDay, renameParty } from "@/app/actions";
 import { PartyInvite } from "@/components/party-invite";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SubmitButton } from "@/components/submit-button";
-import { DeletePartyButton, LeavePartyButton } from "@/components/danger-button";
+import {
+    DeletePartyButton,
+    LeavePartyButton,
+} from "@/components/danger-button";
 import { ChevronLeftIcon } from "@/components/icons";
 import {
     CATEGORY_LABEL,
@@ -41,31 +44,35 @@ export default async function PartyPage({
 
     const todayISO = await getUserToday();
 
-    const [{ data: party }, { data: members }, { data: invites }, { data: days }] =
-        await Promise.all([
-            supabase
-                .from("parties")
-                .select("id, name, created_by")
-                .eq("id", id)
-                .maybeSingle(),
-            supabase
-                .from("party_members")
-                .select("user_id, role, joined_at, profiles(display_name)")
-                .eq("party_id", id)
-                .order("joined_at"),
-            supabase
-                .from("party_invites")
-                .select("code")
-                .eq("party_id", id)
-                .limit(1),
-            supabase
-                .from("planned_days")
-                .select("id, date, category, planned_day_exercises(id)")
-                .eq("party_id", id)
-                .gte("date", todayISO)
-                .order("date")
-                .limit(10),
-        ]);
+    const [
+        { data: party },
+        { data: members },
+        { data: invites },
+        { data: days },
+    ] = await Promise.all([
+        supabase
+            .from("parties")
+            .select("id, name, created_by")
+            .eq("id", id)
+            .maybeSingle(),
+        supabase
+            .from("party_members")
+            .select("user_id, role, joined_at, profiles(display_name)")
+            .eq("party_id", id)
+            .order("joined_at"),
+        supabase
+            .from("party_invites")
+            .select("code")
+            .eq("party_id", id)
+            .limit(1),
+        supabase
+            .from("planned_days")
+            .select("id, date, category, planned_day_exercises(id)")
+            .eq("party_id", id)
+            .gte("date", todayISO)
+            .order("date")
+            .limit(10),
+    ]);
     if (!party) notFound();
 
     const isOwner = members?.some(
@@ -222,7 +229,11 @@ export default async function PartyPage({
                                         {formatLong(d.date)}
                                         <span
                                             className={`rounded-md border px-2 py-0.5 text-xs ${CATEGORY_STYLE[dayType(d.category)]}`}>
-                                            {CATEGORY_LABEL[dayType(d.category)]}
+                                            {
+                                                CATEGORY_LABEL[
+                                                    dayType(d.category)
+                                                ]
+                                            }
                                         </span>
                                     </span>
                                     <span className='text-xs text-text-muted'>
@@ -235,7 +246,6 @@ export default async function PartyPage({
                     </ul>
                 </div>
             )}
-
         </div>
     );
 }

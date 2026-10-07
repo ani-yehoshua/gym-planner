@@ -89,13 +89,19 @@ export default async function AccountPage() {
             </section>
 
             <section className={field}>
-                <TimezoneField current={profile?.timezone ?? "America/Chicago"} />
+                <TimezoneField
+                    current={profile?.timezone ?? "America/Chicago"}
+                />
             </section>
 
             {/* profile: name + email */}
             <section className='flex flex-col gap-4'>
-                <form action={updateDisplayName} className={field}>
-                    <label className={label} htmlFor='display_name'>
+                <form
+                    action={updateDisplayName}
+                    className={field}>
+                    <label
+                        className={label}
+                        htmlFor='display_name'>
                         Display name
                     </label>
                     <div className='flex items-center gap-2'>
@@ -322,7 +328,9 @@ export default async function AccountPage() {
 
             <section className='flex flex-col items-start gap-3 border-t border-border pt-6'>
                 <ReplayTourButton />
-                <form action='/auth/signout' method='post'>
+                <form
+                    action='/auth/signout'
+                    method='post'>
                     <button className='rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-500/20 dark:text-rose-300'>
                         Sign out
                     </button>

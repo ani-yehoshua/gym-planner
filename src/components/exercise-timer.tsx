@@ -58,7 +58,8 @@ export function ExerciseTimer({
         if (!running) return;
         runStartRef.current = performance.now();
         tickRef.current = setInterval(() => {
-            const ms = baseMsRef.current + (performance.now() - runStartRef.current);
+            const ms =
+                baseMsRef.current + (performance.now() - runStartRef.current);
             setElapsedMs(ms);
             if (ms >= targetSeconds * 1000 && !alertedRef.current) {
                 alertedRef.current = true;

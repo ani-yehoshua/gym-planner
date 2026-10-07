@@ -9,42 +9,41 @@ import { clearActiveSession } from "@/lib/active-session";
  *  calendar (anything you've logged stays), so it asks first. `redirectTo` is for use on
  *  a program day itself, which may be one of the days that just went away. */
 export function StopProgramButton({
-  label = "Stop program",
-  redirectTo,
-  className,
+    label = "Stop program",
+    redirectTo,
+    className,
 }: {
-  label?: string;
-  redirectTo?: string;
-  className?: string;
+    label?: string;
+    redirectTo?: string;
+    className?: string;
 }) {
-  const [pending, start] = useTransition();
-  const router = useRouter();
+    const [pending, start] = useTransition();
+    const router = useRouter();
 
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() => {
-        if (
-          !confirm(
-            "Stop this program? Its days with nothing logged will be removed from your calendar. Anything you've already logged stays.",
-          )
-        )
-          return;
-        start(async () => {
-          const { removedDayIds } = await stopProgram();
-          // the nav's "Resume" shortcut remembers the last day you had open;
-          // if that day just went away, forget it rather than link to a 404
-          for (const id of removedDayIds) clearActiveSession(id);
-          if (redirectTo) router.push(redirectTo);
-        });
-      }}
-      className={
-        className ??
-        "rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-500/20 disabled:opacity-50 dark:text-rose-300"
-      }
-    >
-      {pending ? "Stopping…" : label}
-    </button>
-  );
+    return (
+        <button
+            type='button'
+            disabled={pending}
+            onClick={() => {
+                if (
+                    !confirm(
+                        "Stop this program? Its days with nothing logged will be removed from your calendar. Anything you've already logged stays.",
+                    )
+                )
+                    return;
+                start(async () => {
+                    const { removedDayIds } = await stopProgram();
+                    // the nav's "Resume" shortcut remembers the last day you had open;
+                    // if that day just went away, forget it rather than link to a 404
+                    for (const id of removedDayIds) clearActiveSession(id);
+                    if (redirectTo) router.push(redirectTo);
+                });
+            }}
+            className={
+                className ??
+                "rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-500/20 disabled:opacity-50 dark:text-rose-300"
+            }>
+            {pending ? "Stopping…" : label}
+        </button>
+    );
 }
