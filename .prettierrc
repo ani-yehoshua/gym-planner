@@ -1,0 +1,13 @@
+{
+    "tabWidth": 4,
+    "jsxSingleQuote": true,
+    "singleAttributePerLine": true,
+    "arrowParens": "avoid",
+    "bracketSameLine": true,
+    "overrides": [
+        {
+            "files": ["*.ts", "*.js", "*.mjs", "*.cjs"],
+            "options": { "singleQuote": true }
+        }
+    ]
+}
