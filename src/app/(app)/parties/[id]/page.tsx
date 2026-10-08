@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createPartyDay, renameParty } from "@/app/actions";
+import { renameParty } from "@/app/actions";
+import { PartyPlanForm } from "@/components/party-plan-form";
 import { PartyInvite } from "@/components/party-invite";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SubmitButton } from "@/components/submit-button";
@@ -13,7 +14,7 @@ import { ChevronLeftIcon } from "@/components/icons";
 import {
     CATEGORY_LABEL,
     CATEGORY_STYLE,
-    DAY_PLAN_CHOICES,
+    PROGRAM_STYLE,
     dayType,
 } from "@/lib/labels";
 import { formatLong } from "@/lib/date";
@@ -49,6 +50,7 @@ export default async function PartyPage({
         { data: members },
         { data: invites },
         { data: days },
+        { data: programs },
     ] = await Promise.all([
         supabase
             .from("parties")
@@ -67,11 +69,14 @@ export default async function PartyPage({
             .limit(1),
         supabase
             .from("planned_days")
-            .select("id, date, category, planned_day_exercises(id)")
+            .select(
+                "id, date, category, label, program_day_number, programs(name), planned_day_exercises(id)",
+            )
             .eq("party_id", id)
             .gte("date", todayISO)
             .order("date")
             .limit(10),
+        supabase.from("programs").select("id, name").order("name"),
     ]);
     if (!party) notFound();
 
@@ -177,42 +182,11 @@ export default async function PartyPage({
                 </ul>
             </div>
 
-            <form
-                action={createPartyDay}
-                className='rounded-xl border border-border p-4'>
-                <span className='text-sm font-medium'>Plan a shared day</span>
-                <input
-                    type='hidden'
-                    name='party_id'
-                    value={id}
-                />
-                <div className='mt-2 flex flex-wrap gap-2'>
-                    <input
-                        type='date'
-                        name='date'
-                        required
-                        defaultValue={todayISO}
-                        className='rounded-lg border border-border bg-surface px-3 py-2 text-sm'
-                    />
-                    <select
-                        name='category'
-                        className='rounded-lg border border-border bg-surface px-3 py-2 text-sm'>
-                        <option value=''>Category…</option>
-                        {DAY_PLAN_CHOICES.map(c => (
-                            <option
-                                key={c}
-                                value={c}>
-                                {CATEGORY_LABEL[c]}
-                            </option>
-                        ))}
-                    </select>
-                    <SubmitButton
-                        pendingText='Opening…'
-                        className='rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50'>
-                        Open day
-                    </SubmitButton>
-                </div>
-            </form>
+            <PartyPlanForm
+                partyId={id}
+                defaultDate={todayISO}
+                programs={programs ?? []}
+            />
 
             {(days ?? []).length > 0 && (
                 <div>
@@ -227,14 +201,29 @@ export default async function PartyPage({
                                     className='flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface'>
                                     <span className='flex items-center gap-2'>
                                         {formatLong(d.date)}
-                                        <span
-                                            className={`rounded-md border px-2 py-0.5 text-xs ${CATEGORY_STYLE[dayType(d.category)]}`}>
-                                            {
-                                                CATEGORY_LABEL[
-                                                    dayType(d.category)
-                                                ]
-                                            }
-                                        </span>
+                                        {/* a program's day: the Program pill and
+                                            where it falls, like the Calendar */}
+                                        {d.programs && d.program_day_number ? (
+                                            <>
+                                                <span
+                                                    className={`rounded-md border px-2 py-0.5 text-xs ${PROGRAM_STYLE}`}>
+                                                    Program
+                                                </span>
+                                                <span className='text-xs text-text-muted'>
+                                                    Day {d.program_day_number}
+                                                    {d.label && ` - ${d.label}`}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span
+                                                className={`rounded-md border px-2 py-0.5 text-xs ${CATEGORY_STYLE[dayType(d.category)]}`}>
+                                                {
+                                                    CATEGORY_LABEL[
+                                                        dayType(d.category)
+                                                    ]
+                                                }
+                                            </span>
+                                        )}
                                     </span>
                                     <span className='text-xs text-text-muted'>
                                         {d.planned_day_exercises.length}{" "}

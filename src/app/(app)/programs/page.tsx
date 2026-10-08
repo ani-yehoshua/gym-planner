@@ -11,7 +11,7 @@ import { formatShort } from "@/lib/date";
 import { getUserToday } from "@/lib/user-today";
 
 const EXERCISE_FIELDS =
-    "id, name, category, primary_muscles, time_based, measurement, default_sets, default_rep_min, default_rep_max";
+    "id, name, category, primary_muscles, time_based, measurement, default_sets, default_rep_min, default_rep_max, variant_group, variant_label";
 
 export default async function ProgramsPage() {
     const supabase = await createClient();
@@ -25,7 +25,7 @@ export default async function ProgramsPage() {
         supabase
             .from("programs")
             .select(
-                `id, name, description, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(id, sort, sets, rep_min, rep_max, set_reps, superset_group, exercises(${EXERCISE_FIELDS})))`,
+                `id, name, description, difficulty, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(id, sort, sets, rep_min, rep_max, set_reps, superset_group, exercises(${EXERCISE_FIELDS})))`,
             )
             .order("name"),
         supabase

@@ -9,7 +9,10 @@ import { muscleList } from "@/lib/labels";
 import { toBlocks } from "@/lib/supersets";
 import {
     describeSets,
+    DIFFICULTY_LABEL,
+    DIFFICULTY_STYLE,
     durationLabel,
+    parseDifficulty,
     parseSetReps,
     programTotalDays,
 } from "@/lib/programs";
@@ -19,10 +22,10 @@ export default async function ProgramDetailPage({
     searchParams,
 }: {
     params: Promise<{ id: string }>;
-    searchParams: Promise<{ start?: string }>;
+    searchParams: Promise<{ start?: string; party?: string }>;
 }) {
     const { id } = await params;
-    const { start } = await searchParams;
+    const { start, party: partyParam } = await searchParams;
     const supabase = await createClient();
     const {
         data: { user },
@@ -34,7 +37,7 @@ export default async function ProgramDetailPage({
         supabase
             .from("programs")
             .select(
-                "id, name, description, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(id, sort, sets, rep_min, rep_max, set_reps, superset_group, exercises(id, name, primary_muscles, time_based, default_sets, default_rep_min, default_rep_max)))",
+                "id, name, description, difficulty, duration_unit, duration_count, program_days(id, position, name, is_rest, program_exercises(id, sort, sets, rep_min, rep_max, set_reps, superset_group, exercises(id, name, primary_muscles, time_based, default_sets, default_rep_min, default_rep_max)))",
             )
             .eq("id", id)
             .maybeSingle(),
@@ -46,6 +49,7 @@ export default async function ProgramDetailPage({
     ]);
     if (!program) notFound();
 
+    const difficulty = parseDifficulty(program.difficulty);
     const days = [...program.program_days].sort(
         (a, b) => a.position - b.position,
     );
@@ -58,7 +62,16 @@ export default async function ProgramDetailPage({
     const defaultStart = /^\d{4}-\d{2}-\d{2}$/.test(start ?? "")
         ? start!
         : todayISO;
-    const followingOther = run && run.program_id !== program.id;
+    // arriving from a party's "Plan session…": load it onto the party's
+    // calendar instead (parties are only visible to their members)
+    const { data: party } = partyParam
+        ? await supabase
+              .from("parties")
+              .select("id, name")
+              .eq("id", partyParam)
+              .maybeSingle()
+        : { data: null };
+    const followingOther = !party && run && run.program_id !== program.id;
 
     return (
         <div className='flex flex-col gap-4'>
@@ -72,11 +85,19 @@ export default async function ProgramDetailPage({
             <div>
                 <div className='flex items-start justify-between gap-2'>
                     <h1 className='text-lg font-semibold'>{program.name}</h1>
-                    <span className='shrink-0 rounded-md border border-border px-1.5 py-0.5 text-xs text-text-muted'>
-                        {durationLabel(
-                            program.duration_unit,
-                            program.duration_count,
+                    <span className='flex shrink-0 items-center gap-1.5'>
+                        {difficulty && (
+                            <span
+                                className={`rounded-md border px-1.5 py-0.5 text-xs ${DIFFICULTY_STYLE[difficulty]}`}>
+                                {DIFFICULTY_LABEL[difficulty]}
+                            </span>
                         )}
+                        <span className='rounded-md border border-border px-1.5 py-0.5 text-xs text-text-muted'>
+                            {durationLabel(
+                                program.duration_unit,
+                                program.duration_count,
+                            )}
+                        </span>
                     </span>
                 </div>
                 <p className='text-xs text-text-muted'>
@@ -221,7 +242,18 @@ export default async function ProgramDetailPage({
                     name='program_id'
                     value={program.id}
                 />
-                <span className='text-sm font-medium'>Start this program</span>
+                {party && (
+                    <input
+                        type='hidden'
+                        name='party_id'
+                        value={party.id}
+                    />
+                )}
+                <span className='text-sm font-medium'>
+                    {party
+                        ? `Start this program for ${party.name}`
+                        : "Start this program"}
+                </span>
                 <label className='flex items-center gap-2 text-sm text-text-muted'>
                     Starting
                     <input
@@ -238,8 +270,10 @@ export default async function ProgramDetailPage({
                         program.duration_unit,
                         program.duration_count,
                     )}
-                    . Every training day is added to your calendar with its
-                    exercises, sets and target reps; rest days stay empty.
+                    .{" "}
+                    {party
+                        ? `Every training day is added to ${party.name} as a shared day for everyone in the party, with its exercises, sets and target reps; rest days stay empty. Each member logs to their own profile, and days come off one at a time.`
+                        : "Every training day is added to your calendar with its exercises, sets and target reps; rest days stay empty."}
                     {followingOther &&
                         ` This replaces ${run.programs?.name ?? "the program"} as the one you're following — days it already added stay on your calendar.`}
                 </p>

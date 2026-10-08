@@ -219,6 +219,8 @@ export type Database = {
           primary_muscles: string[]
           secondary_muscles: string[]
           time_based: boolean
+          variant_group: string | null
+          variant_label: string | null
           weighted: boolean
         }
         Insert: {
@@ -239,6 +241,8 @@ export type Database = {
           primary_muscles?: string[]
           secondary_muscles?: string[]
           time_based?: boolean
+          variant_group?: string | null
+          variant_label?: string | null
           weighted?: boolean
         }
         Update: {
@@ -259,6 +263,8 @@ export type Database = {
           primary_muscles?: string[]
           secondary_muscles?: string[]
           time_based?: boolean
+          variant_group?: string | null
+          variant_label?: string | null
           weighted?: boolean
         }
         Relationships: [
@@ -622,6 +628,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          difficulty: string | null
           duration_count: number
           duration_unit: string
           id: string
@@ -631,6 +638,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          difficulty?: string | null
           duration_count?: number
           duration_unit?: string
           id?: string
@@ -640,6 +648,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          difficulty?: string | null
           duration_count?: number
           duration_unit?: string
           id?: string
@@ -1037,6 +1046,7 @@ export type Database = {
         | "back"
         | "shoulders"
         | "arms"
+        | "one_rm"
       muscle_group:
         | "chest"
         | "back"
@@ -1207,6 +1217,7 @@ export const Constants = {
         "back",
         "shoulders",
         "arms",
+        "one_rm",
       ],
       muscle_group: [
         "chest",

@@ -30,6 +30,20 @@ export function ExerciseSearch({ children }: { children: React.ReactNode }) {
                     item.hidden = !match;
                     if (match) anyVisible = true;
                 });
+            // a grip-variant entry (e.g. "Lat Pulldown") follows its grips:
+            // hidden when none match, and opened while searching
+            group
+                .querySelectorAll<HTMLElement>("[data-variant-group]")
+                .forEach(variants => {
+                    const anyMatch = Array.from(
+                        variants.querySelectorAll<HTMLElement>(
+                            "[data-exercise-name]",
+                        ),
+                    ).some(item => !item.hidden);
+                    variants.hidden = !anyMatch;
+                    const details = variants.querySelector("details");
+                    if (details) details.open = needle.length > 0;
+                });
             group.hidden = !anyVisible;
             group.open = needle.length > 0;
         });

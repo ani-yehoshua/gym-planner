@@ -28,6 +28,16 @@ export function RealtimeRefresh({
                 },
                 () => router.refresh(),
             );
+            // A filtered subscription never sees DELETEs (Postgres only sends
+            // the deleted row's primary key, so there's nothing to filter on).
+            // Listen for deletes on the table as a whole; a refresh is cheap.
+            if (t.filter) {
+                ch = ch.on(
+                    "postgres_changes",
+                    { event: "DELETE", schema: "public", table: t.table },
+                    () => router.refresh(),
+                );
+            }
         }
         ch.subscribe();
         return () => {

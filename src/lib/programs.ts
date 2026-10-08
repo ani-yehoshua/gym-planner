@@ -2,6 +2,34 @@ import { addDays } from './date';
 
 export type DurationUnit = 'days' | 'weeks';
 
+export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
+export const DIFFICULTIES: readonly Difficulty[] = [
+    'beginner',
+    'intermediate',
+    'advanced',
+];
+export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
+    beginner: 'Beginner',
+    intermediate: 'Intermediate',
+    advanced: 'Advanced',
+};
+// tinted pills in the same style as the session-type chips
+export const DIFFICULTY_STYLE: Record<Difficulty, string> = {
+    beginner:
+        'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+    intermediate:
+        'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+    advanced:
+        'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
+};
+
+/** A difficulty out of a database / form value, or null if it isn't one. */
+export function parseDifficulty(value: unknown): Difficulty | null {
+    return DIFFICULTIES.includes(value as Difficulty)
+        ? (value as Difficulty)
+        : null;
+}
+
 /** The rep range for one set. */
 export type SetRep = { min: number | null; max: number | null };
 
@@ -14,6 +42,7 @@ export type ProgramInput = {
     description: string;
     durationUnit: DurationUnit;
     durationCount: number;
+    difficulty: Difficulty | null;
     days: {
         name: string;
         isRest: boolean;

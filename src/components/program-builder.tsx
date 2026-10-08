@@ -4,11 +4,16 @@ import { useState, useTransition } from "react";
 import { saveProgram } from "@/app/actions";
 import { TrashIcon } from "@/components/icons";
 import { announceSave } from "@/components/save-pill";
+import { GroupedExerciseList } from "@/components/grouped-exercise-list";
 import { CATEGORY_LABEL, CATEGORY_ORDER, muscleList } from "@/lib/labels";
 import {
     clampDuration,
+    DIFFICULTIES,
+    DIFFICULTY_LABEL,
+    DIFFICULTY_STYLE,
     programTotalDays,
     repsForSet,
+    type Difficulty,
     type DurationUnit,
     type SetRep,
 } from "@/lib/programs";
@@ -35,6 +40,8 @@ export type BuilderExercise = {
     default_sets: number | null;
     default_rep_min: number | null;
     default_rep_max: number | null;
+    variant_group: string | null;
+    variant_label: string | null;
 };
 
 /** A saved program, as the builder is handed it when editing. */
@@ -44,6 +51,7 @@ export type InitialProgram = {
     description: string;
     durationUnit: DurationUnit;
     durationCount: number;
+    difficulty: Difficulty | null;
     days: {
         name: string;
         isRest: boolean;
@@ -118,6 +126,9 @@ export function ProgramBuilder({
         initial?.durationUnit ?? "weeks",
     );
     const [count, setCount] = useState(String(initial?.durationCount ?? 4));
+    const [difficulty, setDifficulty] = useState<Difficulty | null>(
+        initial?.difficulty ?? null,
+    );
     const [days, setDays] = useState<DraftDay[]>(fromInitial);
     const [pickerDay, setPickerDay] = useState<string | null>(null);
     // exercises ticked to be made into a superset (or taken out of one)
@@ -283,6 +294,7 @@ export function ProgramBuilder({
                     description,
                     durationUnit: unit,
                     durationCount: n,
+                    difficulty,
                     days: days.map(d => ({
                         name: d.name,
                         isRest: d.isRest,
@@ -339,6 +351,29 @@ export function ProgramBuilder({
                 placeholder='What it is, who it’s for…'
                 className={inp}
             />
+
+            {/* difficulty: Beginner / Intermediate / Advanced (tap again to clear) */}
+            <div className='flex flex-wrap items-center gap-2 text-sm'>
+                <span className='text-text-muted'>Difficulty</span>
+                <div className='flex flex-wrap gap-1.5'>
+                    {DIFFICULTIES.map(dl => (
+                        <button
+                            key={dl}
+                            type='button'
+                            aria-pressed={difficulty === dl}
+                            onClick={() =>
+                                setDifficulty(difficulty === dl ? null : dl)
+                            }
+                            className={`rounded-md border px-2.5 py-1 text-xs ${
+                                difficulty === dl
+                                    ? DIFFICULTY_STYLE[dl]
+                                    : "border-border text-text-muted hover:border-text-muted"
+                            }`}>
+                            {DIFFICULTY_LABEL[dl]}
+                        </button>
+                    ))}
+                </div>
+            </div>
 
             {/* duration */}
             <div className='flex flex-wrap items-center gap-2 text-sm'>
@@ -876,30 +911,42 @@ export function ProgramBuilder({
                                                             </span>
                                                         </summary>
                                                         <ul className='border-t border-border p-1'>
-                                                            {g.items.map(c => (
-                                                                <li key={c.id}>
-                                                                    <button
-                                                                        type='button'
-                                                                        onClick={() =>
-                                                                            addExercise(
-                                                                                d.key,
-                                                                                c,
-                                                                            )
-                                                                        }
-                                                                        className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2'>
-                                                                        <span>
-                                                                            {
-                                                                                c.name
+                                                            <GroupedExerciseList
+                                                                items={g.items}
+                                                                open={
+                                                                    query.length >
+                                                                    0
+                                                                }
+                                                                renderItem={(
+                                                                    c,
+                                                                    label,
+                                                                ) => (
+                                                                    <li
+                                                                        key={
+                                                                            c.id
+                                                                        }>
+                                                                        <button
+                                                                            type='button'
+                                                                            onClick={() =>
+                                                                                addExercise(
+                                                                                    d.key,
+                                                                                    c,
+                                                                                )
                                                                             }
-                                                                        </span>
-                                                                        <span className='text-xs text-text-muted'>
-                                                                            {muscleList(
-                                                                                c.primary_muscles,
-                                                                            )}
-                                                                        </span>
-                                                                    </button>
-                                                                </li>
-                                                            ))}
+                                                                            className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2'>
+                                                                            <span>
+                                                                                {label ??
+                                                                                    c.name}
+                                                                            </span>
+                                                                            <span className='text-xs text-text-muted'>
+                                                                                {muscleList(
+                                                                                    c.primary_muscles,
+                                                                                )}
+                                                                            </span>
+                                                                        </button>
+                                                                    </li>
+                                                                )}
+                                                            />
                                                         </ul>
                                                     </details>
                                                 ))}

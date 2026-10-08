@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import {
     addExerciseToDay,
     logSet,
+    makeDaySuperset,
     removeDayExercise,
+    removeFromDaySuperset,
     reorderDayExercise,
     saveExerciseNote,
     setDayCategory,
@@ -19,6 +21,7 @@ import {
 } from "@/app/actions";
 import { formatShort } from "@/lib/date";
 import { formatDuration, parseDuration } from "@/lib/duration";
+import { GroupedExerciseList } from "@/components/grouped-exercise-list";
 import { toBlocks } from "@/lib/supersets";
 import {
     formatRepRange,
@@ -69,6 +72,9 @@ type CatalogItem = {
     weighted: boolean;
     measurement: Measurement;
     default_distance: number | null;
+    /** grip variants of one lift share a group name (e.g. "Lat Pulldown") */
+    variant_group: string | null;
+    variant_label: string | null;
 };
 type DayEx = {
     id: string;
@@ -225,6 +231,8 @@ export default function DayEditor({
         Record<string, boolean>
     >({});
     const [swapId, setSwapId] = useState<string | null>(null);
+    // exercises ticked to be made into a superset (or taken out of one)
+    const [selected, setSelected] = useState<string[]>([]);
     const [swapQuery, setSwapQuery] = useState("");
     const weightInputRefs = useRef(new Map<string, HTMLInputElement>());
     // deload % typed per exercise — purely a live calculator, nothing here
@@ -306,6 +314,16 @@ export default function DayEditor({
     }, [day.id, day.date, day.category, day.exercises, sessionEligible]);
 
     // ---- realtime: refresh when a party-mate changes this day ----------------
+    // Postgres only sends a deleted row's primary key, so the planned_day_id
+    // filter below can never match a DELETE and those events were dropped (a
+    // party-mate removing an exercise didn't show up here). Deletes are
+    // listened for unfiltered instead and matched by id against what's on
+    // screen.
+    const exerciseIds = useRef(new Set<string>());
+    useEffect(() => {
+        exerciseIds.current = new Set(day.exercises.map(e => e.id));
+    }, [day.exercises]);
+
     useEffect(() => {
         if (!day.partyId) return;
         const supabase = createClient();
@@ -320,6 +338,28 @@ export default function DayEditor({
                     filter: `planned_day_id=eq.${day.id}`,
                 },
                 () => router.refresh(),
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "DELETE",
+                    schema: "public",
+                    table: "planned_day_exercises",
+                },
+                payload => {
+                    const id = (payload.old as { id?: string }).id;
+                    if (id && exerciseIds.current.has(id)) router.refresh();
+                },
+            )
+            .on(
+                "postgres_changes",
+                { event: "DELETE", schema: "public", table: "planned_days" },
+                payload => {
+                    // the whole day was deleted: re-rendering lands on the
+                    // "not on your calendar" page
+                    if ((payload.old as { id?: string }).id === day.id)
+                        router.refresh();
+                },
             )
             .on(
                 "postgres_changes",
@@ -470,6 +510,17 @@ export default function DayEditor({
             if (w > top) top = w;
         }
         return { volume, top };
+    }
+    /** Heaviest set of exactly 1 rep in this member's entries — a max attempt. */
+    function bestSingle(ex: DayEx) {
+        let best = 0;
+        for (let s = 1; s <= rowsFor(ex); s++) {
+            const c = values.get(`${ex.id}:${s}`);
+            if (!c || c.reps.trim() !== "1") continue;
+            const w = Number(c.weight);
+            if (w > best) best = w;
+        }
+        return best;
     }
     function otherStats(pdeId: string, userId: string) {
         let volume = 0;
@@ -648,6 +699,15 @@ export default function DayEditor({
                     : "Mark as deload day"}
             </button>
 
+            {day.category === "one_rm" && (
+                <p className='rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-muted'>
+                    <span className='font-semibold text-text'>1RM day.</span>{" "}
+                    Work up to one heavy single on each lift and log it as{" "}
+                    <span className='text-text'>1 rep</span>. Your heaviest
+                    single is saved as that lift&apos;s 1RM.
+                </p>
+            )}
+
             <div className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
                 {/* party progress */}
                 {day.partyId && members.length > 1 && (
@@ -705,6 +765,50 @@ export default function DayEditor({
             </div>
 
             {/* exercises */}
+            {(() => {
+                // exercises that came from a program keep the program's grouping
+                const ticked = day.exercises.filter(
+                    e => selected.includes(e.id) && !e.fromProgram,
+                );
+                if (ticked.length === 0) return null;
+                const ids = ticked.map(e => e.id);
+                return (
+                    <div className='flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs'>
+                        <span className='text-text-muted'>
+                            {ticked.length} selected
+                        </span>
+                        <button
+                            type='button'
+                            disabled={ticked.length < 2}
+                            onClick={() => {
+                                startQuiet(() => makeDaySuperset(day.id, ids));
+                                setSelected([]);
+                            }}
+                            className='rounded-md border border-amber-400/70 bg-amber-400/20 px-2 py-1 font-medium text-amber-700 hover:bg-amber-400/30 disabled:opacity-40 dark:text-amber-300'>
+                            Make superset
+                        </button>
+                        {ticked.some(e => e.supersetGroup != null) && (
+                            <button
+                                type='button'
+                                onClick={() => {
+                                    startQuiet(() =>
+                                        removeFromDaySuperset(day.id, ids),
+                                    );
+                                    setSelected([]);
+                                }}
+                                className='rounded-md border border-border px-2 py-1 text-text-muted hover:text-text'>
+                                Remove from superset
+                            </button>
+                        )}
+                        <button
+                            type='button'
+                            onClick={() => setSelected([])}
+                            className='text-text-muted hover:text-text'>
+                            Clear
+                        </button>
+                    </div>
+                );
+            })()}
             <ul className='flex flex-col gap-4'>
                 {toBlocks(
                     day.exercises.map(e => ({ group: e.supersetGroup, e })),
@@ -788,6 +892,23 @@ export default function DayEditor({
                                 data-ex-id={ex.id}
                                 className='rounded-xl border border-border p-3'>
                                 <div className='flex items-start justify-between gap-2'>
+                                    {!ex.fromProgram && (
+                                        <input
+                                            type='checkbox'
+                                            checked={selected.includes(ex.id)}
+                                            onChange={() =>
+                                                setSelected(sel =>
+                                                    sel.includes(ex.id)
+                                                        ? sel.filter(
+                                                              k => k !== ex.id,
+                                                          )
+                                                        : [...sel, ex.id],
+                                                )
+                                            }
+                                            aria-label={`Select ${ex.exercise.name} for a superset`}
+                                            className='mt-1 h-4 w-4 shrink-0 accent-amber-500'
+                                        />
+                                    )}
                                     <button
                                         onClick={() =>
                                             setExpanded(p => ({
@@ -939,28 +1060,39 @@ export default function DayEditor({
                                                         </span>
                                                     </summary>
                                                     <ul className='border-t border-border p-1'>
-                                                        {g.items.map(c => (
-                                                            <li key={c.id}>
-                                                                <button
-                                                                    onClick={() =>
-                                                                        trySwap(
-                                                                            ex.id,
-                                                                            c,
-                                                                            swapLogged,
-                                                                        )
-                                                                    }
-                                                                    className='flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2'>
-                                                                    <span>
-                                                                        {c.name}
-                                                                    </span>
-                                                                    <span className='text-xs text-text-muted'>
-                                                                        {muscleList(
-                                                                            c.primary_muscles,
-                                                                        )}
-                                                                    </span>
-                                                                </button>
-                                                            </li>
-                                                        ))}
+                                                        <GroupedExerciseList
+                                                            items={g.items}
+                                                            open={
+                                                                swapQuery.length >
+                                                                0
+                                                            }
+                                                            renderItem={(
+                                                                c,
+                                                                label,
+                                                            ) => (
+                                                                <li key={c.id}>
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            trySwap(
+                                                                                ex.id,
+                                                                                c,
+                                                                                swapLogged,
+                                                                            )
+                                                                        }
+                                                                        className='flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2'>
+                                                                        <span>
+                                                                            {label ??
+                                                                                c.name}
+                                                                        </span>
+                                                                        <span className='text-xs text-text-muted'>
+                                                                            {muscleList(
+                                                                                c.primary_muscles,
+                                                                            )}
+                                                                        </span>
+                                                                    </button>
+                                                                </li>
+                                                            )}
+                                                        />
                                                     </ul>
                                                 </details>
                                             ))}
@@ -1011,8 +1143,18 @@ export default function DayEditor({
                                                                     </span>
                                                                 </summary>
                                                                 <ul className='border-t border-border p-1'>
-                                                                    {g.items.map(
-                                                                        c => (
+                                                                    <GroupedExerciseList
+                                                                        items={
+                                                                            g.items
+                                                                        }
+                                                                        open={
+                                                                            swapQuery.length >
+                                                                            0
+                                                                        }
+                                                                        renderItem={(
+                                                                            c,
+                                                                            label,
+                                                                        ) => (
                                                                             <li
                                                                                 key={
                                                                                     c.id
@@ -1027,9 +1169,8 @@ export default function DayEditor({
                                                                                     }
                                                                                     className='flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm text-text-muted hover:bg-surface-2'>
                                                                                     <span>
-                                                                                        {
-                                                                                            c.name
-                                                                                        }
+                                                                                        {label ??
+                                                                                            c.name}
                                                                                     </span>
                                                                                     <span className='text-xs'>
                                                                                         {muscleList(
@@ -1038,8 +1179,8 @@ export default function DayEditor({
                                                                                     </span>
                                                                                 </button>
                                                                             </li>
-                                                                        ),
-                                                                    )}
+                                                                        )}
+                                                                    />
                                                                 </ul>
                                                             </details>
                                                         ),
@@ -1567,6 +1708,17 @@ export default function DayEditor({
                                 </div>
 
                                 <div className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted'>
+                                    {day.category === "one_rm" &&
+                                        bestSingle(ex) > 0 && (
+                                            <span>
+                                                1RM today{" "}
+                                                <span className='font-semibold text-text'>
+                                                    {bestSingle(ex)} {u}
+                                                </span>{" "}
+                                                · saved to your{" "}
+                                                {ex.exercise.name} 1RM
+                                            </span>
+                                        )}
                                     <span>
                                         Your top set{" "}
                                         <span className='text-text'>
@@ -1744,20 +1896,26 @@ export default function DayEditor({
                                     </span>
                                 </summary>
                                 <ul className='border-t border-border p-1'>
-                                    {g.items.map(c => (
-                                        <li key={c.id}>
-                                            <button
-                                                onClick={() => tryAdd(c)}
-                                                className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2'>
-                                                <span>{c.name}</span>
-                                                <span className='text-xs text-text-muted'>
-                                                    {muscleList(
-                                                        c.primary_muscles,
-                                                    )}
-                                                </span>
-                                            </button>
-                                        </li>
-                                    ))}
+                                    <GroupedExerciseList
+                                        items={g.items}
+                                        open={query.length > 0}
+                                        renderItem={(c, label) => (
+                                            <li key={c.id}>
+                                                <button
+                                                    onClick={() => tryAdd(c)}
+                                                    className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2'>
+                                                    <span>
+                                                        {label ?? c.name}
+                                                    </span>
+                                                    <span className='text-xs text-text-muted'>
+                                                        {muscleList(
+                                                            c.primary_muscles,
+                                                        )}
+                                                    </span>
+                                                </button>
+                                            </li>
+                                        )}
+                                    />
                                 </ul>
                             </details>
                         ))}
@@ -1785,22 +1943,29 @@ export default function DayEditor({
                                             </span>
                                         </summary>
                                         <ul className='border-t border-border p-1'>
-                                            {g.items.map(c => (
-                                                <li key={c.id}>
-                                                    <button
-                                                        onClick={() =>
-                                                            tryAdd(c)
-                                                        }
-                                                        className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm text-text-muted hover:bg-surface-2'>
-                                                        <span>{c.name}</span>
-                                                        <span className='text-xs'>
-                                                            {muscleList(
-                                                                c.primary_muscles,
-                                                            )}
-                                                        </span>
-                                                    </button>
-                                                </li>
-                                            ))}
+                                            <GroupedExerciseList
+                                                items={g.items}
+                                                open={query.length > 0}
+                                                renderItem={(c, label) => (
+                                                    <li key={c.id}>
+                                                        <button
+                                                            onClick={() =>
+                                                                tryAdd(c)
+                                                            }
+                                                            className='flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm text-text-muted hover:bg-surface-2'>
+                                                            <span>
+                                                                {label ??
+                                                                    c.name}
+                                                            </span>
+                                                            <span className='text-xs'>
+                                                                {muscleList(
+                                                                    c.primary_muscles,
+                                                                )}
+                                                            </span>
+                                                        </button>
+                                                    </li>
+                                                )}
+                                            />
                                         </ul>
                                     </details>
                                 ))}

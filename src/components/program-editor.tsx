@@ -5,7 +5,12 @@ import {
     type InitialProgram,
 } from "@/components/program-builder";
 import { SubmitButton } from "@/components/submit-button";
-import { durationLabel, parseSetReps, type DurationUnit } from "@/lib/programs";
+import {
+    durationLabel,
+    parseDifficulty,
+    parseSetReps,
+    type DurationUnit,
+} from "@/lib/programs";
 
 export type EditableProgram = {
     id: string;
@@ -13,6 +18,7 @@ export type EditableProgram = {
     description: string | null;
     duration_unit: string;
     duration_count: number;
+    difficulty: string | null;
     program_days: {
         id: string;
         position: number;
@@ -40,6 +46,7 @@ function toInitial(p: EditableProgram): InitialProgram {
             ? "days"
             : "weeks") as DurationUnit,
         durationCount: p.duration_count,
+        difficulty: parseDifficulty(p.difficulty),
         days: [...p.program_days]
             .sort((a, b) => a.position - b.position)
             .map(d => ({

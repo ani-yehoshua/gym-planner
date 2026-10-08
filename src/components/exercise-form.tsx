@@ -39,6 +39,8 @@ export type ExerciseFormValues = {
     measurement: Measurement;
     time_based: boolean;
     weighted: boolean;
+    variant_group: string | null;
+    variant_label: string | null;
 };
 
 const toInput = (ms: string[]) => ms.map(muscleLabel).join(", ");
@@ -229,6 +231,28 @@ export function ExerciseForm({
                     />
                 </label>
             )}
+
+            {/* grip variants of one lift read as a single entry in the lists */}
+            <div className='flex flex-col gap-1 text-xs text-text-muted'>
+                Grip variant (optional)
+                <div className='flex gap-2'>
+                    <input
+                        name='variant_group'
+                        defaultValue={exercise?.variant_group ?? ""}
+                        placeholder='Lift — e.g. Lat Pulldown'
+                        className={`${inp} min-w-0 flex-1`}
+                    />
+                    <input
+                        name='variant_label'
+                        defaultValue={exercise?.variant_label ?? ""}
+                        placeholder='Grip — e.g. Wide'
+                        className={`${inp} min-w-0 flex-1`}
+                    />
+                </div>
+                <span>
+                    Exercises sharing the lift name are grouped under it.
+                </span>
+            </div>
 
             <label className='flex flex-col gap-1 text-xs text-text-muted'>
                 How to do it

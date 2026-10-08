@@ -1,10 +1,16 @@
 import Link from "next/link";
-import { durationLabel } from "@/lib/programs";
+import {
+    DIFFICULTY_LABEL,
+    DIFFICULTY_STYLE,
+    durationLabel,
+    parseDifficulty,
+} from "@/lib/programs";
 
 export type ProgramSummary = {
     id: string;
     name: string;
     description: string | null;
+    difficulty: string | null;
     duration_unit: string;
     duration_count: number;
     program_days: {
@@ -27,6 +33,7 @@ export function ProgramCard({ program }: { program: ProgramSummary }) {
         .map(d => d.name)
         .join(" · ");
     const more = training.length - 4;
+    const difficulty = parseDifficulty(program.difficulty);
 
     return (
         <Link
@@ -34,11 +41,19 @@ export function ProgramCard({ program }: { program: ProgramSummary }) {
             className='flex flex-col gap-2 rounded-xl border border-border p-4 hover:bg-surface'>
             <div className='flex items-start justify-between gap-2'>
                 <span className='font-medium'>{program.name}</span>
-                <span className='shrink-0 rounded-md border border-border px-1.5 py-0.5 text-xs text-text-muted'>
-                    {durationLabel(
-                        program.duration_unit,
-                        program.duration_count,
+                <span className='flex shrink-0 items-center gap-1.5'>
+                    {difficulty && (
+                        <span
+                            className={`rounded-md border px-1.5 py-0.5 text-xs ${DIFFICULTY_STYLE[difficulty]}`}>
+                            {DIFFICULTY_LABEL[difficulty]}
+                        </span>
                     )}
+                    <span className='rounded-md border border-border px-1.5 py-0.5 text-xs text-text-muted'>
+                        {durationLabel(
+                            program.duration_unit,
+                            program.duration_count,
+                        )}
+                    </span>
                 </span>
             </div>
             {program.description && (

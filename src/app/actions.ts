@@ -8,7 +8,14 @@ import { DEFAULT_SETS } from '@/lib/targets';
 import { distanceUnitLabel } from '@/lib/units';
 import { getUserToday } from '@/lib/user-today';
 import {
+    makeSuperset,
+    moveItem,
+    normalizeGroups,
+    ungroup,
+} from '@/lib/supersets';
+import {
     clampDuration,
+    parseDifficulty,
     parseSetReps,
     programEndDate,
     programTotalDays,
@@ -390,6 +397,11 @@ function exerciseFieldsFromForm(formData: FormData) {
         time_based:
             measurement === 'time' || measurement === 'time_or_distance',
         weighted: formData.get('weighted') === 'true',
+        // grip variants of one lift share a group name; both blank = not one
+        variant_group:
+            String(formData.get('variant_group') || '').trim() || null,
+        variant_label:
+            String(formData.get('variant_label') || '').trim() || null,
     };
 }
 
@@ -906,44 +918,92 @@ export async function updateDayExerciseTarget(input: {
     revalidatePath(`/day/${input.dayId}`);
 }
 
+/** A day's exercises in order, each with the superset group it belongs to. */
+async function loadDayOrder(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    dayId: string,
+) {
+    const { data } = await supabase
+        .from('planned_day_exercises')
+        .select('id, sort, superset_group, created_at')
+        .eq('planned_day_id', dayId)
+        .order('sort')
+        .order('created_at');
+    return (data ?? []).map(r => ({
+        id: r.id,
+        sort: r.sort,
+        group: r.superset_group,
+    }));
+}
+
+/** Write back a new order / grouping, touching only the rows that changed.
+ *  Every sort is rewritten to its 0..n-1 index so equal or gapped values can't
+ *  make a move a no-op. */
+async function saveDayOrder(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    before: { id: string; sort: number; group: number | null }[],
+    after: { id: string; group: number | null }[],
+) {
+    await Promise.all(
+        after.flatMap((r, idx) => {
+            const prev = before.find(b => b.id === r.id);
+            if (prev && prev.sort === idx && prev.group === r.group) return [];
+            return [
+                supabase
+                    .from('planned_day_exercises')
+                    .update({ sort: idx, superset_group: r.group })
+                    .eq('id', r.id),
+            ];
+        }),
+    );
+}
+
+/** Move one exercise up or down. Supersets stay intact: inside one it reorders
+ *  within it, and at its edge the whole superset moves (see lib/supersets). */
 export async function reorderDayExercise(
     pdeId: string,
     dayId: string,
     dir: -1 | 1,
 ) {
     const { supabase } = await requireUser();
-    const { data: rows } = await supabase
-        .from('planned_day_exercises')
-        .select('id, sort, created_at')
-        .eq('planned_day_id', dayId)
-        .order('sort')
-        .order('created_at');
-    if (!rows) return;
-
+    const rows = await loadDayOrder(supabase, dayId);
     const i = rows.findIndex(r => r.id === pdeId);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= rows.length) return;
-
-    // move in the array, then rewrite every sort to its new 0..n-1 index so equal
-    // or gapped sort values can't make a swap a no-op
-    const [moved] = rows.splice(i, 1);
-    rows.splice(j, 0, moved);
-    await Promise.all(
-        rows.map((r, idx) =>
-            r.sort === idx
-                ? Promise.resolve()
-                : supabase
-                      .from('planned_day_exercises')
-                      .update({ sort: idx })
-                      .eq('id', r.id),
-        ),
-    );
+    if (i < 0) return;
+    await saveDayOrder(supabase, rows, moveItem(rows, i, dir));
     revalidatePath(`/day/${dayId}`);
 }
 
 export async function removeDayExercise(pdeId: string, dayId: string) {
     const { supabase } = await requireUser();
     await supabase.from('planned_day_exercises').delete().eq('id', pdeId);
+    // a superset left with a single exercise isn't one any more
+    const rows = await loadDayOrder(supabase, dayId);
+    await saveDayOrder(supabase, rows, normalizeGroups(rows));
+    revalidatePath(`/day/${dayId}`);
+}
+
+/** Make the given exercises of a day a superset: gathered next to each other
+ *  (at the first one's place) and outlined together. */
+export async function makeDaySuperset(dayId: string, pdeIds: string[]) {
+    const { supabase } = await requireUser();
+    const rows = await loadDayOrder(supabase, dayId);
+    const picked = new Set(pdeIds);
+    const selected = new Set(
+        rows.flatMap((r, i) => (picked.has(r.id) ? [i] : [])),
+    );
+    await saveDayOrder(supabase, rows, makeSuperset(rows, selected));
+    revalidatePath(`/day/${dayId}`);
+}
+
+/** Take the given exercises of a day out of their supersets. */
+export async function removeFromDaySuperset(dayId: string, pdeIds: string[]) {
+    const { supabase } = await requireUser();
+    const rows = await loadDayOrder(supabase, dayId);
+    const picked = new Set(pdeIds);
+    const selected = new Set(
+        rows.flatMap((r, i) => (picked.has(r.id) ? [i] : [])),
+    );
+    await saveDayOrder(supabase, rows, ungroup(rows, selected));
     revalidatePath(`/day/${dayId}`);
 }
 
@@ -1055,7 +1115,68 @@ export async function logSet(input: {
             { onConflict: 'planned_day_exercise_id,user_id,set_no' },
         );
     }
+
+    // On a 1RM day a logged single is a max attempt: remember the heaviest one
+    // as this lift's 1RM.
+    if (input.reps === 1) {
+        await saveOneRepMax(supabase, user.id, input.dayId, input.pdeId);
+    }
     revalidatePath(`/day/${input.dayId}`);
+}
+
+/** On a 1RM day, your heaviest single (a set of exactly 1 rep) on an exercise
+ *  becomes its saved 1RM — what the Exercises tab shows as "est. 1RM". Leaves
+ *  the member's other saved defaults for that exercise alone. */
+async function saveOneRepMax(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    userId: string,
+    dayId: string,
+    pdeId: string,
+) {
+    const { data: day } = await supabase
+        .from('planned_days')
+        .select('category')
+        .eq('id', dayId)
+        .maybeSingle();
+    if (day?.category !== 'one_rm') return;
+
+    const [{ data: pde }, { data: singles }] = await Promise.all([
+        supabase
+            .from('planned_day_exercises')
+            .select('exercise_id')
+            .eq('id', pdeId)
+            .maybeSingle(),
+        supabase
+            .from('set_logs')
+            .select('weight')
+            .eq('planned_day_exercise_id', pdeId)
+            .eq('user_id', userId)
+            .eq('reps', 1)
+            .not('weight', 'is', null),
+    ]);
+    const best = Math.max(0, ...(singles ?? []).map(s => s.weight ?? 0));
+    if (!pde || best <= 0) return;
+
+    const { data: existing } = await supabase
+        .from('user_exercise_prefs')
+        .select('exercise_id')
+        .eq('user_id', userId)
+        .eq('exercise_id', pde.exercise_id)
+        .maybeSingle();
+    if (existing) {
+        await supabase
+            .from('user_exercise_prefs')
+            .update({ default_1rm: best })
+            .eq('user_id', userId)
+            .eq('exercise_id', pde.exercise_id);
+    } else {
+        await supabase.from('user_exercise_prefs').insert({
+            user_id: userId,
+            exercise_id: pde.exercise_id,
+            default_1rm: best,
+        });
+    }
+    revalidatePath('/exercises');
 }
 
 // ---------------------------------------------------------------------------
@@ -1399,6 +1520,7 @@ export async function saveProgram(
         description: input.description.trim() || null,
         duration_unit: unit,
         duration_count: clampDuration(unit, input.durationCount),
+        difficulty: parseDifficulty(input.difficulty),
     };
 
     let programId = input.id;
@@ -1516,7 +1638,15 @@ export async function startProgram(formData: FormData) {
     const { supabase, user } = await requireUser();
     const programId = String(formData.get('program_id'));
     const start = String(formData.get('start_date'));
+    // set when started from a party: the days become shared party days
+    const partyId = String(formData.get('party_id') || '');
     if (!programId || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return;
+    if (partyId) {
+        const { data: isMember } = await supabase.rpc('is_party_member', {
+            p_party: partyId,
+        });
+        if (isMember !== true) return;
+    }
 
     const { data: program } = await supabase
         .from('programs')
@@ -1552,7 +1682,11 @@ export async function startProgram(formData: FormData) {
             .from('planned_days')
             .insert(
                 part.map(p => ({
-                    owner_user: user.id,
+                    // a party's days belong to the party (no owner), personal
+                    // ones to the member
+                    ...(partyId
+                        ? { party_id: partyId, owner_user: null }
+                        : { owner_user: user.id }),
                     date: p.date,
                     category: null,
                     label: p.day.name,
@@ -1657,21 +1791,33 @@ export async function startProgram(formData: FormData) {
             .upsert(part, { onConflict: 'planned_day_exercise_id,user_id' });
     }
 
-    check(
-        await supabase.from('user_programs').upsert(
-            {
-                user_id: user.id,
-                program_id: programId,
-                start_date: start,
-                end_date: programEndDate(start, unit, program.duration_count),
-            },
-            { onConflict: 'user_id' },
-        ),
-        'start program',
-    );
+    // Following a program (and its Stop / repeat prompts) is a personal thing;
+    // a party's days are just shared days, taken off one at a time.
+    if (!partyId) {
+        check(
+            await supabase.from('user_programs').upsert(
+                {
+                    user_id: user.id,
+                    program_id: programId,
+                    start_date: start,
+                    end_date: programEndDate(
+                        start,
+                        unit,
+                        program.duration_count,
+                    ),
+                },
+                { onConflict: 'user_id' },
+            ),
+            'start program',
+        );
+    }
 
     revalidatePath('/');
     revalidatePath('/programs');
+    if (partyId) {
+        revalidatePath(`/parties/${partyId}`);
+        redirect(`/parties/${partyId}`);
+    }
     redirect(`/?week=${start}`);
 }
 

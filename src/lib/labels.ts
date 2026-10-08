@@ -15,6 +15,7 @@ export const CATEGORY_LABEL: Record<Enums<'muscle_category'>, string> = {
     cardio: 'Cardio',
     custom: 'Mix',
     rest: 'Rest',
+    one_rm: '1RM',
 };
 
 export const CATEGORY_ORDER: Enums<'muscle_category'>[] = [
@@ -30,13 +31,15 @@ export const CATEGORY_ORDER: Enums<'muscle_category'>[] = [
     'arms',
     'core',
     'cardio',
+    'one_rm',
     'custom',
     'rest',
 ];
 
-// categories offered when planning / editing a day (everything except "custom")
+// categories offered for an exercise's muscle group and in the split editors
+// (everything except "custom"; a 1RM day is a session type, not a muscle group)
 export const DAY_CATEGORY_CHOICES: Enums<'muscle_category'>[] =
-    CATEGORY_ORDER.filter(c => c !== 'custom');
+    CATEGORY_ORDER.filter(c => c !== 'custom' && c !== 'one_rm');
 
 // day-type options when planning a session: "Mix" (anything from the catalog,
 // no off-category nag) pinned first, the rest alphabetical. "rest" isn't a
@@ -72,6 +75,8 @@ export const CATEGORY_STYLE: Record<Enums<'muscle_category'>, string> = {
     core: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30',
     cardio: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30',
     custom: 'bg-white text-zinc-800 border-zinc-300',
+    // a max-effort day: a solid, high-contrast pill so it stands out from the tinted ones
+    one_rm: 'bg-zinc-900 text-white border-zinc-900 dark:bg-white dark:text-zinc-900 dark:border-white',
     rest: 'bg-surface-2 text-text-muted border-border',
 };
 
@@ -96,6 +101,7 @@ export const CATEGORY_DOT: Record<Enums<'muscle_category'>, string> = {
     core: 'bg-orange-500',
     cardio: 'bg-teal-500',
     custom: 'bg-white ring-1 ring-black/15 dark:ring-white/25',
+    one_rm: 'bg-zinc-900 dark:bg-white',
     rest: 'bg-text-muted',
 };
 
@@ -130,6 +136,7 @@ export const DAY_ACCEPTS: Record<
     cardio: ['cardio'],
     custom: BODY_PART_CATS,
     rest: BODY_PART_CATS,
+    one_rm: BODY_PART_CATS,
 };
 
 export function dayAcceptsExercise(
