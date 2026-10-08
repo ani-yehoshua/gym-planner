@@ -233,6 +233,20 @@ export default function DayEditor({
     const [swapId, setSwapId] = useState<string | null>(null);
     // exercises ticked to be made into a superset (or taken out of one)
     const [selected, setSelected] = useState<string[]>([]);
+    // The Party progress / Calculator block sticks to the top and changes height
+    // as its dropdowns open. The superset bar sticks right below it, so its
+    // offset follows that height.
+    const stickyBlockRef = useRef<HTMLDivElement>(null);
+    const [stickyBlockH, setStickyBlockH] = useState(0);
+    useEffect(() => {
+        const el = stickyBlockRef.current;
+        if (!el) return;
+        const update = () => setStickyBlockH(el.offsetHeight);
+        update();
+        const observer = new ResizeObserver(update);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
     const [swapQuery, setSwapQuery] = useState("");
     const weightInputRefs = useRef(new Map<string, HTMLInputElement>());
     // deload % typed per exercise — purely a live calculator, nothing here
@@ -708,7 +722,9 @@ export default function DayEditor({
                 </p>
             )}
 
-            <div className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
+            <div
+                ref={stickyBlockRef}
+                className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
                 {/* party progress */}
                 {day.partyId && members.length > 1 && (
                     <details className='rounded-xl border border-border'>
@@ -773,7 +789,9 @@ export default function DayEditor({
                 if (ticked.length === 0) return null;
                 const ids = ticked.map(e => e.id);
                 return (
-                    <div className='sticky top-14 z-20 bg-bg py-1'>
+                    <div
+                        className='sticky z-[9] bg-bg py-1'
+                        style={{ top: `calc(3.5rem + ${stickyBlockH}px)` }}>
                         <div className='flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs'>
                             <span className='text-text-muted'>
                                 {ticked.length} selected
