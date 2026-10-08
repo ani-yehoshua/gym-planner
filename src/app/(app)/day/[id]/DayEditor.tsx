@@ -773,39 +773,43 @@ export default function DayEditor({
                 if (ticked.length === 0) return null;
                 const ids = ticked.map(e => e.id);
                 return (
-                    <div className='flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs'>
-                        <span className='text-text-muted'>
-                            {ticked.length} selected
-                        </span>
-                        <button
-                            type='button'
-                            disabled={ticked.length < 2}
-                            onClick={() => {
-                                startQuiet(() => makeDaySuperset(day.id, ids));
-                                setSelected([]);
-                            }}
-                            className='rounded-md border border-amber-400/70 bg-amber-400/20 px-2 py-1 font-medium text-amber-700 hover:bg-amber-400/30 disabled:opacity-40 dark:text-amber-300'>
-                            Make superset
-                        </button>
-                        {ticked.some(e => e.supersetGroup != null) && (
+                    <div className='sticky top-14 z-20 bg-bg py-1'>
+                        <div className='flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs'>
+                            <span className='text-text-muted'>
+                                {ticked.length} selected
+                            </span>
                             <button
                                 type='button'
+                                disabled={ticked.length < 2}
                                 onClick={() => {
                                     startQuiet(() =>
-                                        removeFromDaySuperset(day.id, ids),
+                                        makeDaySuperset(day.id, ids),
                                     );
                                     setSelected([]);
                                 }}
-                                className='rounded-md border border-border px-2 py-1 text-text-muted hover:text-text'>
-                                Remove from superset
+                                className='rounded-md border border-amber-400/70 bg-amber-400/20 px-2 py-1 font-medium text-amber-700 hover:bg-amber-400/30 disabled:opacity-40 dark:text-amber-300'>
+                                Make superset
                             </button>
-                        )}
-                        <button
-                            type='button'
-                            onClick={() => setSelected([])}
-                            className='text-text-muted hover:text-text'>
-                            Clear
-                        </button>
+                            {ticked.some(e => e.supersetGroup != null) && (
+                                <button
+                                    type='button'
+                                    onClick={() => {
+                                        startQuiet(() =>
+                                            removeFromDaySuperset(day.id, ids),
+                                        );
+                                        setSelected([]);
+                                    }}
+                                    className='rounded-md border border-border px-2 py-1 text-text-muted hover:text-text'>
+                                    Remove from superset
+                                </button>
+                            )}
+                            <button
+                                type='button'
+                                onClick={() => setSelected([])}
+                                className='text-text-muted hover:text-text'>
+                                Clear
+                            </button>
+                        </div>
                     </div>
                 );
             })()}

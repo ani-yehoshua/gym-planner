@@ -494,39 +494,41 @@ export function ProgramBuilder({
                                             i => d.exercises[i].group != null,
                                         );
                                         return (
-                                            <div className='flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs'>
-                                                <span className='text-text-muted'>
-                                                    {sel.size} selected
-                                                </span>
-                                                <button
-                                                    type='button'
-                                                    disabled={sel.size < 2}
-                                                    onClick={() =>
-                                                        groupSelected(d.key)
-                                                    }
-                                                    className='rounded-md border border-amber-400/70 bg-amber-400/20 px-2 py-1 font-medium text-amber-700 hover:bg-amber-400/30 disabled:opacity-40 dark:text-amber-300'>
-                                                    Make superset
-                                                </button>
-                                                {anyGrouped && (
+                                            <div className='sticky top-14 z-20 bg-bg py-1'>
+                                                <div className='flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs'>
+                                                    <span className='text-text-muted'>
+                                                        {sel.size} selected
+                                                    </span>
+                                                    <button
+                                                        type='button'
+                                                        disabled={sel.size < 2}
+                                                        onClick={() =>
+                                                            groupSelected(d.key)
+                                                        }
+                                                        className='rounded-md border border-amber-400/70 bg-amber-400/20 px-2 py-1 font-medium text-amber-700 hover:bg-amber-400/30 disabled:opacity-40 dark:text-amber-300'>
+                                                        Make superset
+                                                    </button>
+                                                    {anyGrouped && (
+                                                        <button
+                                                            type='button'
+                                                            onClick={() =>
+                                                                ungroupSelected(
+                                                                    d.key,
+                                                                )
+                                                            }
+                                                            className='rounded-md border border-border px-2 py-1 text-text-muted hover:text-text'>
+                                                            Remove from superset
+                                                        </button>
+                                                    )}
                                                     <button
                                                         type='button'
                                                         onClick={() =>
-                                                            ungroupSelected(
-                                                                d.key,
-                                                            )
+                                                            setSelected([])
                                                         }
-                                                        className='rounded-md border border-border px-2 py-1 text-text-muted hover:text-text'>
-                                                        Remove from superset
+                                                        className='text-text-muted hover:text-text'>
+                                                        Clear
                                                     </button>
-                                                )}
-                                                <button
-                                                    type='button'
-                                                    onClick={() =>
-                                                        setSelected([])
-                                                    }
-                                                    className='text-text-muted hover:text-text'>
-                                                    Clear
-                                                </button>
+                                                </div>
                                             </div>
                                         );
                                     })()}
