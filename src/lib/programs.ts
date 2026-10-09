@@ -1,4 +1,5 @@
 import { addDays } from './date';
+import { formatDuration } from './duration';
 
 export type DurationUnit = 'days' | 'weeks';
 
@@ -84,10 +85,14 @@ export function summarizeSetReps(list: SetRep[]): SetRep {
 }
 
 /** "12–15 · 10–12 · 8–10", or a single range when every set is the same. */
-export function formatSetReps(list: SetRep[], sets: number): string {
+export function formatSetReps(
+    list: SetRep[],
+    sets: number,
+    fmt: (n: number) => string = String,
+): string {
     const per = Array.from({ length: Math.max(sets, 1) }, (_, i) => {
         const r = repsForSet(list, i);
-        return formatRepRange(r.min, r.max);
+        return formatRepRange(r.min, r.max, fmt);
     });
     return per.every(x => x === per[0]) ? per[0] : per.join(' · ');
 }
@@ -137,12 +142,13 @@ export function describeSets(
     setReps: SetRep[],
     fallbackMin: number | null,
     fallbackMax: number | null,
-    unit = 'reps',
+    /** a timed exercise: ranges are times (0:30–1:00), not rep counts */
+    timed = false,
 ): string {
     if (setReps.length === 0)
-        return formatRx(sets, fallbackMin, fallbackMax, unit);
+        return formatRx(sets, fallbackMin, fallbackMax, timed);
     const n = sets ?? setReps.length;
-    const reps = formatSetReps(setReps, n);
+    const reps = formatSetReps(setReps, n, timed ? formatDuration : String);
     if (!reps) return `${n} ${n === 1 ? 'set' : 'sets'}`;
     return reps.includes(' · ') ? `${n} sets · ${reps}` : `${n} × ${reps}`;
 }
@@ -152,22 +158,31 @@ export function formatRx(
     sets: number | null,
     repMin: number | null,
     repMax: number | null,
-    unit = 'reps',
+    timed = false,
 ): string {
-    const reps = formatRepRange(repMin, repMax);
+    const reps = formatRepRange(
+        repMin,
+        repMax,
+        timed ? formatDuration : String,
+    );
     if (sets != null && reps) return `${sets} × ${reps}`;
     if (sets != null) return `${sets} sets`;
-    return reps ? `${reps} ${unit}` : '';
+    if (!reps) return '';
+    return timed ? reps : `${reps} reps`;
 }
 
 /** "8–12", "10", "8+", "up to 12", or "" — a rep range on its own. */
 export function formatRepRange(
     repMin: number | null,
     repMax: number | null,
+    /** how one number reads — String for reps, formatDuration for timed sets */
+    fmt: (n: number) => string = String,
 ): string {
     if (repMin != null && repMax != null)
-        return repMin === repMax ? `${repMin}` : `${repMin}–${repMax}`;
-    if (repMin != null) return `${repMin}+`;
-    if (repMax != null) return `up to ${repMax}`;
+        return repMin === repMax
+            ? fmt(repMin)
+            : `${fmt(repMin)}–${fmt(repMax)}`;
+    if (repMin != null) return `${fmt(repMin)}+`;
+    if (repMax != null) return `up to ${fmt(repMax)}`;
     return '';
 }

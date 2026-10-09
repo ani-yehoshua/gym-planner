@@ -197,9 +197,7 @@ export default async function ProgramDetailPage({
                                                                             e.ex
                                                                                 .default_rep_max,
                                                                         e.ex
-                                                                            .time_based
-                                                                            ? "sec"
-                                                                            : "reps",
+                                                                            .time_based,
                                                                     )}
                                                                 </span>
                                                             </li>

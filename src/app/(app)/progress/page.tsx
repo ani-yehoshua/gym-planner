@@ -163,15 +163,17 @@ export default async function ProgressPage() {
             for (const pde of [...d.planned_day_exercises].sort(
                 (a, b) => a.sort - b.sort,
             )) {
+                // a set needs reps; weight is optional (bodyweight exercises)
                 const done = (logsByPde.get(pde.id) ?? []).filter(
-                    l => l.weight != null && l.reps != null,
+                    l => l.reps != null,
                 );
                 if (done.length === 0) continue;
                 let exVol = 0;
                 let exTop = 0;
                 for (const l of done) {
-                    exVol += l.weight! * l.reps!;
-                    if (l.weight! > exTop) exTop = l.weight!;
+                    const w = l.weight ?? 0;
+                    exVol += w * l.reps!;
+                    if (w > exTop) exTop = w;
                 }
                 // rows here always have reps, so a time / time-or-distance exercise
                 // can only be a timed set
@@ -188,7 +190,10 @@ export default async function ProgressPage() {
                 exercises.push({
                     name: pde.exercises?.name ?? "?",
                     muscles: pde.exercises?.primary_muscles ?? [],
-                    sets: done.map(l => ({ weight: l.weight!, reps: l.reps! })),
+                    sets: done.map(l => ({
+                        weight: l.weight ?? 0,
+                        reps: l.reps!,
+                    })),
                     volume: exVol,
                     timed,
                     top: exTop,

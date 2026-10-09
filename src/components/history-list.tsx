@@ -9,6 +9,7 @@ import {
     formatLong,
     formatRangeNumeric,
 } from "@/lib/date";
+import { formatSet } from "@/lib/format-set";
 import { CATEGORY_LABEL, CATEGORY_STYLE, muscleLabel } from "@/lib/labels";
 import type { Enums } from "@/lib/supabase/database.types";
 
@@ -396,18 +397,24 @@ export function HistoryList({
                                                 </span>
                                                 <span className='min-w-0 flex-1 truncate'>
                                                     {ex.sets
-                                                        .map(
-                                                            s =>
-                                                                `${s.weight}×${s.reps}`,
+                                                        .map(s =>
+                                                            formatSet(
+                                                                s.weight,
+                                                                s.reps,
+                                                                ex.timed,
+                                                            ),
                                                         )
                                                         .join("  ·  ")}
                                                 </span>
-                                                <span className='shrink-0 text-text-muted'>
-                                                    top{" "}
-                                                    <span className='text-text'>
-                                                        {ex.top}
+                                                {/* no top weight on a bodyweight exercise */}
+                                                {ex.top > 0 && (
+                                                    <span className='shrink-0 text-text-muted'>
+                                                        top{" "}
+                                                        <span className='text-text'>
+                                                            {ex.top}
+                                                        </span>
                                                     </span>
-                                                </span>
+                                                )}
                                             </Link>
                                         </li>
                                     ))}
@@ -562,15 +569,20 @@ export function HistoryList({
                                                 <div className='mt-1 flex flex-col gap-0.5 text-text-muted'>
                                                     {ex.sets.map((s, si) => (
                                                         <div key={si}>
-                                                            {s.weight} ×{" "}
-                                                            {s.reps}
+                                                            {formatSet(
+                                                                s.weight,
+                                                                s.reps,
+                                                                ex.timed,
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className='mt-1 font-semibold text-text'>
-                                                    top {ex.top} · vol{" "}
-                                                    {ex.volume}
-                                                </div>
+                                                {ex.top > 0 && (
+                                                    <div className='mt-1 font-semibold text-text'>
+                                                        top {ex.top} · vol{" "}
+                                                        {ex.volume}
+                                                    </div>
+                                                )}
                                             </li>
                                         ))}
                                     </ul>

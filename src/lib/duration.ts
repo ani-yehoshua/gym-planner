@@ -1,28 +1,44 @@
-/** Parses a duration typed as plain seconds ("90"), "M:SS" ("1:30"), or
- *  "1m30s"/"1m"/"30s" into total seconds. Returns null if empty/unparseable. */
+/** Parses a typed duration into total seconds; null if empty or unparseable.
+ *  Minute notation is the default: a bare number is MINUTES ("2" = 2:00,
+ *  "1.5" = 1:30). Also "M:SS" ("1:30"), "H:MM:SS" ("1:05:00"), and units
+ *  ("45s", "2m", "1m30s", "1h", "1h 5m") for anything else. */
 export function parseDuration(raw: string): number | null {
-    const s = raw.trim();
+    const s = raw.trim().toLowerCase();
     if (!s) return null;
+
+    const hms = s.match(/^(\d+):([0-5]?\d):([0-5]?\d)$/);
+    if (hms)
+        return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3]);
 
     const colon = s.match(/^(\d+):([0-5]?\d)$/);
     if (colon) return Number(colon[1]) * 60 + Number(colon[2]);
 
-    const minSec = s.match(/^(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?$/i);
-    if (minSec && (minSec[1] || minSec[2])) {
-        return Number(minSec[1] ?? 0) * 60 + Number(minSec[2] ?? 0);
+    const units = s.match(
+        /^(?:(\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?)?\s*(?:(\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?)?)?\s*(?:(\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?)?$/,
+    );
+    if (units && (units[1] || units[2] || units[3])) {
+        return Math.round(
+            Number(units[1] ?? 0) * 3600 +
+                Number(units[2] ?? 0) * 60 +
+                Number(units[3] ?? 0),
+        );
     }
 
-    const n = Number(s);
-    return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+    const minutes = Number(s);
+    return Number.isFinite(minutes) && minutes >= 0
+        ? Math.round(minutes * 60)
+        : null;
 }
 
-/** Formats total seconds as "M:SS" once a minute or more, otherwise plain
- *  seconds — so the field only ever shows what someone would naturally type. */
+/** Formats total seconds in minute notation: "0:45", "2:00", "12:30", and
+ *  "1:05:00" once there's an hour. */
 export function formatDuration(totalSeconds: number): string {
-    if (totalSeconds < 60) return String(totalSeconds);
-    const m = Math.floor(totalSeconds / 60);
-    const s = totalSeconds % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
+    const t = Math.max(0, Math.round(totalSeconds));
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    const sec = t % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
 /** Formats milliseconds as a stopwatch readout: MM:SS:CS, growing to

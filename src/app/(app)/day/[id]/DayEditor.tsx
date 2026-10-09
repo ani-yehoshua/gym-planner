@@ -21,6 +21,7 @@ import {
 } from "@/app/actions";
 import { formatShort } from "@/lib/date";
 import { formatDuration, parseDuration } from "@/lib/duration";
+import { formatSet } from "@/lib/format-set";
 import { GroupedExerciseList } from "@/components/grouped-exercise-list";
 import { toBlocks } from "@/lib/supersets";
 import {
@@ -451,8 +452,9 @@ export default function DayEditor({
         );
     }
 
-    /** Same as persist(), but the reps field is a duration — accepts "90" or
-     *  "1:30", and reformats to whichever's natural once it's parsed. */
+    /** Same as persist(), but the reps field is a time. A bare number is
+     *  minutes ("2" = 2:00); "1:30", "45s" and "1m30s" work too. Whatever was
+     *  typed is rewritten in minute notation (0:45, 2:00) once it's parsed. */
     function persistTimeField(pdeId: string, setNo: number) {
         const c = cell(pdeId, setNo);
         const parsed = parseDuration(c.reps);
@@ -869,14 +871,25 @@ export default function DayEditor({
                         // instead of controls, so nothing looks editable
                         const locked = ex.fromProgram;
                         // "12–15 · 10–12 · 8–10", or one range if every set matches
+                        // timed exercises show times (0:30–1:00), not counts
+                        const rangeFmt =
+                            mode === "time" ? formatDuration : String;
                         const repRange = ex.programSetReps.length
-                            ? formatSetReps(ex.programSetReps, ex.targetSets)
-                            : formatRepRange(ex.targetRepMin, ex.targetRepMax);
+                            ? formatSetReps(
+                                  ex.programSetReps,
+                                  ex.targetSets,
+                                  rangeFmt,
+                              )
+                            : formatRepRange(
+                                  ex.targetRepMin,
+                                  ex.targetRepMax,
+                                  rangeFmt,
+                              );
                         // each set's own range, shown in that set's reps box
                         const setRangeHint = (s: number) => {
                             if (!ex.programSetReps.length) return "";
                             const r = repsForSet(ex.programSetReps, s - 1);
-                            return formatRepRange(r.min, r.max);
+                            return formatRepRange(r.min, r.max, rangeFmt);
                         };
                         const gridCols = showWeight
                             ? "grid-cols-[1.5rem_1fr_1fr]"
@@ -897,7 +910,7 @@ export default function DayEditor({
                                     ? `${s.weight} ${u} / ${formatDuration(s.reps)}`
                                     : formatDuration(s.reps);
                             }
-                            return `${s.weight}×${s.reps}`;
+                            return formatSet(s.weight, s.reps);
                         };
                         const swapLogged = hasAnyLog(ex.id);
                         // the owner can always swap (confirming past any logged
@@ -1384,7 +1397,7 @@ export default function DayEditor({
                                         repRange && (
                                             <div className='flex items-center gap-1.5'>
                                                 <span className='text-text-muted'>
-                                                    Sec
+                                                    Time
                                                 </span>
                                                 <span className='text-sm font-semibold'>
                                                     {repRange}
@@ -1612,7 +1625,7 @@ export default function DayEditor({
                                             {mode === "distance"
                                                 ? `Distance (${du})`
                                                 : mode === "time"
-                                                  ? "Sec"
+                                                  ? "Time (m:ss)"
                                                   : "Reps"}
                                         </span>
                                     </div>
@@ -1700,7 +1713,10 @@ export default function DayEditor({
                                                                 ? formatDuration(
                                                                       ex.targetRepMin,
                                                                   )
-                                                                : "")
+                                                                : mode ===
+                                                                    "time"
+                                                                  ? "m:ss"
+                                                                  : "")
                                                         }
                                                         value={c.reps}
                                                         onChange={e =>
