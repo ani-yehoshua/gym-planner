@@ -232,20 +232,20 @@ export function ExerciseForm({
                 </label>
             )}
 
-            {/* grip variants of one lift read as a single entry in the lists */}
+            {/* variations of one lift (grip, posture, equipment) read as a single entry in the lists */}
             <div className='flex flex-col gap-1 text-xs text-text-muted'>
-                Grip variant (optional)
+                Variation (optional)
                 <div className='flex gap-2'>
                     <input
                         name='variant_group'
                         defaultValue={exercise?.variant_group ?? ""}
-                        placeholder='Lift — e.g. Lat Pulldown'
+                        placeholder='Lift — e.g. Hamstring Curl'
                         className={`${inp} min-w-0 flex-1`}
                     />
                     <input
                         name='variant_label'
                         defaultValue={exercise?.variant_label ?? ""}
-                        placeholder='Grip — e.g. Wide'
+                        placeholder='Variation — e.g. Seated'
                         className={`${inp} min-w-0 flex-1`}
                     />
                 </div>

@@ -1,10 +1,11 @@
 import { Fragment, type ReactNode } from "react";
 import { groupVariants, type VariantItem } from "@/lib/variants";
 
-/** The <li>s for a list of exercises, with grip variants of one lift gathered
- *  into a single expandable entry ("Lat Pulldown · 4 grips") instead of several
- *  near-identical rows. `renderItem` draws one exercise as an <li>; `label` is
- *  the grip name when it's shown inside its group, else null. Works in both
+/** The <li>s for a list of exercises, with variations of one lift (grip,
+ *  posture, equipment) gathered into a single expandable entry ("Lat Pulldown ·
+ *  4 variations") instead of several near-identical rows. `renderItem` draws
+ *  one exercise as an <li>; `label` is the variation name when it's shown
+ *  inside its group, else null. Works in both
  *  server and client components. */
 export function GroupedExerciseList<T extends VariantItem>({
     items,
@@ -33,7 +34,7 @@ export function GroupedExerciseList<T extends VariantItem>({
                             <summary className='flex cursor-pointer list-none items-center justify-between px-2 py-2 text-sm'>
                                 <span>{entry.group}</span>
                                 <span className='text-xs text-text-muted'>
-                                    {entry.items.length} grips ▾
+                                    {entry.items.length} variations ▾
                                 </span>
                             </summary>
                             <ul className='flex flex-col gap-1 border-t border-border p-1'>
