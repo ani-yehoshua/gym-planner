@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server';
 import { addDays } from '@/lib/date';
 import { DEFAULT_SETS } from '@/lib/targets';
 import { distanceUnitLabel } from '@/lib/units';
+import { GRIPS } from '@/lib/grips';
+import { EQUIPMENT } from '@/lib/equipment';
 import { getUserToday } from '@/lib/user-today';
 import {
     makeSuperset,
@@ -402,6 +404,18 @@ function exerciseFieldsFromForm(formData: FormData) {
             String(formData.get('variant_group') || '').trim() || null,
         variant_label:
             String(formData.get('variant_label') || '').trim() || null,
+        // how it's gripped; blank = not set
+        grip: (() => {
+            const raw = String(formData.get('grip') || '');
+            return GRIPS.some(g => g.id === raw) ? raw : null;
+        })(),
+        // what it's done with (barbell, cable…); blank = not set
+        equipment: (() => {
+            const raw = String(formData.get('equipment') || '');
+            return EQUIPMENT.some(e => e.id === raw && e.id !== 'none')
+                ? raw
+                : null;
+        })(),
     };
 }
 

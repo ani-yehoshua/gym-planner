@@ -22,7 +22,9 @@ import {
 import { formatShort } from "@/lib/date";
 import { formatDuration, parseDuration } from "@/lib/duration";
 import { formatSet } from "@/lib/format-set";
+import { EquipmentFilter } from "@/components/equipment-filter";
 import { GroupedExerciseList } from "@/components/grouped-exercise-list";
+import { matchesEquipment } from "@/lib/equipment";
 import { toBlocks } from "@/lib/supersets";
 import {
     formatRepRange,
@@ -76,6 +78,9 @@ type CatalogItem = {
     /** grip variants of one lift share a group name (e.g. "Lat Pulldown") */
     variant_group: string | null;
     variant_label: string | null;
+    grip: string | null;
+    /** barbell / dumbbell / cable / … (null = not set) */
+    equipment: string | null;
 };
 type DayEx = {
     id: string;
@@ -226,6 +231,9 @@ export default function DayEditor({
     const [values, setValues] = useState(initial);
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [query, setQuery] = useState("");
+    // equipment filters for the add and swap pickers
+    const [addEquip, setAddEquip] = useState<string[]>([]);
+    const [swapEquip, setSwapEquip] = useState<string[]>([]);
     const [showAdd, setShowAdd] = useState(day.exercises.length === 0);
     const [savedDefault, setSavedDefault] = useState<string | null>(null);
     const [weightOverride, setWeightOverride] = useState<
@@ -627,8 +635,10 @@ export default function DayEditor({
         setSwapQuery("");
     }
 
-    const matches = catalog.filter(c =>
-        c.name.toLowerCase().includes(query.toLowerCase()),
+    const matches = catalog.filter(
+        c =>
+            c.name.toLowerCase().includes(query.toLowerCase()) &&
+            matchesEquipment(c.equipment, addEquip),
     );
     const accepted = matches.filter(c =>
         dayAcceptsExercise(day.category, c.category),
@@ -659,8 +669,10 @@ export default function DayEditor({
                       c.id !==
                       day.exercises.find(e => e.id === swapId)?.exercise.id,
               )
-              .filter(c =>
-                  c.name.toLowerCase().includes(swapQuery.toLowerCase()),
+              .filter(
+                  c =>
+                      c.name.toLowerCase().includes(swapQuery.toLowerCase()) &&
+                      matchesEquipment(c.equipment, swapEquip),
               )
         : [];
     const swapAcceptedGroups = groupByCategory(
@@ -1078,11 +1090,20 @@ export default function DayEditor({
                                             }
                                             className='mt-1.5 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-text-muted'
                                         />
+                                        <div className='mt-1.5'>
+                                            <EquipmentFilter
+                                                selected={swapEquip}
+                                                onChange={setSwapEquip}
+                                            />
+                                        </div>
                                         <div className='mt-1.5 max-h-64 overflow-y-auto'>
                                             {swapAcceptedGroups.map(g => (
                                                 <details
                                                     key={g.category}
-                                                    open={swapQuery.length > 0}
+                                                    open={
+                                                        swapQuery.length > 0 ||
+                                                        swapEquip.length > 0
+                                                    }
                                                     className='mb-1 rounded-md border border-border'>
                                                     <summary className='flex cursor-pointer list-none items-center justify-between px-2 py-1.5 text-xs font-medium'>
                                                         {
@@ -1099,7 +1120,9 @@ export default function DayEditor({
                                                             items={g.items}
                                                             open={
                                                                 swapQuery.length >
-                                                                0
+                                                                    0 ||
+                                                                swapEquip.length >
+                                                                    0
                                                             }
                                                             renderItem={(
                                                                 c,
@@ -1158,7 +1181,9 @@ export default function DayEditor({
                                                                 key={g.category}
                                                                 open={
                                                                     swapQuery.length >
-                                                                    0
+                                                                        0 ||
+                                                                    swapEquip.length >
+                                                                        0
                                                                 }
                                                                 className='mb-1 rounded-md border border-border'>
                                                                 <summary className='flex cursor-pointer list-none items-center justify-between px-2 py-1.5 text-xs font-medium text-text-muted'>
@@ -1184,7 +1209,9 @@ export default function DayEditor({
                                                                         }
                                                                         open={
                                                                             swapQuery.length >
-                                                                            0
+                                                                                0 ||
+                                                                            swapEquip.length >
+                                                                                0
                                                                         }
                                                                         renderItem={(
                                                                             c,
@@ -1921,11 +1948,17 @@ export default function DayEditor({
                         onChange={e => setQuery(e.target.value)}
                         className='mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-text-muted'
                     />
+                    <div className='mt-2'>
+                        <EquipmentFilter
+                            selected={addEquip}
+                            onChange={setAddEquip}
+                        />
+                    </div>
                     <div className='mt-2 max-h-96 overflow-y-auto'>
                         {acceptedGroups.map(g => (
                             <details
                                 key={g.category}
-                                open={query.length > 0}
+                                open={query.length > 0 || addEquip.length > 0}
                                 className='mb-1.5 rounded-lg border border-border'>
                                 <summary className='flex cursor-pointer list-none items-center justify-between px-2.5 py-2 text-sm font-medium'>
                                     {CATEGORY_LABEL[g.category]}
@@ -1936,7 +1969,10 @@ export default function DayEditor({
                                 <ul className='border-t border-border p-1'>
                                     <GroupedExerciseList
                                         items={g.items}
-                                        open={query.length > 0}
+                                        open={
+                                            query.length > 0 ||
+                                            addEquip.length > 0
+                                        }
                                         renderItem={(c, label) => (
                                             <li key={c.id}>
                                                 <button
@@ -1972,7 +2008,10 @@ export default function DayEditor({
                                 {offCategoryGroups.map(g => (
                                     <details
                                         key={g.category}
-                                        open={query.length > 0}
+                                        open={
+                                            query.length > 0 ||
+                                            addEquip.length > 0
+                                        }
                                         className='mb-1.5 rounded-lg border border-border'>
                                         <summary className='flex cursor-pointer list-none items-center justify-between px-2.5 py-2 text-sm font-medium text-text-muted'>
                                             {CATEGORY_LABEL[g.category]}
@@ -1983,7 +2022,10 @@ export default function DayEditor({
                                         <ul className='border-t border-border p-1'>
                                             <GroupedExerciseList
                                                 items={g.items}
-                                                open={query.length > 0}
+                                                open={
+                                                    query.length > 0 ||
+                                                    addEquip.length > 0
+                                                }
                                                 renderItem={(c, label) => (
                                                     <li key={c.id}>
                                                         <button

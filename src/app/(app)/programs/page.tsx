@@ -11,7 +11,7 @@ import { formatShort } from "@/lib/date";
 import { getUserToday } from "@/lib/user-today";
 
 const EXERCISE_FIELDS =
-    "id, name, category, primary_muscles, time_based, measurement, default_sets, default_rep_min, default_rep_max, variant_group, variant_label";
+    "id, name, category, primary_muscles, time_based, measurement, default_sets, default_rep_min, default_rep_max, variant_group, variant_label, grip, equipment";
 
 export default async function ProgramsPage() {
     const supabase = await createClient();

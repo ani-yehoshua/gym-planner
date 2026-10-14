@@ -4,7 +4,9 @@ import { useState, useTransition } from "react";
 import { saveProgram } from "@/app/actions";
 import { TrashIcon } from "@/components/icons";
 import { announceSave } from "@/components/save-pill";
+import { EquipmentFilter } from "@/components/equipment-filter";
 import { GroupedExerciseList } from "@/components/grouped-exercise-list";
+import { matchesEquipment } from "@/lib/equipment";
 import { CATEGORY_LABEL, CATEGORY_ORDER, muscleList } from "@/lib/labels";
 import {
     clampDuration,
@@ -42,6 +44,8 @@ export type BuilderExercise = {
     default_rep_max: number | null;
     variant_group: string | null;
     variant_label: string | null;
+    grip: string | null;
+    equipment: string | null;
 };
 
 /** A saved program, as the builder is handed it when editing. */
@@ -134,6 +138,7 @@ export function ProgramBuilder({
     // exercises ticked to be made into a superset (or taken out of one)
     const [selected, setSelected] = useState<string[]>([]);
     const [query, setQuery] = useState("");
+    const [equipFilter, setEquipFilter] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [pending, start] = useTransition();
 
@@ -326,6 +331,7 @@ export function ProgramBuilder({
         for (const c of catalog) {
             if (taken.has(c.id)) continue;
             if (!c.name.toLowerCase().includes(query.toLowerCase())) continue;
+            if (!matchesEquipment(c.equipment, equipFilter)) continue;
             const arr = m.get(c.category) ?? [];
             arr.push(c);
             m.set(c.category, arr);
@@ -895,11 +901,21 @@ export function ProgramBuilder({
                                                 }
                                                 className={`${inp} mt-2 w-full`}
                                             />
+                                            <div className='mt-2'>
+                                                <EquipmentFilter
+                                                    selected={equipFilter}
+                                                    onChange={setEquipFilter}
+                                                />
+                                            </div>
                                             <div className='mt-2 max-h-96 overflow-y-auto'>
                                                 {groups(taken).map(g => (
                                                     <details
                                                         key={g.category}
-                                                        open={query.length > 0}
+                                                        open={
+                                                            query.length > 0 ||
+                                                            equipFilter.length >
+                                                                0
+                                                        }
                                                         className='mb-1.5 rounded-lg border border-border'>
                                                         <summary className='flex cursor-pointer list-none items-center justify-between px-2.5 py-2 text-sm font-medium'>
                                                             {
@@ -917,7 +933,9 @@ export function ProgramBuilder({
                                                                 items={g.items}
                                                                 open={
                                                                     query.length >
-                                                                    0
+                                                                        0 ||
+                                                                    equipFilter.length >
+                                                                        0
                                                                 }
                                                                 renderItem={(
                                                                     c,

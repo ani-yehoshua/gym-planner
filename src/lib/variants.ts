@@ -6,6 +6,7 @@ export type VariantItem = {
     id: string;
     variant_group: string | null;
     variant_label: string | null;
+    grip?: string | null;
 };
 
 export type VariantEntry<T> =

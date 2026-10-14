@@ -210,6 +210,7 @@ export type Database = {
           default_rep_max: number | null
           default_rep_min: number | null
           default_sets: number | null
+          equipment: string | null
           howto_text: string | null
           id: string
           is_public: boolean
@@ -219,6 +220,7 @@ export type Database = {
           primary_muscles: string[]
           secondary_muscles: string[]
           time_based: boolean
+          grip: string | null
           variant_group: string | null
           variant_label: string | null
           weighted: boolean
@@ -232,6 +234,7 @@ export type Database = {
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
+          equipment?: string | null
           howto_text?: string | null
           id?: string
           is_public?: boolean
@@ -241,6 +244,7 @@ export type Database = {
           primary_muscles?: string[]
           secondary_muscles?: string[]
           time_based?: boolean
+          grip?: string | null
           variant_group?: string | null
           variant_label?: string | null
           weighted?: boolean
@@ -254,6 +258,7 @@ export type Database = {
           default_rep_max?: number | null
           default_rep_min?: number | null
           default_sets?: number | null
+          equipment?: string | null
           howto_text?: string | null
           id?: string
           is_public?: boolean
@@ -263,6 +268,7 @@ export type Database = {
           primary_muscles?: string[]
           secondary_muscles?: string[]
           time_based?: boolean
+          grip?: string | null
           variant_group?: string | null
           variant_label?: string | null
           weighted?: boolean

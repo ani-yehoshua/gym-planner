@@ -70,6 +70,7 @@ export function StrengthWidgets({
         range: "30d",
     });
     const [showAll, setShowAll] = useState(false);
+    const [query, setQuery] = useState("");
     const { view, range } = prefs;
 
     useEffect(() => {
@@ -216,8 +217,16 @@ export function StrengthWidgets({
         [byFrequency],
     );
     const hiddenCount = aggs.length - keepIds.size;
+    // searching looks through every lift, not just the top few
+    const needle = query.trim().toLowerCase();
+    const searching = needle !== "";
     const visible = (list: ExAgg[]) =>
-        showAll ? list : list.filter(a => keepIds.has(a.exerciseId));
+        searching
+            ? list.filter(a => a.name.toLowerCase().includes(needle))
+            : showAll
+              ? list
+              : list.filter(a => keepIds.has(a.exerciseId));
+    const noMatches = searching && visible(ranked).length === 0;
 
     // "you just PR'd": your best set in range came from your latest session, and
     // that session was recent (so it doesn't linger for months on the All view)
@@ -261,6 +270,17 @@ export function StrengthWidgets({
                 ))}
             </div>
 
+            {aggs.length > 0 && (
+                <input
+                    type='search'
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder='Search your lifts…'
+                    aria-label='Search your lifts'
+                    className='mb-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-text-muted'
+                />
+            )}
+
             {aggs.length === 0 ? (
                 <p className='text-sm text-text-muted'>
                     {rows.length === 0
@@ -269,6 +289,11 @@ export function StrengthWidgets({
                 </p>
             ) : (
                 <>
+                    {noMatches && (
+                        <p className='text-sm text-text-muted'>
+                            No lifts match “{query.trim()}”.
+                        </p>
+                    )}
                     {view === "records" && (
                         <RecordsView
                             aggs={visible(ranked)}
@@ -296,7 +321,7 @@ export function StrengthWidgets({
                         />
                     )}
 
-                    {hiddenCount > 0 && (
+                    {hiddenCount > 0 && !searching && (
                         <button
                             onClick={() => setShowAll(s => !s)}
                             className='mt-3 w-full rounded-lg border border-border px-3 py-2 text-xs text-text-muted hover:text-text'>

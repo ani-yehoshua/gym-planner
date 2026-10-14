@@ -46,7 +46,7 @@ export default async function ExercisesPage() {
         supabase
             .from("exercises")
             .select(
-                "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, default_sets, default_rep_min, default_rep_max, default_distance, measurement, time_based, weighted, created_by, archived_at, variant_group, variant_label",
+                "id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, default_sets, default_rep_min, default_rep_max, default_distance, measurement, time_based, weighted, created_by, archived_at, variant_group, variant_label, grip, equipment",
             )
             .order("category")
             .order("name"),
@@ -276,6 +276,9 @@ export default async function ExercisesPage() {
                                         <li
                                             key={e.id}
                                             data-exercise-name={e.name}
+                                            data-equipment={
+                                                e.equipment ?? "none"
+                                            }
                                             className='rounded-lg border border-border'>
                                             <details className='group'>
                                                 <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm'>

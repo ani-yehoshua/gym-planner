@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { createExercise, updateExercise } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
+import { EQUIPMENT } from "@/lib/equipment";
+import { GRIPS } from "@/lib/grips";
 import {
     CATEGORY_LABEL,
     DAY_CATEGORY_CHOICES,
@@ -41,6 +43,8 @@ export type ExerciseFormValues = {
     weighted: boolean;
     variant_group: string | null;
     variant_label: string | null;
+    grip: string | null;
+    equipment: string | null;
 };
 
 const toInput = (ms: string[]) => ms.map(muscleLabel).join(", ");
@@ -232,6 +236,23 @@ export function ExerciseForm({
                 </label>
             )}
 
+            <label className='flex flex-col gap-1 text-xs text-text-muted'>
+                Equipment
+                <select
+                    name='equipment'
+                    defaultValue={exercise?.equipment ?? ""}
+                    className={inp}>
+                    <option value=''>Not set</option>
+                    {EQUIPMENT.filter(e => e.id !== "none").map(e => (
+                        <option
+                            key={e.id}
+                            value={e.id}>
+                            {e.label}
+                        </option>
+                    ))}
+                </select>
+            </label>
+
             {/* variations of one lift (grip, posture, equipment) read as a single entry in the lists */}
             <div className='flex flex-col gap-1 text-xs text-text-muted'>
                 Variation (optional)
@@ -249,8 +270,22 @@ export function ExerciseForm({
                         className={`${inp} min-w-0 flex-1`}
                     />
                 </div>
+                <select
+                    name='grip'
+                    defaultValue={exercise?.grip ?? ""}
+                    className={inp}>
+                    <option value=''>Grip: not set</option>
+                    {GRIPS.map(g => (
+                        <option
+                            key={g.id}
+                            value={g.id}>
+                            {g.label}
+                        </option>
+                    ))}
+                </select>
                 <span>
-                    Exercises sharing the lift name are grouped under it.
+                    Exercises sharing the lift name are grouped under it; with a
+                    grip set they&rsquo;re split into grip sections.
                 </span>
             </div>
 
