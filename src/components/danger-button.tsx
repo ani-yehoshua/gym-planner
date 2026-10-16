@@ -14,14 +14,16 @@ export function DeleteDayButton({ dayId }: { dayId: string }) {
         <button
             disabled={pending}
             onClick={() => {
-                if (confirm("Delete this day and everything logged on it?")) {
+                if (
+                    confirm("Delete this session and everything logged on it?")
+                ) {
                     clearActiveSession(dayId);
                     start(() => deleteDay(dayId));
                 }
             }}
             className={cls}>
             <TrashIcon className='h-3.5 w-3.5' />
-            {pending ? "Deleting…" : "Delete day"}
+            {pending ? "Deleting…" : "Delete session"}
         </button>
     );
 }

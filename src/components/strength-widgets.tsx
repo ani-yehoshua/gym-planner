@@ -16,11 +16,12 @@ export type StrengthRow = {
     date: string; // YYYY-MM-DD in the user's timezone
 };
 
-type View = "records" | "e1rm" | "trend" | "volume";
+type View = "records" | "big3" | "e1rm" | "trend" | "volume";
 type Range = "7d" | "30d" | "90d" | "all";
 
 const VIEWS: { id: View; label: string }[] = [
     { id: "records", label: "Records" },
+    { id: "big3", label: "Big 3" },
     { id: "e1rm", label: "Est. 1RM" },
     { id: "trend", label: "Trend" },
     { id: "volume", label: "Volume" },
@@ -37,6 +38,12 @@ const RANGE_WORD: Record<Range, string> = {
     "90d": "90 days",
     all: "all time",
 };
+
+const BIG_3 = [
+    "Barbell Back Squat",
+    "Barbell Bench Press",
+    "Conventional Deadlift",
+];
 
 const STORE_KEY = "gymplanner:strengthWidget";
 const TOP_N = 8;
@@ -270,7 +277,7 @@ export function StrengthWidgets({
                 ))}
             </div>
 
-            {aggs.length > 0 && (
+            {aggs.length > 0 && view !== "big3" && (
                 <input
                     type='search'
                     value={query}
@@ -289,7 +296,14 @@ export function StrengthWidgets({
                 </p>
             ) : (
                 <>
-                    {noMatches && (
+                    {view === "big3" && (
+                        <Big3View
+                            aggs={aggs}
+                            unit={u}
+                            prd={justPrd}
+                        />
+                    )}
+                    {view !== "big3" && noMatches && (
                         <p className='text-sm text-text-muted'>
                             No lifts match “{query.trim()}”.
                         </p>
@@ -321,7 +335,7 @@ export function StrengthWidgets({
                         />
                     )}
 
-                    {hiddenCount > 0 && !searching && (
+                    {view !== "big3" && hiddenCount > 0 && !searching && (
                         <button
                             onClick={() => setShowAll(s => !s)}
                             className='mt-3 w-full rounded-lg border border-border px-3 py-2 text-xs text-text-muted hover:text-text'>
@@ -611,6 +625,70 @@ function VolumeView({ aggs, unit }: { aggs: ExAgg[]; unit: string }) {
                     </div>
                 </div>
             ))}
+        </div>
+    );
+}
+
+function Big3View({
+    aggs,
+    unit,
+    prd,
+}: {
+    aggs: ExAgg[];
+    unit: string;
+    prd: (a: ExAgg) => boolean;
+}) {
+    const lifts = BIG_3.map(name => ({
+        name,
+        agg: aggs.find(a => a.name === name),
+    }));
+    // the classic total, from each lift's best estimated 1RM
+    const total = lifts.reduce((sum, l) => sum + (l.agg?.best.e1rm ?? 0), 0);
+    const complete = lifts.every(l => l.agg);
+
+    return (
+        <div className='flex flex-col gap-2'>
+            {lifts.map(({ name, agg: a }) => (
+                <div
+                    key={name}
+                    className='rounded-lg border border-border p-3'>
+                    <div className='flex items-center justify-between gap-2'>
+                        <span className='text-sm font-medium'>{name}</span>
+                        {a && prd(a) && <NewPill />}
+                    </div>
+                    {a ? (
+                        <>
+                            <div className='mt-1 flex items-baseline justify-between gap-2'>
+                                <span className='text-lg font-semibold tabular-nums'>
+                                    {setLabel(a)}
+                                </span>
+                                <span className='text-sm tabular-nums'>
+                                    e1RM {a.best.e1rm} {unit}
+                                </span>
+                            </div>
+                            <div className='flex items-center justify-between text-[11px] text-text-muted'>
+                                <span>{formatShort(a.best.date)}</span>
+                                <Delta sessions={a.sessions} />
+                            </div>
+                            <div className='mt-1.5'>
+                                <Sparkline sessions={a.sessions} />
+                            </div>
+                        </>
+                    ) : (
+                        <p className='mt-1 text-xs text-text-muted'>
+                            Not logged in this range.
+                        </p>
+                    )}
+                </div>
+            ))}
+            <div className='flex items-baseline justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm'>
+                <span className='font-medium'>
+                    Total{complete ? "" : " (so far)"}
+                </span>
+                <span className='font-semibold tabular-nums'>
+                    {total} {unit}
+                </span>
+            </div>
         </div>
     );
 }
