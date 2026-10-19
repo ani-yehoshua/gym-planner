@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong } from "@/lib/date";
 import { PROGRAM_STYLE } from "@/lib/labels";
+import { parseDrops, type Drop } from "@/lib/drops";
 import { parseSetReps } from "@/lib/programs";
 import { isCompound, recommendedReps, type Goal } from "@/lib/targets";
 import { DeleteDayButton } from "@/components/danger-button";
@@ -76,7 +77,7 @@ export default async function DayPage({
             ? supabase
                   .from("set_logs")
                   .select(
-                      "planned_day_exercise_id, user_id, set_no, weight, reps, distance, volume",
+                      "planned_day_exercise_id, user_id, set_no, weight, reps, distance, volume, drops",
                   )
                   .in("planned_day_exercise_id", pdeIds)
             : Promise.resolve({ data: [] }),
@@ -129,7 +130,7 @@ export default async function DayPage({
             ? supabase
                   .from("set_logs")
                   .select(
-                      "set_no, weight, reps, distance, planned_day_exercises!inner(exercise_id, planned_days!inner(id, date))",
+                      "set_no, weight, reps, distance, volume, drops, planned_day_exercises!inner(exercise_id, planned_days!inner(id, date))",
                   )
                   .eq("user_id", user.id)
                   .in("planned_day_exercises.exercise_id", exIds)
@@ -187,6 +188,8 @@ export default async function DayPage({
         weight: number | null;
         reps: number | null;
         distance: number | null;
+        volume: number | null;
+        drops: unknown;
         planned_day_exercises: PrevEmbed;
     };
     type PrevNoteRow = {
@@ -197,7 +200,13 @@ export default async function DayPage({
         string,
         {
             date: string;
-            sets: { weight: number; reps: number; distance: number | null }[];
+            sets: {
+                weight: number;
+                reps: number;
+                distance: number | null;
+                drops: Drop[];
+            }[];
+            volume: number;
             note?: string;
         }
     > = {};
@@ -210,6 +219,8 @@ export default async function DayPage({
                 weight: number;
                 reps: number;
                 distance: number | null;
+                drops: Drop[];
+                volume: number;
             }[]
         > = {};
         for (const row of (prevLogs ?? []) as PrevRow[]) {
@@ -224,6 +235,8 @@ export default async function DayPage({
                 weight: row.weight ?? 0,
                 reps: row.reps ?? 0,
                 distance: row.distance,
+                drops: parseDrops(row.drops),
+                volume: row.volume ?? 0,
             });
         }
         for (const [exId, rows] of Object.entries(rowsByEx)) {
@@ -231,16 +244,18 @@ export default async function DayPage({
                 (a, r) => (r.date > a ? r.date : a),
                 "",
             );
+            const latest = rows
+                .filter(r => r.date === maxDate)
+                .sort((a, b) => a.set_no - b.set_no);
             prevByExercise[exId] = {
                 date: maxDate,
-                sets: rows
-                    .filter(r => r.date === maxDate)
-                    .sort((a, b) => a.set_no - b.set_no)
-                    .map(r => ({
-                        weight: r.weight,
-                        reps: r.reps,
-                        distance: r.distance,
-                    })),
+                sets: latest.map(r => ({
+                    weight: r.weight,
+                    reps: r.reps,
+                    distance: r.distance,
+                    drops: r.drops,
+                })),
+                volume: latest.reduce((sum, r) => sum + r.volume, 0),
             };
         }
         for (const row of (prevNotes ?? []) as unknown as PrevNoteRow[]) {
@@ -262,25 +277,46 @@ export default async function DayPage({
         const t = targetByPde.get(p.id);
         const pref = prefByExercise.get(p.exercises.id);
         const [recMin, recMax] = recommendedReps(goal, isCompound(p.exercises));
+        // a program's exercise carries the program's own sets and reps, which
+        // beat the member's saved exercise defaults (those are for exercises
+        // they add themselves); per-set ranges also fix the set count
+        const fromProgram = p.from_program;
+        const programSets = parseSetReps(p.program_set_reps).length;
         return {
-            sets:
-                t?.target_sets ??
-                pref?.default_sets ??
-                p.target_sets ??
-                p.exercises.default_sets ??
-                2,
-            repMin:
-                t?.target_rep_min ??
-                pref?.default_rep_min ??
-                p.target_rep_min ??
-                p.exercises.default_rep_min ??
-                recMin,
-            repMax:
-                t?.target_rep_max ??
-                pref?.default_rep_max ??
-                p.target_rep_max ??
-                p.exercises.default_rep_max ??
-                recMax,
+            sets: fromProgram
+                ? programSets ||
+                  (t?.target_sets ??
+                      p.target_sets ??
+                      pref?.default_sets ??
+                      p.exercises.default_sets ??
+                      2)
+                : (t?.target_sets ??
+                  pref?.default_sets ??
+                  p.target_sets ??
+                  p.exercises.default_sets ??
+                  2),
+            repMin: fromProgram
+                ? (t?.target_rep_min ??
+                  p.target_rep_min ??
+                  pref?.default_rep_min ??
+                  p.exercises.default_rep_min ??
+                  recMin)
+                : (t?.target_rep_min ??
+                  pref?.default_rep_min ??
+                  p.target_rep_min ??
+                  p.exercises.default_rep_min ??
+                  recMin),
+            repMax: fromProgram
+                ? (t?.target_rep_max ??
+                  p.target_rep_max ??
+                  pref?.default_rep_max ??
+                  p.exercises.default_rep_max ??
+                  recMax)
+                : (t?.target_rep_max ??
+                  pref?.default_rep_max ??
+                  p.target_rep_max ??
+                  p.exercises.default_rep_max ??
+                  recMax),
             weight: t?.target_weight ?? pref?.default_weight ?? null,
             distance:
                 t?.target_distance ??

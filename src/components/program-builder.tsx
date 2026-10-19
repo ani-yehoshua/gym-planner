@@ -13,6 +13,7 @@ import {
     DIFFICULTIES,
     DIFFICULTY_LABEL,
     DIFFICULTY_STYLE,
+    MAX_DROPS,
     programTotalDays,
     repsForSet,
     type Difficulty,
@@ -825,6 +826,64 @@ export function ProgramBuilder({
                                                                                                 ? "sec"
                                                                                                 : "reps"}
                                                                                         </span>
+                                                                                        {!ex.time_based && (
+                                                                                            <select
+                                                                                                value={
+                                                                                                    r.drops ??
+                                                                                                    0
+                                                                                                }
+                                                                                                aria-label={`Set ${i + 1} drops`}
+                                                                                                onChange={ev =>
+                                                                                                    editSetRep(
+                                                                                                        d.key,
+                                                                                                        e,
+                                                                                                        effectiveSets,
+                                                                                                        i,
+                                                                                                        {
+                                                                                                            drops: Number(
+                                                                                                                ev
+                                                                                                                    .target
+                                                                                                                    .value,
+                                                                                                            ),
+                                                                                                        },
+                                                                                                    )
+                                                                                                }
+                                                                                                className='rounded-md border border-border bg-surface px-1 py-1 text-xs'>
+                                                                                                <option
+                                                                                                    value={
+                                                                                                        0
+                                                                                                    }>
+                                                                                                    no
+                                                                                                    drops
+                                                                                                </option>
+                                                                                                {Array.from(
+                                                                                                    {
+                                                                                                        length: MAX_DROPS,
+                                                                                                    },
+                                                                                                    (
+                                                                                                        _,
+                                                                                                        k,
+                                                                                                    ) => (
+                                                                                                        <option
+                                                                                                            key={
+                                                                                                                k
+                                                                                                            }
+                                                                                                            value={
+                                                                                                                k +
+                                                                                                                1
+                                                                                                            }>
+                                                                                                            +
+                                                                                                            {k +
+                                                                                                                1}{" "}
+                                                                                                            {k ===
+                                                                                                            0
+                                                                                                                ? "drop"
+                                                                                                                : "drops"}
+                                                                                                        </option>
+                                                                                                    ),
+                                                                                                )}
+                                                                                            </select>
+                                                                                        )}
                                                                                     </div>
                                                                                 );
                                                                             },

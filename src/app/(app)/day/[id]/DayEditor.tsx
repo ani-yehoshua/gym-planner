@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+    Fragment,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
     addExerciseToDay,
@@ -21,6 +28,7 @@ import {
 } from "@/app/actions";
 import { formatShort } from "@/lib/date";
 import { formatDuration, parseDuration } from "@/lib/duration";
+import { dropVolume, parseDrops, type Drop } from "@/lib/drops";
 import { formatSet } from "@/lib/format-set";
 import { EquipmentFilter } from "@/components/equipment-filter";
 import { GroupedExerciseList } from "@/components/grouped-exercise-list";
@@ -29,6 +37,7 @@ import { toBlocks } from "@/lib/supersets";
 import {
     formatRepRange,
     formatSetReps,
+    MAX_DROPS,
     repsForSet,
     type SetRep,
 } from "@/lib/programs";
@@ -108,7 +117,22 @@ type LogRow = {
     reps: number | null;
     distance: number | null;
     volume: number | null;
+    drops: unknown;
 };
+/** What's typed into one set's boxes, plus the drops that follow it. */
+type Cell = {
+    weight: string;
+    reps: string;
+    distance: string;
+    drops: { weight: string; reps: string }[];
+};
+const EMPTY_CELL: Cell = { weight: "", reps: "", distance: "", drops: [] };
+/** a cell's drops as numbers, ready to save */
+const dropsOf = (c: Cell): Drop[] =>
+    c.drops.map(d => ({
+        weight: d.weight === "" ? null : Number(d.weight),
+        reps: d.reps === "" ? null : Number(d.reps),
+    }));
 type Member = { user_id: string; display_name: string | null; color: string };
 type NoteRow = {
     planned_day_exercise_id: string;
@@ -132,7 +156,14 @@ const TrashIcon = () => (
 
 type LastEntry = {
     date: string;
-    sets: { weight: number; reps: number; distance: number | null }[];
+    sets: {
+        weight: number;
+        reps: number;
+        distance: number | null;
+        drops: Drop[];
+    }[];
+    /** total volume of that session (weight × reps, drops included) */
+    volume: number;
     note?: string;
 };
 
@@ -213,16 +244,17 @@ export default function DayEditor({
     }, [pending]);
 
     const initial = useMemo(() => {
-        const m = new Map<
-            string,
-            { weight: string; reps: string; distance: string }
-        >();
+        const m = new Map<string, Cell>();
         for (const l of logs) {
             if (l.user_id !== currentUserId) continue;
             m.set(`${l.planned_day_exercise_id}:${l.set_no}`, {
                 weight: l.weight?.toString() ?? "",
                 reps: l.reps?.toString() ?? "",
                 distance: l.distance?.toString() ?? "",
+                drops: parseDrops(l.drops).map(d => ({
+                    weight: d.weight?.toString() ?? "",
+                    reps: d.reps?.toString() ?? "",
+                })),
             });
         }
         return m;
@@ -426,14 +458,20 @@ export default function DayEditor({
                 n.note.trim() !== "",
         );
 
-    function cell(pdeId: string, setNo: number) {
-        return (
-            values.get(`${pdeId}:${setNo}`) ?? {
-                weight: "",
-                reps: "",
-                distance: "",
-            }
-        );
+    function cell(pdeId: string, setNo: number): Cell {
+        return values.get(`${pdeId}:${setNo}`) ?? EMPTY_CELL;
+    }
+    /** Replace a set's drops. `save` writes them right away (adding or removing
+     *  a drop); typing into a drop's boxes saves when the box loses focus. */
+    function setDrops(
+        pdeId: string,
+        setNo: number,
+        drops: Cell["drops"],
+        save: boolean,
+    ) {
+        const next = { ...cell(pdeId, setNo), drops };
+        setValues(prev => new Map(prev).set(`${pdeId}:${setNo}`, next));
+        if (save) persistCell(pdeId, setNo, next);
     }
     function update(
         pdeId: string,
@@ -446,8 +484,7 @@ export default function DayEditor({
             new Map(prev).set(key, { ...cell(pdeId, setNo), [f]: raw }),
         );
     }
-    function persist(pdeId: string, setNo: number) {
-        const c = cell(pdeId, setNo);
+    function persistCell(pdeId: string, setNo: number, c: Cell) {
         start(() =>
             logSet({
                 pdeId,
@@ -456,8 +493,12 @@ export default function DayEditor({
                 weight: c.weight === "" ? null : Number(c.weight),
                 reps: c.reps === "" ? null : Number(c.reps),
                 distance: c.distance === "" ? null : Number(c.distance),
+                drops: dropsOf(c),
             }),
         );
+    }
+    function persist(pdeId: string, setNo: number) {
+        persistCell(pdeId, setNo, cell(pdeId, setNo));
     }
 
     /** Same as persist(), but the reps field is a time. A bare number is
@@ -480,6 +521,7 @@ export default function DayEditor({
                 weight: c.weight === "" ? null : Number(c.weight),
                 reps: parsed,
                 distance: null,
+                drops: dropsOf(c),
             }),
         );
     }
@@ -503,6 +545,7 @@ export default function DayEditor({
                 weight: c.weight === "" ? null : Number(c.weight),
                 reps: elapsed,
                 distance: null,
+                drops: dropsOf(c),
             }),
         );
     }
@@ -530,7 +573,7 @@ export default function DayEditor({
             const c = values.get(`${ex.id}:${s}`);
             if (!c || c.weight === "" || c.reps === "") continue;
             const w = Number(c.weight);
-            volume += w * Number(c.reps);
+            volume += w * Number(c.reps) + dropVolume(dropsOf(c));
             if (w > top) top = w;
         }
         return { volume, top };
@@ -553,7 +596,7 @@ export default function DayEditor({
             if (l.planned_day_exercise_id !== pdeId || l.user_id !== userId)
                 continue;
             if (l.weight != null && l.reps != null) {
-                volume += l.weight * l.reps;
+                volume += l.weight * l.reps + dropVolume(parseDrops(l.drops));
                 if (l.weight > top) top = l.weight;
             }
         }
@@ -911,6 +954,7 @@ export default function DayEditor({
                             weight: number;
                             reps: number;
                             distance: number | null;
+                            drops: Drop[];
                         }) => {
                             if (s.distance != null) {
                                 return s.weight
@@ -922,7 +966,13 @@ export default function DayEditor({
                                     ? `${s.weight} ${u} / ${formatDuration(s.reps)}`
                                     : formatDuration(s.reps);
                             }
-                            return formatSet(s.weight, s.reps);
+                            // a drop set reads as a chain: 135×8 → 115×6 → 95×6
+                            return [
+                                formatSet(s.weight, s.reps),
+                                ...s.drops.map(d =>
+                                    formatSet(d.weight ?? 0, d.reps ?? 0),
+                                ),
+                            ].join(" → ");
                         };
                         const swapLogged = hasAnyLog(ex.id);
                         // the owner can always swap (confirming past any logged
@@ -1265,6 +1315,23 @@ export default function DayEditor({
                                                     .join("  ·  ")}
                                             </span>
                                         </div>
+                                        {/* rep-based sessions only: weight × a
+                                            duration or distance isn't a volume */}
+                                        {last.volume > 0 &&
+                                            !ex.exercise.timeBased &&
+                                            !last.sets.some(
+                                                s => s.distance != null,
+                                            ) && (
+                                                <div className='mt-1 text-text-muted'>
+                                                    Volume{" "}
+                                                    <span className='text-text'>
+                                                        {Math.round(
+                                                            last.volume,
+                                                        ).toLocaleString()}{" "}
+                                                        {u}
+                                                    </span>
+                                                </div>
+                                            )}
                                         {last.note && (
                                             <div className='mt-1 italic text-text-muted'>
                                                 “{last.note}”
@@ -1661,113 +1728,262 @@ export default function DayEditor({
                                         (_, i) => i + 1,
                                     ).map(s => {
                                         const c = cell(ex.id, s);
+                                        const canDrop =
+                                            showWeight &&
+                                            mode !== "distance" &&
+                                            mode !== "time";
+                                        const plannedDrops =
+                                            repsForSet(ex.programSetReps, s - 1)
+                                                .drops ?? 0;
                                         return (
-                                            <div
-                                                key={s}
-                                                className={`grid items-center gap-2 ${gridCols}`}>
-                                                <span className='text-sm text-text-muted'>
-                                                    {s}
-                                                </span>
-                                                {showWeight && (
-                                                    <input
-                                                        inputMode='decimal'
-                                                        className={inputCls}
-                                                        placeholder={
-                                                            s === 1 &&
-                                                            ex.targetWeight !=
-                                                                null
-                                                                ? String(
-                                                                      ex.targetWeight,
-                                                                  )
-                                                                : ""
-                                                        }
-                                                        value={c.weight}
-                                                        onChange={e =>
-                                                            update(
-                                                                ex.id,
-                                                                s,
-                                                                "weight",
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        onBlur={() =>
-                                                            persist(ex.id, s)
-                                                        }
-                                                    />
-                                                )}
-                                                {mode === "distance" ? (
-                                                    <input
-                                                        inputMode='decimal'
-                                                        className={inputCls}
-                                                        placeholder={
-                                                            s === 1 &&
-                                                            ex.targetDistance !=
-                                                                null
-                                                                ? String(
-                                                                      ex.targetDistance,
-                                                                  )
-                                                                : ""
-                                                        }
-                                                        value={c.distance}
-                                                        onChange={e =>
-                                                            update(
-                                                                ex.id,
-                                                                s,
-                                                                "distance",
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        onBlur={() =>
-                                                            persist(ex.id, s)
-                                                        }
-                                                    />
-                                                ) : (
-                                                    <input
-                                                        inputMode={
-                                                            mode === "time"
-                                                                ? "text"
-                                                                : "numeric"
-                                                        }
-                                                        className={inputCls}
-                                                        placeholder={
-                                                            // a program's range for this set, else the
-                                                            // usual first-set hint for timed exercises
-                                                            setRangeHint(s) ||
-                                                            (mode === "time" &&
-                                                            s === 1 &&
-                                                            ex.targetRepMin !=
-                                                                null
-                                                                ? formatDuration(
-                                                                      ex.targetRepMin,
-                                                                  )
-                                                                : mode ===
-                                                                    "time"
-                                                                  ? "m:ss"
-                                                                  : "")
-                                                        }
-                                                        value={c.reps}
-                                                        onChange={e =>
-                                                            update(
-                                                                ex.id,
-                                                                s,
-                                                                "reps",
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        onBlur={() =>
-                                                            mode === "time"
-                                                                ? persistTimeField(
-                                                                      ex.id,
-                                                                      s,
-                                                                  )
-                                                                : persist(
-                                                                      ex.id,
-                                                                      s,
-                                                                  )
-                                                        }
-                                                    />
-                                                )}
-                                            </div>
+                                            <Fragment key={s}>
+                                                <div
+                                                    className={`grid items-center gap-2 ${gridCols}`}>
+                                                    <span className='text-sm text-text-muted'>
+                                                        {s}
+                                                    </span>
+                                                    {showWeight && (
+                                                        <input
+                                                            inputMode='decimal'
+                                                            className={inputCls}
+                                                            placeholder={
+                                                                s === 1 &&
+                                                                ex.targetWeight !=
+                                                                    null
+                                                                    ? String(
+                                                                          ex.targetWeight,
+                                                                      )
+                                                                    : ""
+                                                            }
+                                                            value={c.weight}
+                                                            onChange={e =>
+                                                                update(
+                                                                    ex.id,
+                                                                    s,
+                                                                    "weight",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            onBlur={() =>
+                                                                persist(
+                                                                    ex.id,
+                                                                    s,
+                                                                )
+                                                            }
+                                                        />
+                                                    )}
+                                                    {mode === "distance" ? (
+                                                        <input
+                                                            inputMode='decimal'
+                                                            className={inputCls}
+                                                            placeholder={
+                                                                s === 1 &&
+                                                                ex.targetDistance !=
+                                                                    null
+                                                                    ? String(
+                                                                          ex.targetDistance,
+                                                                      )
+                                                                    : ""
+                                                            }
+                                                            value={c.distance}
+                                                            onChange={e =>
+                                                                update(
+                                                                    ex.id,
+                                                                    s,
+                                                                    "distance",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            onBlur={() =>
+                                                                persist(
+                                                                    ex.id,
+                                                                    s,
+                                                                )
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <input
+                                                            inputMode={
+                                                                mode === "time"
+                                                                    ? "text"
+                                                                    : "numeric"
+                                                            }
+                                                            className={inputCls}
+                                                            placeholder={
+                                                                // a program's range for this set, else the
+                                                                // usual first-set hint for timed exercises
+                                                                setRangeHint(
+                                                                    s,
+                                                                ) ||
+                                                                (mode ===
+                                                                    "time" &&
+                                                                s === 1 &&
+                                                                ex.targetRepMin !=
+                                                                    null
+                                                                    ? formatDuration(
+                                                                          ex.targetRepMin,
+                                                                      )
+                                                                    : mode ===
+                                                                        "time"
+                                                                      ? "m:ss"
+                                                                      : "")
+                                                            }
+                                                            value={c.reps}
+                                                            onChange={e =>
+                                                                update(
+                                                                    ex.id,
+                                                                    s,
+                                                                    "reps",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            onBlur={() =>
+                                                                mode === "time"
+                                                                    ? persistTimeField(
+                                                                          ex.id,
+                                                                          s,
+                                                                      )
+                                                                    : persist(
+                                                                          ex.id,
+                                                                          s,
+                                                                      )
+                                                            }
+                                                        />
+                                                    )}
+                                                </div>
+                                                {canDrop &&
+                                                    c.drops.map((d, di) => (
+                                                        <div
+                                                            key={di}
+                                                            className={`grid items-center gap-2 ${gridCols}`}>
+                                                            <span
+                                                                className='text-center text-sm text-text-muted'
+                                                                title={`Drop ${di + 1}`}>
+                                                                ↓
+                                                            </span>
+                                                            {(
+                                                                [
+                                                                    "weight",
+                                                                    "reps",
+                                                                ] as const
+                                                            ).map(f => (
+                                                                <input
+                                                                    key={f}
+                                                                    inputMode={
+                                                                        f ===
+                                                                        "weight"
+                                                                            ? "decimal"
+                                                                            : "numeric"
+                                                                    }
+                                                                    aria-label={`Set ${s} drop ${di + 1} ${f}`}
+                                                                    placeholder={
+                                                                        f ===
+                                                                        "weight"
+                                                                            ? `drop ${di + 1}`
+                                                                            : ""
+                                                                    }
+                                                                    className={
+                                                                        inputCls
+                                                                    }
+                                                                    value={d[f]}
+                                                                    onChange={e =>
+                                                                        setDrops(
+                                                                            ex.id,
+                                                                            s,
+                                                                            c.drops.map(
+                                                                                (
+                                                                                    x,
+                                                                                    xi,
+                                                                                ) =>
+                                                                                    xi ===
+                                                                                    di
+                                                                                        ? {
+                                                                                              ...x,
+                                                                                              [f]: e
+                                                                                                  .target
+                                                                                                  .value,
+                                                                                          }
+                                                                                        : x,
+                                                                            ),
+                                                                            false,
+                                                                        )
+                                                                    }
+                                                                    onBlur={() =>
+                                                                        persist(
+                                                                            ex.id,
+                                                                            s,
+                                                                        )
+                                                                    }
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    ))}
+                                                {canDrop &&
+                                                    (c.weight !== "" ||
+                                                        c.drops.length > 0 ||
+                                                        plannedDrops > 0) && (
+                                                        <div className='flex items-center gap-3 pl-8 text-[11px]'>
+                                                            {c.drops.length <
+                                                                MAX_DROPS && (
+                                                                <button
+                                                                    type='button'
+                                                                    onClick={() =>
+                                                                        setDrops(
+                                                                            ex.id,
+                                                                            s,
+                                                                            [
+                                                                                ...c.drops,
+                                                                                {
+                                                                                    weight: "",
+                                                                                    reps: "",
+                                                                                },
+                                                                            ],
+                                                                            false,
+                                                                        )
+                                                                    }
+                                                                    className='text-accent hover:underline'>
+                                                                    + Drop
+                                                                </button>
+                                                            )}
+                                                            {c.drops.length >
+                                                                0 && (
+                                                                <button
+                                                                    type='button'
+                                                                    onClick={() =>
+                                                                        setDrops(
+                                                                            ex.id,
+                                                                            s,
+                                                                            c.drops.slice(
+                                                                                0,
+                                                                                -1,
+                                                                            ),
+                                                                            true,
+                                                                        )
+                                                                    }
+                                                                    className='text-text-muted hover:text-text'>
+                                                                    − Remove
+                                                                    drop
+                                                                </button>
+                                                            )}
+                                                            {plannedDrops >
+                                                                0 && (
+                                                                <span className='text-text-muted'>
+                                                                    program:{" "}
+                                                                    {
+                                                                        plannedDrops
+                                                                    }{" "}
+                                                                    {plannedDrops ===
+                                                                    1
+                                                                        ? "drop"
+                                                                        : "drops"}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                            </Fragment>
                                         );
                                     })}
                                 </div>

@@ -744,6 +744,7 @@ export type Database = {
       set_logs: {
         Row: {
           distance: number | null
+          drops: Json | null
           id: string
           logged_at: string
           notes: string | null
@@ -757,6 +758,7 @@ export type Database = {
         }
         Insert: {
           distance?: number | null
+          drops?: Json | null
           id?: string
           logged_at?: string
           notes?: string | null
@@ -770,6 +772,7 @@ export type Database = {
         }
         Update: {
           distance?: number | null
+          drops?: Json | null
           id?: string
           logged_at?: string
           notes?: string | null

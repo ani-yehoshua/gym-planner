@@ -32,7 +32,15 @@ export function parseDifficulty(value: unknown): Difficulty | null {
 }
 
 /** The rep range for one set. */
-export type SetRep = { min: number | null; max: number | null };
+/** One set's rep range, plus how many weight drops follow it (a drop set);
+ *  missing or 0 = a straight set. */
+export type SetRep = {
+    min: number | null;
+    max: number | null;
+    drops?: number;
+};
+
+export const MAX_DROPS = 4;
 
 /** What an admin submits when creating or saving a program: an ordered list of
  *  days (training days with exercises, or rest days) and a duration. Each
@@ -61,10 +69,19 @@ export type ProgramInput = {
 export function parseSetReps(raw: unknown): SetRep[] {
     if (!Array.isArray(raw)) return [];
     return raw.map(r => {
-        const o = (r ?? {}) as { min?: unknown; max?: unknown };
+        const o = (r ?? {}) as {
+            min?: unknown;
+            max?: unknown;
+            drops?: unknown;
+        };
+        const drops =
+            typeof o.drops === 'number' && o.drops > 0
+                ? Math.min(Math.round(o.drops), MAX_DROPS)
+                : 0;
         return {
             min: typeof o.min === 'number' ? o.min : null,
             max: typeof o.max === 'number' ? o.max : null,
+            ...(drops ? { drops } : {}),
         };
     });
 }

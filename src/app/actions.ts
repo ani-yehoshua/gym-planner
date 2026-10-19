@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { addDays } from '@/lib/date';
 import { DEFAULT_SETS } from '@/lib/targets';
 import { distanceUnitLabel } from '@/lib/units';
+import { cleanDrops, type Drop } from '@/lib/drops';
 import { GRIPS } from '@/lib/grips';
 import { EQUIPMENT } from '@/lib/equipment';
 import { getUserToday } from '@/lib/user-today';
@@ -17,6 +18,7 @@ import {
 } from '@/lib/supersets';
 import {
     clampDuration,
+    MAX_DROPS,
     parseDifficulty,
     parseSetReps,
     programEndDate,
@@ -24,6 +26,7 @@ import {
     summarizeSetReps,
     type DurationUnit,
     type ProgramInput,
+    type SetRep,
 } from '@/lib/programs';
 import { isAdmin, notifyExerciseRequest } from '@/lib/admin';
 import { epley1rm, round5, WORKING_REPS } from '@/lib/one-rm';
@@ -1105,11 +1108,19 @@ export async function logSet(input: {
     weight: number | null;
     reps: number | null;
     distance?: number | null;
+    /** weight drops after the top weight (a drop set) */
+    drops?: Drop[];
 }) {
     const { supabase, user } = await requireUser();
     const distance = input.distance ?? null;
+    const drops = cleanDrops(input.drops ?? []).slice(0, MAX_DROPS);
 
-    if (input.weight === null && input.reps === null && distance === null) {
+    if (
+        input.weight === null &&
+        input.reps === null &&
+        distance === null &&
+        drops.length === 0
+    ) {
         await supabase
             .from('set_logs')
             .delete()
@@ -1125,6 +1136,7 @@ export async function logSet(input: {
                 weight: input.weight,
                 reps: input.reps,
                 distance,
+                drops: drops.length ? drops : null,
             },
             { onConflict: 'planned_day_exercise_id,user_id,set_no' },
         );
@@ -1603,10 +1615,16 @@ export async function saveProgram(
                 let max = clamp(r.max);
                 if (min !== null && max !== null && min > max)
                     [min, max] = [max, min];
-                return { min, max };
+                const drops = Math.min(
+                    Math.max(Math.round(Number(r.drops) || 0), 0),
+                    MAX_DROPS,
+                );
+                return { min, max, ...(drops ? { drops } : {}) };
             });
             const overall = summarizeSetReps(setReps);
-            const hasReps = setReps.some(r => r.min !== null || r.max !== null);
+            const hasReps = setReps.some(
+                r => r.min !== null || r.max !== null || r.drops,
+            );
             const inSuperset =
                 e.supersetGroup != null &&
                 (groupSizes.get(e.supersetGroup) ?? 0) >= 2;
@@ -1727,7 +1745,7 @@ export async function startProgram(formData: FormData) {
         target_weight: null;
         from_program: true;
         /** each set's own rep range, stated on the day page (null = none given) */
-        program_set_reps: { min: number | null; max: number | null }[] | null;
+        program_set_reps: SetRep[] | null;
         /** exercises sharing a number are a superset (shown with a gold outline) */
         superset_group: number | null;
         added_by: string;
