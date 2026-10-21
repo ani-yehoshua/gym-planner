@@ -41,7 +41,7 @@ export function PlateCalculator({ units = "lb" }: { units?: Unit }) {
         Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, "");
 
     return (
-        <details className='rounded-xl border border-border bg-bg shadow-sm'>
+        <details className='relative rounded-xl border border-border bg-bg shadow-sm'>
             <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm'>
                 <span className='font-medium'>Plate calculator</span>
                 <span className='text-xs text-text-muted'>
@@ -49,7 +49,8 @@ export function PlateCalculator({ units = "lb" }: { units?: Unit }) {
                 </span>
             </summary>
 
-            <div className='flex flex-col gap-3 border-t border-border p-3'>
+            {/* floats over the page so opening it doesn't push the exercises down */}
+            <div className='absolute inset-x-0 top-full z-20 mt-1 flex flex-col gap-3 rounded-xl border border-border bg-bg p-3 shadow-lg'>
                 <div className='flex items-center justify-between gap-2'>
                     <label className='flex items-center gap-2 text-sm text-text-muted'>
                         Bodyweight

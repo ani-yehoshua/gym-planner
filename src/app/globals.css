@@ -4,72 +4,72 @@
 
 /* ---- design tokens ------------------------------------------------------- */
 :root {
-  --bg: #ffffff;
-  --surface: #f4f4f5;
-  --surface-2: #e9e9ec;
-  --border: #d4d4d8;
-  --text: #18181b;
-  --text-muted: #71717a;
-  --primary: #18181b;
-  --primary-fg: #fafafa;
-  --accent: #4f46e5;
-  color-scheme: light;
+    --bg: #ffffff;
+    --surface: #f4f4f5;
+    --surface-2: #e9e9ec;
+    --border: #d4d4d8;
+    --text: #18181b;
+    --text-muted: #71717a;
+    --primary: #18181b;
+    --primary-fg: #fafafa;
+    --accent: #4f46e5;
+    color-scheme: light;
 }
 
 .dark {
-  --bg: #09090b;
-  --surface: #18181b;
-  --surface-2: #27272a;
-  --border: #27272a;
-  --text: #fafafa;
-  --text-muted: #a1a1aa;
-  --primary: #fafafa;
-  --primary-fg: #09090b;
-  --accent: #818cf8;
-  color-scheme: dark;
+    --bg: #09090b;
+    --surface: #18181b;
+    --surface-2: #27272a;
+    --border: #27272a;
+    --text: #fafafa;
+    --text-muted: #a1a1aa;
+    --primary: #fafafa;
+    --primary-fg: #09090b;
+    --accent: #818cf8;
+    color-scheme: dark;
 }
 
 @theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-border: var(--border);
-  --color-text: var(--text);
-  --color-text-muted: var(--text-muted);
-  --color-primary: var(--primary);
-  --color-primary-fg: var(--primary-fg);
-  --color-accent: var(--accent);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+    --color-bg: var(--bg);
+    --color-surface: var(--surface);
+    --color-surface-2: var(--surface-2);
+    --color-border: var(--border);
+    --color-text: var(--text);
+    --color-text-muted: var(--text-muted);
+    --color-primary: var(--primary);
+    --color-primary-fg: var(--primary-fg);
+    --color-accent: var(--accent);
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
 }
 
 html {
-  background: var(--bg);
-  /* keep context above a field the browser scrolls into view on focus, so the
+    background: var(--bg);
+    /* keep context above a field the browser scrolls into view on focus, so the
      top of the exercise card isn't clipped behind the header */
-  scroll-padding-top: 5rem;
-  scroll-padding-bottom: 4rem;
+    scroll-padding-top: 5rem;
+    scroll-padding-bottom: 4rem;
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+    background: var(--bg);
+    color: var(--text);
 }
 
 /* iOS: never zoom the viewport when focusing a form control */
 input,
 select,
 textarea {
-  font-size: 16px;
-  scroll-margin-top: 6rem;
-  scroll-margin-bottom: 6rem;
+    font-size: 16px;
+    scroll-margin-top: 6rem;
+    scroll-margin-bottom: 6rem;
 }
 
 /* wheel-style pickers (duration dial): native momentum scroll, no visible bar */
 .no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 .no-scrollbar::-webkit-scrollbar {
-  display: none;
+    display: none;
 }

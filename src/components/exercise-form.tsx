@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { createExercise, updateExercise } from "@/app/actions";
+import {
+    createExercise,
+    createExerciseInline,
+    updateExercise,
+} from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { EQUIPMENT } from "@/lib/equipment";
 import { GRIPS } from "@/lib/grips";
@@ -18,6 +22,7 @@ const smallInp =
     "w-16 rounded-md border border-border bg-surface px-2 py-1 text-center text-sm";
 
 type Measurement = Enums<"exercise_measurement">;
+type CreatedExercise = Awaited<ReturnType<typeof createExerciseInline>>;
 
 const MEASUREMENT_LABEL: Record<Measurement, string> = {
     reps: "Reps (weight × reps)",
@@ -55,14 +60,25 @@ export function ExerciseForm({
     defaultName,
     requestId,
     submitLabel,
+    onCreated,
 }: {
     exercise?: ExerciseFormValues;
     defaultName?: string;
     requestId?: string;
     submitLabel?: string;
+    /** creating from somewhere that wants the new exercise back (the program
+     *  editor's picker) rather than just a refreshed catalog */
+    onCreated?: (created: NonNullable<CreatedExercise>) => void;
 }) {
     const editing = !!exercise;
-    const action = editing ? updateExercise : createExercise;
+    const action = onCreated
+        ? async (formData: FormData) => {
+              const created = await createExerciseInline(formData);
+              if (created) onCreated(created);
+          }
+        : editing
+          ? updateExercise
+          : createExercise;
     const [measurement, setMeasurement] = useState<Measurement>(
         exercise?.measurement ?? "reps",
     );
@@ -255,18 +271,18 @@ export function ExerciseForm({
 
             {/* variations of one lift (grip, posture, equipment) read as a single entry in the lists */}
             <div className='flex flex-col gap-1 text-xs text-text-muted'>
-                Variation (optional)
+                Variation of another lift (optional)
                 <div className='flex gap-2'>
                     <input
                         name='variant_group'
                         defaultValue={exercise?.variant_group ?? ""}
-                        placeholder='Lift — e.g. Hamstring Curl'
+                        placeholder='Lift — e.g. Rear Delt Fly'
                         className={`${inp} min-w-0 flex-1`}
                     />
                     <input
                         name='variant_label'
                         defaultValue={exercise?.variant_label ?? ""}
-                        placeholder='Variation — e.g. Seated'
+                        placeholder='Variation — e.g. High-to-low'
                         className={`${inp} min-w-0 flex-1`}
                     />
                 </div>
@@ -284,8 +300,11 @@ export function ExerciseForm({
                     ))}
                 </select>
                 <span>
-                    Exercises sharing the lift name are grouped under it; with a
-                    grip set they&rsquo;re split into grip sections.
+                    Fill in both boxes: exercises sharing the lift name are
+                    grouped under it. Set the equipment above and give a
+                    variation to nest it, e.g. Rear Delt Fly › Cable ›
+                    High-to-low. A grip splits the group into grip sections
+                    instead.
                 </span>
             </div>
 

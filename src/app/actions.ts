@@ -445,6 +445,26 @@ export async function createExercise(formData: FormData) {
     revalidatePath('/exercises');
 }
 
+/** Same as createExercise, but hands the new exercise back so the program
+ *  editor can drop it straight into the day it was created from. */
+export async function createExerciseInline(formData: FormData) {
+    const { supabase, user } = await requireUser();
+    if (!(await isAdmin(supabase))) throw new Error('Admins only');
+
+    const fields = exerciseFieldsFromForm(formData);
+    if (!fields.name || !fields.category) return null;
+    const { data, error } = await supabase
+        .from('exercises')
+        .insert({ ...fields, created_by: user.id, is_public: true })
+        .select(
+            'id, name, category, primary_muscles, time_based, measurement, default_sets, default_rep_min, default_rep_max, variant_group, variant_label, grip, equipment',
+        )
+        .single();
+    check({ error }, 'create exercise');
+    revalidatePath('/exercises');
+    return data;
+}
+
 export async function updateExercise(formData: FormData) {
     const { supabase } = await requireUser();
     if (!(await isAdmin(supabase))) throw new Error('Admins only');

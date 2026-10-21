@@ -784,14 +784,15 @@ export default function DayEditor({
                 className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
                 {/* party progress */}
                 {day.partyId && members.length > 1 && (
-                    <details className='rounded-xl border border-border'>
+                    <details className='relative rounded-xl border border-border bg-bg'>
                         <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium'>
                             <span>Party progress</span>
                             <span className='text-xs text-text-muted'>
                                 {members.length} members ▾
                             </span>
                         </summary>
-                        <div className='flex flex-col gap-2 border-t border-border p-3'>
+                        {/* floats over the page instead of pushing the exercises down */}
+                        <div className='absolute inset-x-0 top-full z-20 mt-1 flex flex-col gap-2 rounded-xl border border-border bg-bg p-3 shadow-lg'>
                             {members.map(m => {
                                 const t = memberDayTotals(m.user_id);
                                 return (
@@ -846,10 +847,12 @@ export default function DayEditor({
                 if (ticked.length === 0) return null;
                 const ids = ticked.map(e => e.id);
                 return (
+                    // zero height, so the bar floats over the exercises rather than
+                    // pushing them down when it appears
                     <div
-                        className='sticky z-[9] bg-bg py-1'
+                        className='sticky z-[9] h-0'
                         style={{ top: `calc(3.5rem + ${stickyBlockH}px)` }}>
-                        <div className='flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs'>
+                        <div className='absolute inset-x-0 top-1 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-bg px-3 py-2 text-xs shadow-lg'>
                             <span className='text-text-muted'>
                                 {ticked.length} selected
                             </span>

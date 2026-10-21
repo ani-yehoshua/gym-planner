@@ -5,6 +5,7 @@ import { saveProgram } from "@/app/actions";
 import { TrashIcon } from "@/components/icons";
 import { announceSave } from "@/components/save-pill";
 import { EquipmentFilter } from "@/components/equipment-filter";
+import { ExerciseForm } from "@/components/exercise-form";
 import { GroupedExerciseList } from "@/components/grouped-exercise-list";
 import { matchesEquipment } from "@/lib/equipment";
 import { CATEGORY_LABEL, CATEGORY_ORDER, muscleList } from "@/lib/labels";
@@ -140,6 +141,8 @@ export function ProgramBuilder({
     const [selected, setSelected] = useState<string[]>([]);
     const [query, setQuery] = useState("");
     const [equipFilter, setEquipFilter] = useState<string[]>([]);
+    // exercises made from the picker, until the page next loads the catalog
+    const [created, setCreated] = useState<BuilderExercise[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [pending, start] = useTransition();
 
@@ -329,7 +332,7 @@ export function ProgramBuilder({
     // catalog grouped by muscle group for the picker
     function groups(taken: Set<string>) {
         const m = new Map<Cat, BuilderExercise[]>();
-        for (const c of catalog) {
+        for (const c of [...catalog, ...created]) {
             if (taken.has(c.id)) continue;
             if (!c.name.toLowerCase().includes(query.toLowerCase())) continue;
             if (!matchesEquipment(c.equipment, equipFilter)) continue;
@@ -1035,6 +1038,35 @@ export function ProgramBuilder({
                                                     </p>
                                                 )}
                                             </div>
+                                            <details className='mt-2 rounded-lg border border-border'>
+                                                <summary className='cursor-pointer list-none px-2.5 py-2 text-sm font-medium'>
+                                                    + Create new exercise
+                                                </summary>
+                                                <div className='border-t border-border p-3'>
+                                                    <ExerciseForm
+                                                        key={created.length}
+                                                        defaultName={query}
+                                                        submitLabel='Create and add'
+                                                        onCreated={row => {
+                                                            const ex: BuilderExercise =
+                                                                {
+                                                                    ...row,
+                                                                    primary_muscles:
+                                                                        row.primary_muscles ??
+                                                                        [],
+                                                                };
+                                                            setCreated(c => [
+                                                                ...c,
+                                                                ex,
+                                                            ]);
+                                                            addExercise(
+                                                                d.key,
+                                                                ex,
+                                                            );
+                                                        }}
+                                                    />
+                                                </div>
+                                            </details>
                                         </div>
                                     ) : (
                                         <button

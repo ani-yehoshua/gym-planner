@@ -1,10 +1,15 @@
 import { Fragment, type ReactNode } from "react";
+import { EQUIPMENT } from "@/lib/equipment";
 import { GRIPS } from "@/lib/grips";
 import { groupVariants, type VariantItem } from "@/lib/variants";
 
-/** A group's members split by grip (Underhand, Overhand, Neutral); members with
- *  no grip come first, unlabelled. A group with no grips is one plain section. */
+/** A group's members split into labelled sections. By grip (Underhand,
+ *  Overhand, Neutral) when any member has one, members with no grip first and
+ *  unlabelled. Otherwise by equipment (Cable › High-to-low, Low-to-high), but
+ *  only when some equipment has several variations of its own; else one plain
+ *  section. */
 function gripSections<T extends VariantItem>(items: T[]) {
+    if (!items.some(it => it.grip)) return equipmentSections(items);
     const sections = [
         { id: "none", label: null as string | null, items: [] as T[] },
         ...GRIPS.map(g => ({
@@ -15,6 +20,29 @@ function gripSections<T extends VariantItem>(items: T[]) {
     ];
     for (const it of items)
         (sections.find(s => s.id === it.grip) ?? sections[0]).items.push(it);
+    return sections.filter(s => s.items.length > 0);
+}
+
+function equipmentSections<T extends VariantItem>(items: T[]) {
+    const counts = new Map<string, number>();
+    for (const it of items)
+        if (it.equipment)
+            counts.set(it.equipment, (counts.get(it.equipment) ?? 0) + 1);
+    if (![...counts.values()].some(n => n >= 2))
+        return [{ id: "all", label: null as string | null, items }];
+
+    const sections = [
+        { id: "none", label: null as string | null, items: [] as T[] },
+        ...EQUIPMENT.filter(e => counts.has(e.id)).map(e => ({
+            id: e.id as string,
+            label: e.label as string | null,
+            items: [] as T[],
+        })),
+    ];
+    for (const it of items)
+        (sections.find(s => s.id === it.equipment) ?? sections[0]).items.push(
+            it,
+        );
     return sections.filter(s => s.items.length > 0);
 }
 

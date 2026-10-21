@@ -7,6 +7,7 @@ export type VariantItem = {
     variant_group: string | null;
     variant_label: string | null;
     grip?: string | null;
+    equipment?: string | null;
 };
 
 export type VariantEntry<T> =
