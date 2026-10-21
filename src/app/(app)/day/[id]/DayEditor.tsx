@@ -274,20 +274,6 @@ export default function DayEditor({
     const [swapId, setSwapId] = useState<string | null>(null);
     // exercises ticked to be made into a superset (or taken out of one)
     const [selected, setSelected] = useState<string[]>([]);
-    // The Party progress / Calculator block sticks to the top and changes height
-    // as its dropdowns open. The superset bar sticks right below it, so its
-    // offset follows that height.
-    const stickyBlockRef = useRef<HTMLDivElement>(null);
-    const [stickyBlockH, setStickyBlockH] = useState(0);
-    useEffect(() => {
-        const el = stickyBlockRef.current;
-        if (!el) return;
-        const update = () => setStickyBlockH(el.offsetHeight);
-        update();
-        const observer = new ResizeObserver(update);
-        observer.observe(el);
-        return () => observer.disconnect();
-    }, []);
     const [swapQuery, setSwapQuery] = useState("");
     const weightInputRefs = useRef(new Map<string, HTMLInputElement>());
     // deload % typed per exercise — purely a live calculator, nothing here
@@ -779,9 +765,7 @@ export default function DayEditor({
                 </p>
             )}
 
-            <div
-                ref={stickyBlockRef}
-                className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
+            <div className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
                 {/* party progress */}
                 {day.partyId && members.length > 1 && (
                     <details className='relative rounded-xl border border-border bg-bg'>
@@ -847,12 +831,14 @@ export default function DayEditor({
                 if (ticked.length === 0) return null;
                 const ids = ticked.map(e => e.id);
                 return (
-                    // zero height, so the bar floats over the exercises rather than
-                    // pushing them down when it appears
+                    // pinned just above the bottom nav, so it never covers the
+                    // exercise you're picking or pushes the list around
                     <div
-                        className='sticky z-[9] h-0'
-                        style={{ top: `calc(3.5rem + ${stickyBlockH}px)` }}>
-                        <div className='absolute inset-x-0 top-1 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-bg px-3 py-2 text-xs shadow-lg'>
+                        className='pointer-events-none fixed inset-x-0 z-[9] mx-auto w-full max-w-2xl px-4'
+                        style={{
+                            bottom: "calc(4.5rem + env(safe-area-inset-bottom))",
+                        }}>
+                        <div className='pointer-events-auto flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-bg px-3 py-2 text-xs shadow-lg'>
                             <span className='text-text-muted'>
                                 {ticked.length} selected
                             </span>
