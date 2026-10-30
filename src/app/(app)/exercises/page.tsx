@@ -16,7 +16,9 @@ import { SavePillHost } from "@/components/save-pill";
 import { SubmitButton } from "@/components/submit-button";
 import { recommendedReps, isCompound, type Goal } from "@/lib/targets";
 import { isAdmin } from "@/lib/admin";
-import { distanceUnitLabel, type Unit } from "@/lib/units";
+import { formatShort } from "@/lib/date";
+import { fetchOneRmHistory } from "@/lib/one-rm-history";
+import { distanceUnitLabel, unitLabel, type Unit } from "@/lib/units";
 import type { Enums } from "@/lib/supabase/database.types";
 
 const inp = "rounded-lg border border-border bg-surface px-3 py-2 text-sm";
@@ -73,6 +75,7 @@ export default async function ExercisesPage() {
             .maybeSingle(),
     ]);
 
+    const oneRms = await fetchOneRmHistory(supabase, user.id);
     const exercises = (allExercises ?? []).filter(e => !e.archived_at);
     const archived = admin
         ? (allExercises ?? []).filter(e => e.archived_at)
@@ -295,6 +298,52 @@ export default async function ExercisesPage() {
                                                     <ExerciseDetailBody
                                                         ex={e}
                                                     />
+                                                    {(() => {
+                                                        const tested =
+                                                            oneRms.filter(
+                                                                r =>
+                                                                    r.exerciseId ===
+                                                                    e.id,
+                                                            );
+                                                        if (!tested.length)
+                                                            return null;
+                                                        const u = unitLabel(
+                                                            (profile?.units as Unit) ??
+                                                                "lb",
+                                                        );
+                                                        return (
+                                                            <div className='mt-3 rounded-lg bg-surface p-3 text-xs'>
+                                                                <div className='mb-1 font-medium'>
+                                                                    Tested 1RMs
+                                                                </div>
+                                                                <ul className='flex flex-col gap-0.5 text-text-muted'>
+                                                                    {tested.map(
+                                                                        t => (
+                                                                            <li
+                                                                                key={
+                                                                                    t.date
+                                                                                }
+                                                                                className='flex justify-between'>
+                                                                                <span>
+                                                                                    {formatShort(
+                                                                                        t.date,
+                                                                                    )}
+                                                                                </span>
+                                                                                <span className='tabular-nums text-text'>
+                                                                                    {
+                                                                                        t.weight
+                                                                                    }{" "}
+                                                                                    {
+                                                                                        u
+                                                                                    }
+                                                                                </span>
+                                                                            </li>
+                                                                        ),
+                                                                    )}
+                                                                </ul>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                     {(() => {
                                                         const [rMin, rMax] =
                                                             recommendedReps(

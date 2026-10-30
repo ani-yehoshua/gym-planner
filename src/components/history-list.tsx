@@ -10,7 +10,12 @@ import {
     formatRangeNumeric,
 } from "@/lib/date";
 import { formatSet } from "@/lib/format-set";
-import { CATEGORY_LABEL, CATEGORY_STYLE, muscleLabel } from "@/lib/labels";
+import {
+    CATEGORY_LABEL,
+    CATEGORY_STYLE,
+    muscleLabel,
+    PROGRAM_STYLE,
+} from "@/lib/labels";
 import type { Enums } from "@/lib/supabase/database.types";
 
 export type HistoryDay = {
@@ -19,6 +24,8 @@ export type HistoryDay = {
     category: Enums<"muscle_category"> | null;
     partyName: string | null;
     isDeload: boolean;
+    /** the program this session came from, if any */
+    program: { name: string; dayNumber: number | null } | null;
     /** reps-based volume only; timed sets are totalled separately */
     volume: number;
     timedVolume: number;
@@ -71,7 +78,16 @@ function exportDays(days: HistoryDay[], format: "csv" | "json") {
     }
 
     const rows = [
-        ["date", "category", "party", "exercise", "set", "weight", "reps"],
+        [
+            "date",
+            "category",
+            "program",
+            "party",
+            "exercise",
+            "set",
+            "weight",
+            "reps",
+        ],
     ];
     for (const d of sorted) {
         for (const ex of d.exercises) {
@@ -79,6 +95,7 @@ function exportDays(days: HistoryDay[], format: "csv" | "json") {
                 rows.push([
                     d.date,
                     d.category ?? "",
+                    d.program?.name ?? "",
                     d.partyName ?? "",
                     ex.name,
                     String(i + 1),
@@ -260,11 +277,23 @@ export function HistoryList({
                                     {dayOfMonth(d.date)}
                                 </span>
                             </span>
-                            {d.category && (
+                            {d.program ? (
                                 <span
-                                    className={`shrink-0 rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}>
-                                    {CATEGORY_LABEL[d.category]}
+                                    title={
+                                        d.program.dayNumber
+                                            ? `${d.program.name} · Day ${d.program.dayNumber}`
+                                            : d.program.name
+                                    }
+                                    className={`max-w-[9rem] shrink-0 truncate rounded-md border px-1.5 py-0.5 text-xs ${PROGRAM_STYLE}`}>
+                                    {d.program.name}
                                 </span>
+                            ) : (
+                                d.category && (
+                                    <span
+                                        className={`shrink-0 rounded-md border px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[d.category]}`}>
+                                        {CATEGORY_LABEL[d.category]}
+                                    </span>
+                                )
                             )}
                             {d.isDeload && (
                                 <span className='shrink-0 rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-300'>
@@ -537,11 +566,23 @@ export function HistoryList({
                                         {formatLong(d.date)}
                                     </div>
                                     <div className='mb-2 flex flex-wrap items-center gap-1.5 text-xs text-text-muted'>
-                                        {d.category && (
+                                        {d.program ? (
                                             <span
-                                                className={`rounded-md border px-1.5 py-0.5 ${CATEGORY_STYLE[d.category]}`}>
-                                                {CATEGORY_LABEL[d.category]}
+                                                title={
+                                                    d.program.dayNumber
+                                                        ? `${d.program.name} · Day ${d.program.dayNumber}`
+                                                        : d.program.name
+                                                }
+                                                className={`rounded-md border px-1.5 py-0.5 ${PROGRAM_STYLE}`}>
+                                                {d.program.name}
                                             </span>
+                                        ) : (
+                                            d.category && (
+                                                <span
+                                                    className={`rounded-md border px-1.5 py-0.5 ${CATEGORY_STYLE[d.category]}`}>
+                                                    {CATEGORY_LABEL[d.category]}
+                                                </span>
+                                            )
                                         )}
                                         {d.isDeload && (
                                             <span className='rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-amber-600 dark:text-amber-300'>

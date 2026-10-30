@@ -22,6 +22,7 @@ import {
     setExerciseDefaultDistance,
     setExerciseDefaultSeconds,
     setExerciseDefaultWeight,
+    setOneRmAttempt,
     setLogMode,
     swapExercise,
     updateDayExerciseTarget,
@@ -99,6 +100,8 @@ type DayEx = {
     targetWeight: number | null;
     targetDistance: number | null;
     logMode: LogMode;
+    /** my own mark: this exercise is a 1RM attempt */
+    isOneRm: boolean;
     addedBy: string | null;
     /** came from a program: its sets and reps are the program's, so they're
      *  shown but locked for the member following along */
@@ -280,6 +283,8 @@ export default function DayEditor({
     // is persisted; only the resulting weight (written into the normal
     // "current weight" target) sticks around
     const [deloadPct, setDeloadPct] = useState<Record<string, string>>({});
+    // 1RM-attempt ticks, shown right away while the save goes through
+    const [oneRmMarks, setOneRmMarks] = useState<Record<string, boolean>>({});
 
     function saveDefaultWeight(pdeId: string, exerciseId: string) {
         const raw = weightInputRefs.current.get(pdeId)?.value ?? "";
@@ -968,6 +973,14 @@ export default function DayEditor({
                         // sets); a member can swap their own add too, logged
                         // sets or not — they just get the same confirm prompt
                         const canSwap = canManageAll || addedByMe;
+                        // my own "this is a max attempt" mark; a 1RM day
+                        // already treats every exercise that way
+                        const isOneRmAttempt = oneRmMarks[ex.id] ?? ex.isOneRm;
+                        const canMarkOneRm =
+                            day.category !== "one_rm" &&
+                            showWeight &&
+                            mode !== "distance" &&
+                            mode !== "time";
                         return (
                             <li
                                 key={ex.id}
@@ -1978,7 +1991,32 @@ export default function DayEditor({
                                 </div>
 
                                 <div className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted'>
-                                    {day.category === "one_rm" &&
+                                    {canMarkOneRm && (
+                                        <label className='flex cursor-pointer items-center gap-1.5'>
+                                            <input
+                                                type='checkbox'
+                                                checked={isOneRmAttempt}
+                                                onChange={e => {
+                                                    const value =
+                                                        e.target.checked;
+                                                    setOneRmMarks(p => ({
+                                                        ...p,
+                                                        [ex.id]: value,
+                                                    }));
+                                                    startQuiet(() =>
+                                                        setOneRmAttempt({
+                                                            pdeId: ex.id,
+                                                            dayId: day.id,
+                                                            value,
+                                                        }),
+                                                    );
+                                                }}
+                                            />
+                                            1RM attempt
+                                        </label>
+                                    )}
+                                    {(day.category === "one_rm" ||
+                                        isOneRmAttempt) &&
                                         bestSingle(ex) > 0 && (
                                             <span>
                                                 1RM today{" "}

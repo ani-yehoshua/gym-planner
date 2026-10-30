@@ -8,6 +8,7 @@ import {
     StrengthWidgets,
     type StrengthRow,
 } from "@/components/strength-widgets";
+import { fetchOneRmHistory } from "@/lib/one-rm-history";
 import { unitLabel, type Unit } from "@/lib/units";
 
 export default async function ProgressPage() {
@@ -48,7 +49,7 @@ export default async function ProgressPage() {
         supabase
             .from("planned_days")
             .select(
-                "id, date, category, party_id, is_deload, parties(name), planned_day_exercises(id, sort, exercises(name, primary_muscles, time_based, measurement))",
+                "id, date, category, party_id, is_deload, program_id, program_day_number, parties(name), programs(name), planned_day_exercises(id, sort, exercises(name, primary_muscles, time_based, measurement))",
             )
             .lte("date", todayISO)
             .order("date", { ascending: false })
@@ -60,6 +61,7 @@ export default async function ProgressPage() {
             .maybeSingle(),
     ]);
 
+    const oneRms = await fetchOneRmHistory(supabase, user.id);
     const units: Unit = (profile?.units as Unit) ?? "lb";
     const u = unitLabel(units);
 
@@ -206,6 +208,13 @@ export default async function ProgressPage() {
                 category: d.category,
                 partyName: d.party_id ? (d.parties?.name ?? "Party") : null,
                 isDeload: d.is_deload,
+                program:
+                    d.program_id && d.programs
+                        ? {
+                              name: d.programs.name,
+                              dayNumber: d.program_day_number,
+                          }
+                        : null,
                 volume,
                 timedVolume,
                 exercisesDone: exercises.length,
@@ -410,6 +419,7 @@ export default async function ProgressPage() {
 
             <StrengthWidgets
                 rows={strengthRows}
+                oneRms={oneRms}
                 todayISO={todayISO}
                 units={units}
             />

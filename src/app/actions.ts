@@ -1162,29 +1162,63 @@ export async function logSet(input: {
         );
     }
 
-    // On a 1RM day a logged single is a max attempt: remember the heaviest one
-    // as this lift's 1RM.
+    // On a 1RM day, or an exercise marked as a 1RM attempt, a logged single is
+    // a max attempt: remember the heaviest one as this lift's 1RM.
     if (input.reps === 1) {
         await saveOneRepMax(supabase, user.id, input.dayId, input.pdeId);
     }
     revalidatePath(`/day/${input.dayId}`);
 }
 
-/** On a 1RM day, your heaviest single (a set of exactly 1 rep) on an exercise
- *  becomes its saved 1RM — what the Exercises tab shows as "est. 1RM". Leaves
- *  the member's other saved defaults for that exercise alone. */
+/** Mark (or unmark) an exercise on a session as your own 1RM attempt. Marking
+ *  it also counts any singles already logged on it. */
+export async function setOneRmAttempt(input: {
+    pdeId: string;
+    dayId: string;
+    value: boolean;
+}) {
+    const { supabase, user } = await requireUser();
+    check(
+        await supabase.from('day_exercise_user_targets').upsert(
+            {
+                planned_day_exercise_id: input.pdeId,
+                user_id: user.id,
+                is_one_rm: input.value,
+            },
+            { onConflict: 'planned_day_exercise_id,user_id' },
+        ),
+        'mark 1RM attempt',
+    );
+    if (input.value) {
+        await saveOneRepMax(supabase, user.id, input.dayId, input.pdeId);
+    }
+    revalidatePath(`/day/${input.dayId}`);
+}
+
+/** The heaviest single (a set of exactly 1 rep) on a 1RM attempt becomes the
+ *  exercise's saved 1RM — what the Exercises tab shows as "est. 1RM". It only
+ *  ever goes up. Leaves the member's other saved defaults alone. */
 async function saveOneRepMax(
     supabase: Awaited<ReturnType<typeof createClient>>,
     userId: string,
     dayId: string,
     pdeId: string,
 ) {
-    const { data: day } = await supabase
-        .from('planned_days')
-        .select('category')
-        .eq('id', dayId)
-        .maybeSingle();
-    if (day?.category !== 'one_rm') return;
+    // a 1RM day, or an exercise the member marked as a 1RM attempt
+    const [{ data: day }, { data: marked }] = await Promise.all([
+        supabase
+            .from('planned_days')
+            .select('category')
+            .eq('id', dayId)
+            .maybeSingle(),
+        supabase
+            .from('day_exercise_user_targets')
+            .select('is_one_rm')
+            .eq('planned_day_exercise_id', pdeId)
+            .eq('user_id', userId)
+            .maybeSingle(),
+    ]);
+    if (day?.category !== 'one_rm' && !marked?.is_one_rm) return;
 
     const [{ data: pde }, { data: singles }] = await Promise.all([
         supabase
@@ -1205,10 +1239,12 @@ async function saveOneRepMax(
 
     const { data: existing } = await supabase
         .from('user_exercise_prefs')
-        .select('exercise_id')
+        .select('exercise_id, default_1rm')
         .eq('user_id', userId)
         .eq('exercise_id', pde.exercise_id)
         .maybeSingle();
+    // the saved 1RM only ever goes up: a lighter test doesn't replace it
+    if (existing && (existing.default_1rm ?? 0) >= best) return;
     if (existing) {
         await supabase
             .from('user_exercise_prefs')

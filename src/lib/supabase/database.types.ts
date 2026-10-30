@@ -119,6 +119,7 @@ export type Database = {
       }
       day_exercise_user_targets: {
         Row: {
+          is_one_rm: boolean
           planned_day_exercise_id: string
           target_distance: number | null
           target_rep_max: number | null
@@ -129,6 +130,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          is_one_rm?: boolean
           planned_day_exercise_id: string
           target_distance?: number | null
           target_rep_max?: number | null
@@ -139,6 +141,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          is_one_rm?: boolean
           planned_day_exercise_id?: string
           target_distance?: number | null
           target_rep_max?: number | null

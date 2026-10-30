@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { addDays, formatShort } from "@/lib/date";
 import { CATEGORY_DOT, CATEGORY_LABEL, CATEGORY_ORDER } from "@/lib/labels";
 import { epley1rm, round5 } from "@/lib/one-rm";
+import type { OneRmEntry } from "@/lib/one-rm-history";
 import { unitLabel, type Unit } from "@/lib/units";
 import type { Enums } from "@/lib/supabase/database.types";
 
@@ -64,10 +65,13 @@ type ExAgg = {
 
 export function StrengthWidgets({
     rows,
+    oneRms,
     todayISO,
     units,
 }: {
     rows: StrengthRow[];
+    /** tested 1RMs from 1RM days, newest first */
+    oneRms: OneRmEntry[];
     todayISO: string;
     units: Unit;
 }) {
@@ -254,16 +258,18 @@ export function StrengthWidgets({
         <section>
             <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
                 <h2 className='text-sm font-medium'>Lifts</h2>
-                <div className='flex gap-1 rounded-full border border-border p-0.5'>
-                    {RANGES.map(r => (
-                        <button
-                            key={r.id}
-                            onClick={() => setRange(r.id)}
-                            className={pill(range === r.id)}>
-                            {r.label}
-                        </button>
-                    ))}
-                </div>
+                {view !== "big3" && (
+                    <div className='flex gap-1 rounded-full border border-border p-0.5'>
+                        {RANGES.map(r => (
+                            <button
+                                key={r.id}
+                                onClick={() => setRange(r.id)}
+                                className={pill(range === r.id)}>
+                                {r.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
             <div className='mb-3 flex gap-1 overflow-x-auto rounded-full border border-border p-0.5'>
@@ -288,7 +294,12 @@ export function StrengthWidgets({
                 />
             )}
 
-            {aggs.length === 0 ? (
+            {view === "big3" ? (
+                <Big3View
+                    oneRms={oneRms}
+                    unit={u}
+                />
+            ) : aggs.length === 0 ? (
                 <p className='text-sm text-text-muted'>
                     {rows.length === 0
                         ? "Log some weighted sets and this fills in."
@@ -296,14 +307,7 @@ export function StrengthWidgets({
                 </p>
             ) : (
                 <>
-                    {view === "big3" && (
-                        <Big3View
-                            aggs={aggs}
-                            unit={u}
-                            prd={justPrd}
-                        />
-                    )}
-                    {view !== "big3" && noMatches && (
+                    {noMatches && (
                         <p className='text-sm text-text-muted'>
                             No lifts match “{query.trim()}”.
                         </p>
@@ -335,7 +339,7 @@ export function StrengthWidgets({
                         />
                     )}
 
-                    {view !== "big3" && hiddenCount > 0 && !searching && (
+                    {hiddenCount > 0 && !searching && (
                         <button
                             onClick={() => setShowAll(s => !s)}
                             className='mt-3 w-full rounded-lg border border-border px-3 py-2 text-xs text-text-muted hover:text-text'>
@@ -629,54 +633,57 @@ function VolumeView({ aggs, unit }: { aggs: ExAgg[]; unit: string }) {
     );
 }
 
-function Big3View({
-    aggs,
-    unit,
-    prd,
-}: {
-    aggs: ExAgg[];
-    unit: string;
-    prd: (a: ExAgg) => boolean;
-}) {
-    const lifts = BIG_3.map(name => ({
-        name,
-        agg: aggs.find(a => a.name === name),
-    }));
-    // the classic total, from each lift's best estimated 1RM
-    const total = lifts.reduce((sum, l) => sum + (l.agg?.best.e1rm ?? 0), 0);
-    const complete = lifts.every(l => l.agg);
+/** Actual tested 1RMs on the three lifts (from 1RM days), not working weights
+ *  or estimates. Always all-time, so the range picker doesn't apply. */
+function Big3View({ oneRms, unit }: { oneRms: OneRmEntry[]; unit: string }) {
+    const lifts = BIG_3.map(name => {
+        // newest first: [0] is the latest test, the best may be an older one
+        const tests = oneRms.filter(r => r.name === name);
+        const best = tests.reduce((m, r) => Math.max(m, r.weight), 0);
+        return { name, tests, best };
+    });
+    // the classic total, from each lift's best tested 1RM
+    const total = lifts.reduce((sum, l) => sum + l.best, 0);
+    const complete = lifts.every(l => l.tests.length > 0);
 
     return (
         <div className='flex flex-col gap-2'>
-            {lifts.map(({ name, agg: a }) => (
+            {lifts.map(({ name, tests, best }) => (
                 <div
                     key={name}
                     className='rounded-lg border border-border p-3'>
-                    <div className='flex items-center justify-between gap-2'>
+                    <div className='flex items-baseline justify-between gap-2'>
                         <span className='text-sm font-medium'>{name}</span>
-                        {a && prd(a) && <NewPill />}
+                        {tests.length > 0 && (
+                            <span className='text-lg font-semibold tabular-nums'>
+                                {best}
+                                <span className='ml-1 text-xs font-normal text-text-muted'>
+                                    {unit}
+                                </span>
+                            </span>
+                        )}
                     </div>
-                    {a ? (
-                        <>
-                            <div className='mt-1 flex items-baseline justify-between gap-2'>
-                                <span className='text-lg font-semibold tabular-nums'>
-                                    {setLabel(a)}
-                                </span>
-                                <span className='text-sm tabular-nums'>
-                                    e1RM {a.best.e1rm} {unit}
-                                </span>
-                            </div>
-                            <div className='flex items-center justify-between text-[11px] text-text-muted'>
-                                <span>{formatShort(a.best.date)}</span>
-                                <Delta sessions={a.sessions} />
-                            </div>
-                            <div className='mt-1.5'>
-                                <Sparkline sessions={a.sessions} />
-                            </div>
-                        </>
+                    {tests.length > 0 ? (
+                        <ul className='mt-1.5 flex flex-col gap-0.5 text-[11px] text-text-muted'>
+                            {tests.map(t => (
+                                <li
+                                    key={t.date}
+                                    className='flex justify-between'>
+                                    <span>{formatShort(t.date)}</span>
+                                    <span
+                                        className={`tabular-nums ${
+                                            t.weight === best
+                                                ? "font-medium text-text"
+                                                : ""
+                                        }`}>
+                                        {t.weight} {unit}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
                     ) : (
                         <p className='mt-1 text-xs text-text-muted'>
-                            Not logged in this range.
+                            No 1RM tested yet. Plan a 1RM day and log a single.
                         </p>
                     )}
                 </div>

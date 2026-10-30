@@ -1115,17 +1115,26 @@ export function ProgramBuilder({
                 </p>
             )}
 
-            <button
-                type='button'
-                onClick={submit}
-                disabled={pending}
-                className='self-start rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-fg disabled:opacity-50'>
-                {pending
-                    ? "Saving…"
-                    : initial?.id
-                      ? "Save program"
-                      : "Create program"}
-            </button>
+            {/* stays where it is while the end of the program is in view, and
+                floats above the bottom nav otherwise, so saving never means
+                scrolling to the bottom */}
+            <div
+                className='pointer-events-none sticky z-[9] flex'
+                style={{
+                    bottom: "calc(4.5rem + env(safe-area-inset-bottom))",
+                }}>
+                <button
+                    type='button'
+                    onClick={submit}
+                    disabled={pending}
+                    className='pointer-events-auto rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-fg shadow-lg disabled:opacity-50'>
+                    {pending
+                        ? "Saving…"
+                        : initial?.id
+                          ? "Save program"
+                          : "Create program"}
+                </button>
+            </div>
         </div>
     );
 }

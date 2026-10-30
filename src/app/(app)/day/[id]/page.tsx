@@ -92,7 +92,7 @@ export default async function DayPage({
             ? supabase
                   .from("day_exercise_user_targets")
                   .select(
-                      "planned_day_exercise_id, target_sets, target_rep_min, target_rep_max, target_weight, target_distance",
+                      "planned_day_exercise_id, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, is_one_rm",
                   )
                   .eq("user_id", user.id)
                   .in("planned_day_exercise_id", pdeIds)
@@ -405,6 +405,8 @@ export default async function DayPage({
                                 targetWeight: e.weight,
                                 targetDistance: e.distance,
                                 logMode: e.logMode,
+                                isOneRm:
+                                    targetByPde.get(p.id)?.is_one_rm ?? false,
                                 addedBy: p.added_by,
                                 fromProgram: p.from_program,
                                 programSetReps: parseSetReps(

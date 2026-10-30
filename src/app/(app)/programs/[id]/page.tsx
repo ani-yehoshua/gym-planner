@@ -4,6 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { startProgram } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { ChevronLeftIcon } from "@/components/icons";
+import { addDays, formatShort } from "@/lib/date";
+import { ProgramProgressList } from "@/components/program-progress-list";
+import { fetchProgramProgress } from "@/lib/program-progress";
+import { unitLabel, type Unit } from "@/lib/units";
 import { getUserToday } from "@/lib/user-today";
 import { muscleList } from "@/lib/labels";
 import { toBlocks } from "@/lib/supersets";
@@ -43,11 +47,34 @@ export default async function ProgramDetailPage({
             .maybeSingle(),
         supabase
             .from("user_programs")
-            .select("program_id, programs(name)")
+            .select("program_id, start_date, end_date, programs(name)")
             .eq("user_id", user.id)
             .maybeSingle(),
     ]);
     if (!program) notFound();
+
+    // your progress: this run while you're following it, else every run of it
+    // that's still on your calendar
+    const activeRun =
+        run && run.program_id === program.id && run.end_date >= todayISO
+            ? run
+            : null;
+    const [progress, { data: profile }] = await Promise.all([
+        fetchProgramProgress(
+            supabase,
+            user.id,
+            program.id,
+            activeRun
+                ? { start: activeRun.start_date, end: activeRun.end_date }
+                : undefined,
+        ),
+        supabase
+            .from("profiles")
+            .select("units")
+            .eq("id", user.id)
+            .maybeSingle(),
+    ]);
+    const u = unitLabel((profile?.units as Unit) ?? "lb");
 
     const difficulty = parseDifficulty(program.difficulty);
     const days = [...program.program_days].sort(
@@ -58,6 +85,34 @@ export default async function ProgramDetailPage({
     const sessions = Array.from({ length: total }, (_, i) =>
         days.length ? days[i % days.length] : null,
     ).filter(d => d && !d.is_rest).length;
+    // the run laid out week by week (rest days included), so the week and day
+    // you're on can be picked out
+    // Every week of the program, each day with the cycle day it falls on. When
+    // you're following it the days also carry their dates and what you've done.
+    const weeks = days.length
+        ? Array.from({ length: Math.ceil(total / 7) }, (_, w) => ({
+              entries: Array.from(
+                  { length: Math.min(7, total - w * 7) },
+                  (_, k) => {
+                      const i = w * 7 + k;
+                      const date = activeRun
+                          ? addDays(activeRun.start_date, i)
+                          : null;
+                      return {
+                          i,
+                          d: days[i % days.length],
+                          date,
+                          planned: date
+                              ? progress.days.find(p => p.date === date)
+                              : undefined,
+                      };
+                  },
+              ),
+          }))
+        : [];
+    const thisWeek = weeks.findIndex(w =>
+        w.entries.some(e => e.date === todayISO),
+    );
     // arriving from a Calendar day's "Plan session…" pre-fills that date
     const defaultStart = /^\d{4}-\d{2}-\d{2}$/.test(start ?? "")
         ? start!
@@ -114,123 +169,283 @@ export default async function ProgramDetailPage({
 
             {/* what the repeating cycle is made of */}
             <section className='flex flex-col gap-2'>
-                <h2 className='text-sm font-medium'>The cycle</h2>
-                {days.map((d, i) => {
-                    const exercises = [...d.program_exercises]
-                        .sort((a, b) => a.sort - b.sort)
-                        .flatMap(e =>
-                            e.exercises ? [{ ...e, ex: e.exercises }] : [],
-                        );
+                <h2 className='text-sm font-medium'>
+                    The program, week by week
+                </h2>
+                {weeks.map((week, wi) => {
+                    const isNow = wi === thisWeek;
+                    const trainDays = week.entries.filter(e => !e.d.is_rest);
+                    const doneCount = trainDays.filter(
+                        e => e.planned?.done,
+                    ).length;
                     return (
-                        <div
-                            key={d.id}
-                            className='rounded-xl border border-border p-4'>
-                            <div className='flex items-baseline justify-between gap-2'>
-                                <span className='font-medium'>
-                                    <span className='mr-2 text-xs font-normal text-text-muted'>
-                                        Day {i + 1}
-                                    </span>
-                                    {d.name}
+                        <details
+                            key={wi}
+                            open={isNow}
+                            className={`rounded-xl border ${
+                                isNow
+                                    ? "border-accent/60 bg-accent/5"
+                                    : "border-border"
+                            }`}>
+                            <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm'>
+                                <span className='flex items-center gap-2 font-medium'>
+                                    Week {wi + 1}
+                                    {isNow && (
+                                        <span className='rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent'>
+                                            This week
+                                        </span>
+                                    )}
                                 </span>
-                                {d.is_rest && (
-                                    <span className='text-xs text-text-muted'>
-                                        Rest
-                                    </span>
-                                )}
-                            </div>
-                            {!d.is_rest &&
-                                (exercises.length === 0 ? (
-                                    <p className='mt-2 text-sm text-text-muted'>
-                                        No exercises.
-                                    </p>
-                                ) : (
-                                    <ol className='mt-2 flex flex-col gap-2 text-sm'>
-                                        {toBlocks(
-                                            exercises.map(e => ({
-                                                group: e.superset_group,
-                                                e,
-                                            })),
-                                        ).map(block => {
-                                            const rows = (
-                                                <ol className='flex flex-col divide-y divide-border'>
-                                                    {block.items.map(
-                                                        ({
-                                                            item: { e },
-                                                            index: j,
-                                                        }) => (
-                                                            <li
-                                                                key={e.id}
-                                                                className='flex items-center justify-between gap-3 py-2'>
-                                                                <span className='flex min-w-0 items-baseline gap-2'>
-                                                                    <span className='w-4 shrink-0 text-xs text-text-muted'>
-                                                                        {j + 1}
-                                                                    </span>
-                                                                    <span className='min-w-0'>
-                                                                        <span className='block'>
-                                                                            {
-                                                                                e
-                                                                                    .ex
-                                                                                    .name
-                                                                            }
-                                                                        </span>
-                                                                        <span className='block text-xs text-text-muted'>
-                                                                            {muscleList(
-                                                                                e
-                                                                                    .ex
-                                                                                    .primary_muscles,
-                                                                            )}
-                                                                        </span>
-                                                                    </span>
-                                                                </span>
-                                                                <span className='shrink-0 text-right text-xs text-text-muted'>
-                                                                    {describeSets(
-                                                                        e.sets ??
-                                                                            e.ex
-                                                                                .default_sets,
-                                                                        parseSetReps(
-                                                                            e.set_reps,
-                                                                        ),
-                                                                        e.rep_min ??
-                                                                            e.ex
-                                                                                .default_rep_min,
-                                                                        e.rep_max ??
-                                                                            e.ex
-                                                                                .default_rep_max,
-                                                                        e.ex
-                                                                            .time_based,
-                                                                    )}
-                                                                </span>
-                                                            </li>
-                                                        ),
+                                <span className='text-xs text-text-muted'>
+                                    {activeRun
+                                        ? `${doneCount}/${trainDays.length} done`
+                                        : `${trainDays.length} training ${trainDays.length === 1 ? "day" : "days"}`}{" "}
+                                    ▾
+                                </span>
+                            </summary>
+                            {/* a capped height: the days scroll inside the week
+                                instead of stretching the whole page */}
+                            <div className='flex max-h-[60vh] flex-col gap-2 overflow-y-auto overscroll-contain border-t border-border p-2'>
+                                {week.entries.map(({ d, i, date, planned }) => {
+                                    const isToday = date === todayISO;
+                                    const exercises = [...d.program_exercises]
+                                        .sort((a, b) => a.sort - b.sort)
+                                        .flatMap(e =>
+                                            e.exercises
+                                                ? [{ ...e, ex: e.exercises }]
+                                                : [],
+                                        );
+                                    return (
+                                        <div
+                                            key={i}
+                                            className={`rounded-xl border p-4 ${
+                                                isToday
+                                                    ? "border-accent/60 bg-accent/10"
+                                                    : "border-border"
+                                            }`}>
+                                            <div className='flex items-baseline justify-between gap-2'>
+                                                <span className='font-medium'>
+                                                    <span className='mr-2 text-xs font-normal text-text-muted'>
+                                                        Day {i + 1}
+                                                        {date &&
+                                                            ` · ${formatShort(date)}`}
+                                                    </span>
+                                                    {d.name}
+                                                </span>
+                                                <span className='flex shrink-0 items-center gap-1.5 text-xs'>
+                                                    {isToday && (
+                                                        <span className='rounded bg-accent/15 px-1.5 py-0.5 font-semibold text-accent'>
+                                                            Today
+                                                        </span>
                                                     )}
-                                                </ol>
-                                            );
-                                            // a superset: back-to-back exercises, outlined in gold
-                                            return block.group != null &&
-                                                block.items.length >= 2 ? (
-                                                <li
-                                                    key={`g${block.group}`}
-                                                    className='rounded-xl border-2 border-amber-400/70 bg-amber-400/5 px-3 pb-1 pt-2'>
-                                                    <div className='text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300'>
-                                                        Superset
-                                                    </div>
-                                                    {rows}
-                                                </li>
-                                            ) : (
-                                                <li
-                                                    key={
-                                                        block.items[0].item.e.id
-                                                    }>
-                                                    {rows}
-                                                </li>
-                                            );
-                                        })}
-                                    </ol>
-                                ))}
-                        </div>
+                                                    {d.is_rest ? (
+                                                        <span className='text-text-muted'>
+                                                            Rest
+                                                        </span>
+                                                    ) : planned?.done ? (
+                                                        <span className='text-emerald-500'>
+                                                            ✓ Done
+                                                        </span>
+                                                    ) : (
+                                                        date &&
+                                                        date < todayISO && (
+                                                            <span className='text-text-muted'>
+                                                                Not logged
+                                                            </span>
+                                                        )
+                                                    )}
+                                                    {planned && (
+                                                        <Link
+                                                            href={`/day/${planned.id}`}
+                                                            className='text-accent hover:underline'>
+                                                            Open
+                                                        </Link>
+                                                    )}
+                                                </span>
+                                            </div>
+                                            {!d.is_rest &&
+                                                (exercises.length === 0 ? (
+                                                    <p className='mt-2 text-sm text-text-muted'>
+                                                        No exercises.
+                                                    </p>
+                                                ) : (
+                                                    <ol className='mt-2 flex flex-col gap-2 text-sm'>
+                                                        {toBlocks(
+                                                            exercises.map(
+                                                                e => ({
+                                                                    group: e.superset_group,
+                                                                    e,
+                                                                }),
+                                                            ),
+                                                        ).map(block => {
+                                                            const rows = (
+                                                                <ol className='flex flex-col divide-y divide-border'>
+                                                                    {block.items.map(
+                                                                        ({
+                                                                            item: {
+                                                                                e,
+                                                                            },
+                                                                            index: j,
+                                                                        }) => (
+                                                                            <li
+                                                                                key={
+                                                                                    e.id
+                                                                                }
+                                                                                className='flex items-center justify-between gap-3 py-2'>
+                                                                                <span className='flex min-w-0 items-baseline gap-2'>
+                                                                                    <span className='w-4 shrink-0 text-xs text-text-muted'>
+                                                                                        {j +
+                                                                                            1}
+                                                                                    </span>
+                                                                                    <span className='min-w-0'>
+                                                                                        <span className='block'>
+                                                                                            {
+                                                                                                e
+                                                                                                    .ex
+                                                                                                    .name
+                                                                                            }
+                                                                                        </span>
+                                                                                        <span className='block text-xs text-text-muted'>
+                                                                                            {muscleList(
+                                                                                                e
+                                                                                                    .ex
+                                                                                                    .primary_muscles,
+                                                                                            )}
+                                                                                        </span>
+                                                                                    </span>
+                                                                                </span>
+                                                                                <span className='shrink-0 text-right text-xs text-text-muted'>
+                                                                                    {describeSets(
+                                                                                        e.sets ??
+                                                                                            e
+                                                                                                .ex
+                                                                                                .default_sets,
+                                                                                        parseSetReps(
+                                                                                            e.set_reps,
+                                                                                        ),
+                                                                                        e.rep_min ??
+                                                                                            e
+                                                                                                .ex
+                                                                                                .default_rep_min,
+                                                                                        e.rep_max ??
+                                                                                            e
+                                                                                                .ex
+                                                                                                .default_rep_max,
+                                                                                        e
+                                                                                            .ex
+                                                                                            .time_based,
+                                                                                    )}
+                                                                                </span>
+                                                                            </li>
+                                                                        ),
+                                                                    )}
+                                                                </ol>
+                                                            );
+                                                            // a superset: back-to-back exercises, outlined in gold
+                                                            return block.group !=
+                                                                null &&
+                                                                block.items
+                                                                    .length >=
+                                                                    2 ? (
+                                                                <li
+                                                                    key={`g${block.group}`}
+                                                                    className='rounded-xl border-2 border-amber-400/70 bg-amber-400/5 px-3 pb-1 pt-2'>
+                                                                    <div className='text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300'>
+                                                                        Superset
+                                                                    </div>
+                                                                    {rows}
+                                                                </li>
+                                                            ) : (
+                                                                <li
+                                                                    key={
+                                                                        block
+                                                                            .items[0]
+                                                                            .item
+                                                                            .e
+                                                                            .id
+                                                                    }>
+                                                                    {rows}
+                                                                </li>
+                                                            );
+                                                        })}
+                                                    </ol>
+                                                ))}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </details>
                     );
                 })}
             </section>
+
+            {(activeRun || progress.doneDays > 0) && (
+                <section className='flex flex-col gap-2 rounded-xl border border-border px-4 py-3'>
+                    <div className='flex items-baseline justify-between gap-2'>
+                        <h2 className='text-sm font-medium'>Your progress</h2>
+                        <span className='text-xs text-text-muted'>
+                            {activeRun
+                                ? `${formatShort(activeRun.start_date)} – ${formatShort(activeRun.end_date)}`
+                                : "all runs"}
+                        </span>
+                    </div>
+                    <div>
+                        <div className='mb-1 flex justify-between text-xs text-text-muted'>
+                            <span>
+                                {progress.doneDays} of {progress.plannedDays}{" "}
+                                sessions done
+                            </span>
+                            <span>
+                                {progress.plannedDays
+                                    ? Math.round(
+                                          (progress.doneDays /
+                                              progress.plannedDays) *
+                                              100,
+                                      )
+                                    : 0}
+                                %
+                            </span>
+                        </div>
+                        <div className='h-1.5 overflow-hidden rounded-full bg-surface-2'>
+                            <div
+                                className='h-full rounded-full bg-accent/70'
+                                style={{
+                                    width: `${
+                                        progress.plannedDays
+                                            ? (progress.doneDays /
+                                                  progress.plannedDays) *
+                                              100
+                                            : 0
+                                    }%`,
+                                }}
+                            />
+                        </div>
+                    </div>
+                    <p className='flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm'>
+                        <span>
+                            <span className='font-semibold tabular-nums'>
+                                {progress.sets}
+                            </span>{" "}
+                            <span className='text-text-muted'>sets</span>
+                        </span>
+                        <span className='text-text-muted'>·</span>
+                        <span>
+                            <span className='font-semibold tabular-nums'>
+                                {progress.volume.toLocaleString()} {u}
+                            </span>{" "}
+                            <span className='text-text-muted'>
+                                total volume
+                            </span>
+                        </span>
+                    </p>
+                    {progress.exercises.length > 0 && (
+                        <ProgramProgressList
+                            exercises={progress.exercises}
+                            unit={u}
+                        />
+                    )}
+                </section>
+            )}
 
             <form
                 action={startProgram}
