@@ -421,7 +421,7 @@ export default async function ProgramDetailPage({
                             />
                         </div>
                     </div>
-                    <p className='flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm'>
+                    <p className='flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-sm'>
                         <span>
                             <span className='font-semibold tabular-nums'>
                                 {progress.sets}
