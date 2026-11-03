@@ -466,16 +466,23 @@ export function HistoryList({
                         <summary className='flex cursor-pointer list-none items-center justify-between bg-surface/60 px-3 py-2 text-sm font-semibold'>
                             {y.year}
                             <span className='text-xs font-normal text-text-muted'>
-                                {y.months.reduce(
-                                    (n, m) =>
-                                        n +
-                                        m.weeks.reduce(
-                                            (k, w) => k + w.days.length,
-                                            0,
-                                        ),
-                                    0,
-                                )}{" "}
-                                days ▾
+                                {(() => {
+                                    const weekCount = y.months.reduce(
+                                        (n, m) => n + m.weeks.length,
+                                        0,
+                                    );
+                                    const dayCount = y.months.reduce(
+                                        (n, m) =>
+                                            n +
+                                            m.weeks.reduce(
+                                                (k, w) => k + w.days.length,
+                                                0,
+                                            ),
+                                        0,
+                                    );
+                                    return `${weekCount} ${weekCount === 1 ? "week" : "weeks"} · ${dayCount} ${dayCount === 1 ? "day" : "days"}`;
+                                })()}{" "}
+                                ▾
                             </span>
                         </summary>
                         {y.months.map((m, mi) => (
@@ -486,11 +493,14 @@ export function HistoryList({
                                 <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium'>
                                     {m.label}
                                     <span className='text-xs font-normal text-text-muted'>
-                                        {m.weeks.reduce(
-                                            (k, w) => k + w.days.length,
-                                            0,
-                                        )}{" "}
-                                        days ▾
+                                        {(() => {
+                                            const dayCount = m.weeks.reduce(
+                                                (k, w) => k + w.days.length,
+                                                0,
+                                            );
+                                            return `${m.weeks.length} ${m.weeks.length === 1 ? "week" : "weeks"} · ${dayCount} ${dayCount === 1 ? "day" : "days"}`;
+                                        })()}{" "}
+                                        ▾
                                     </span>
                                 </summary>
                                 <div className='border-t border-border pl-2'>
