@@ -1703,6 +1703,16 @@ export async function saveProgram(
         );
     }
 
+    // days already on calendars were copied from the old version: bring the
+    // upcoming ones in line with this one
+    if (input.id) {
+        check(
+            await supabase.rpc('sync_program_days', { p_program: programId! }),
+            'update planned days',
+        );
+        revalidatePath('/', 'layout');
+    }
+
     revalidatePrograms(programId);
     return { id: programId! };
 }

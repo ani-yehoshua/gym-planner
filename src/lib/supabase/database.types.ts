@@ -1039,6 +1039,7 @@ export type Database = {
       is_party_member: { Args: { p_party: string }; Returns: boolean }
       is_party_owner: { Args: { p_party: string }; Returns: boolean }
       join_party_with_code: { Args: { p_code: string }; Returns: string }
+      sync_program_days: { Args: { p_program: string }; Returns: number }
     }
     Enums: {
       exercise_measurement: "reps" | "time" | "distance" | "time_or_distance"
