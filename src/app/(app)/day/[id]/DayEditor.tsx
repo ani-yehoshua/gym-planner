@@ -277,6 +277,32 @@ export default function DayEditor({
     const [swapId, setSwapId] = useState<string | null>(null);
     // exercises ticked to be made into a superset (or taken out of one)
     const [selected, setSelected] = useState<string[]>([]);
+    // The Party progress / Calculator block sticks under the header. Their
+    // dropdowns open in the flow while the block sits at its normal place, and
+    // float over the page once it's stuck to the top.
+    const stickyBlockRef = useRef<HTMLDivElement>(null);
+    const [stuck, setStuck] = useState(false);
+    useEffect(() => {
+        const STICK_TOP = 56; // top-14: just under the header
+        let frame = 0;
+        const check = () => {
+            frame = 0;
+            const el = stickyBlockRef.current;
+            if (!el) return;
+            setStuck(el.getBoundingClientRect().top <= STICK_TOP + 0.5);
+        };
+        const onScroll = () => {
+            if (!frame) frame = requestAnimationFrame(check);
+        };
+        check();
+        window.addEventListener("scroll", onScroll, { passive: true });
+        window.addEventListener("resize", onScroll);
+        return () => {
+            window.removeEventListener("scroll", onScroll);
+            window.removeEventListener("resize", onScroll);
+            if (frame) cancelAnimationFrame(frame);
+        };
+    }, []);
     const [swapQuery, setSwapQuery] = useState("");
     const weightInputRefs = useRef(new Map<string, HTMLInputElement>());
     // deload % typed per exercise — purely a live calculator, nothing here
@@ -770,7 +796,9 @@ export default function DayEditor({
                 </p>
             )}
 
-            <div className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
+            <div
+                ref={stickyBlockRef}
+                className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
                 {/* party progress */}
                 {day.partyId && members.length > 1 && (
                     <details className='relative rounded-xl border border-border bg-bg'>
@@ -780,8 +808,15 @@ export default function DayEditor({
                                 {members.length} members ▾
                             </span>
                         </summary>
-                        {/* floats over the page instead of pushing the exercises down */}
-                        <div className='absolute inset-x-0 top-full z-20 mt-1 flex flex-col gap-2 rounded-xl border border-border bg-bg p-3 shadow-lg'>
+                        {/* in the flow until the block sticks to the top, then
+                            it floats over the page instead of pushing the
+                            exercises down */}
+                        <div
+                            className={`flex flex-col gap-2 bg-bg p-3 ${
+                                stuck
+                                    ? "absolute inset-x-0 top-full z-20 mt-1 rounded-xl border border-border shadow-lg"
+                                    : "border-t border-border"
+                            }`}>
                             {members.map(m => {
                                 const t = memberDayTotals(m.user_id);
                                 return (
@@ -824,7 +859,10 @@ export default function DayEditor({
                     </details>
                 )}
                 {/* weight calculator */}
-                <PlateCalculator units={units} />
+                <PlateCalculator
+                    units={units}
+                    floating={stuck}
+                />
             </div>
 
             {/* exercises */}

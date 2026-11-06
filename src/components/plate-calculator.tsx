@@ -27,7 +27,15 @@ const PLATE_SETS: Record<Unit, Plate[]> = {
     ],
 };
 
-export function PlateCalculator({ units = "lb" }: { units?: Unit }) {
+export function PlateCalculator({
+    units = "lb",
+    floating = false,
+}: {
+    units?: Unit;
+    /** the panel floats over the page (when the calculator is stuck to the
+     *  top) instead of opening in the flow and pushing content down */
+    floating?: boolean;
+}) {
     const [unit, setUnit] = useState<Unit>(units);
     // each entry is an index into the active plate set, in click order
     const [picked, setPicked] = useState<number[]>([]);
@@ -49,8 +57,12 @@ export function PlateCalculator({ units = "lb" }: { units?: Unit }) {
                 </span>
             </summary>
 
-            {/* floats over the page so opening it doesn't push the exercises down */}
-            <div className='absolute inset-x-0 top-full z-20 mt-1 flex flex-col gap-3 rounded-xl border border-border bg-bg p-3 shadow-lg'>
+            <div
+                className={`flex flex-col gap-3 bg-bg p-3 ${
+                    floating
+                        ? "absolute inset-x-0 top-full z-20 mt-1 rounded-xl border border-border shadow-lg"
+                        : "border-t border-border"
+                }`}>
                 <div className='flex items-center justify-between gap-2'>
                     <label className='flex items-center gap-2 text-sm text-text-muted'>
                         Bodyweight
