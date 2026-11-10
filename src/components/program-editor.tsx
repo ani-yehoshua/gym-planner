@@ -1,4 +1,4 @@
-import { deleteProgram } from "@/app/actions";
+import { deleteProgram, duplicateProgram } from "@/app/actions";
 import {
     ProgramBuilder,
     type BuilderExercise,
@@ -129,8 +129,27 @@ export function ProgramEditor({
                                             catalog={catalog}
                                         />
                                         <form
-                                            action={deleteProgram}
+                                            action={duplicateProgram}
                                             className='flex flex-wrap items-center gap-2 border-t border-border pt-3'>
+                                            <input
+                                                type='hidden'
+                                                name='program_id'
+                                                value={p.id}
+                                            />
+                                            <SubmitButton
+                                                pendingText='Copying…'
+                                                className='rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-surface disabled:opacity-50'>
+                                                Duplicate program
+                                            </SubmitButton>
+                                            <span className='text-[11px] text-text-muted'>
+                                                Makes “{p.name} (copy)” to edit,
+                                                with the same days and
+                                                exercises.
+                                            </span>
+                                        </form>
+                                        <form
+                                            action={deleteProgram}
+                                            className='flex flex-wrap items-center gap-2'>
                                             <input
                                                 type='hidden'
                                                 name='program_id'

@@ -1717,6 +1717,72 @@ export async function saveProgram(
     return { id: programId! };
 }
 
+/** A copy of a program (its days, exercises, sets, reps and supersets) under
+ *  the name "<name> (copy)", to reuse parts of it without rebuilding it. Nobody
+ *  is following the copy, so editing it touches no calendars. */
+export async function duplicateProgram(formData: FormData) {
+    const { supabase, user } = await requireAdmin();
+    const sourceId = String(formData.get('program_id'));
+    if (!sourceId) return;
+
+    const { data: source } = await supabase
+        .from('programs')
+        .select(
+            'name, description, duration_unit, duration_count, difficulty, program_days(position, name, is_rest, program_exercises(exercise_id, sort, sets, rep_min, rep_max, set_reps, superset_group))',
+        )
+        .eq('id', sourceId)
+        .maybeSingle();
+    if (!source) return;
+
+    const { data: created, error } = await supabase
+        .from('programs')
+        .insert({
+            name: `${source.name} (copy)`,
+            description: source.description,
+            duration_unit: source.duration_unit,
+            duration_count: source.duration_count,
+            difficulty: source.difficulty,
+            created_by: user.id,
+        })
+        .select('id')
+        .single();
+    if (error || !created) throw new Error(`copy program: ${error?.message}`);
+
+    const { data: days, error: dayErr } = await supabase
+        .from('program_days')
+        .insert(
+            source.program_days.map(d => ({
+                program_id: created.id,
+                position: d.position,
+                name: d.name,
+                is_rest: d.is_rest,
+            })),
+        )
+        .select('id, position');
+    if (dayErr || !days) throw new Error(`copy days: ${dayErr?.message}`);
+    const idByPosition = new Map(days.map(d => [d.position, d.id]));
+
+    const rows = source.program_days.flatMap(d =>
+        d.program_exercises.map(e => ({
+            program_day_id: idByPosition.get(d.position)!,
+            exercise_id: e.exercise_id,
+            sort: e.sort,
+            sets: e.sets,
+            rep_min: e.rep_min,
+            rep_max: e.rep_max,
+            set_reps: e.set_reps,
+            superset_group: e.superset_group,
+        })),
+    );
+    for (const part of chunk(rows)) {
+        check(
+            await supabase.from('program_exercises').insert(part),
+            'copy program exercises',
+        );
+    }
+    revalidatePrograms(created.id);
+}
+
 export async function deleteProgram(formData: FormData) {
     const { supabase } = await requireAdmin();
     const id = String(formData.get('program_id'));
