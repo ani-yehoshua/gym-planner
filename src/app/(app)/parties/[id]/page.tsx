@@ -17,7 +17,9 @@ import {
     PROGRAM_STYLE,
     dayType,
 } from "@/lib/labels";
+import { PartyChangeProposals } from "@/components/party-change-proposals";
 import { formatLong } from "@/lib/date";
+import { fetchPendingProposals } from "@/lib/party-proposals";
 import { getUserToday } from "@/lib/user-today";
 
 const MEMBER_COLORS = [
@@ -80,6 +82,9 @@ export default async function PartyPage({
     ]);
     if (!party) notFound();
 
+    const proposals = await fetchPendingProposals(supabase, user.id, {
+        partyId: id,
+    });
     const isOwner = members?.some(
         m => m.user_id === user.id && m.role === "owner",
     );
@@ -91,6 +96,10 @@ export default async function PartyPage({
                 tables={[
                     { table: "party_members", filter: `party_id=eq.${id}` },
                     { table: "planned_days", filter: `party_id=eq.${id}` },
+                    {
+                        table: "party_change_proposals",
+                        filter: `recipient=eq.${user.id}`,
+                    },
                 ]}
             />
             <div className='flex items-center justify-between'>
@@ -181,6 +190,11 @@ export default async function PartyPage({
                     ))}
                 </ul>
             </div>
+
+            <PartyChangeProposals
+                groups={proposals}
+                showDay
+            />
 
             <PartyPlanForm
                 partyId={id}

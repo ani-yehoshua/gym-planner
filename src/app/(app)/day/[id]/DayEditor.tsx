@@ -655,8 +655,24 @@ export default function DayEditor({
             distance?: number | null;
         },
     ) {
+        // on a party day the rest of the party is offered sets/reps changes,
+        // so say what they were before
+        const ex = day.exercises.find(e => e.id === pdeId);
+        const previous =
+            day.partyId && ex
+                ? {
+                      sets: ex.targetSets,
+                      repMin: ex.targetRepMin,
+                      repMax: ex.targetRepMax,
+                  }
+                : undefined;
         startQuiet(() =>
-            updateDayExerciseTarget({ pdeId, dayId: day.id, ...patch }),
+            updateDayExerciseTarget({
+                pdeId,
+                dayId: day.id,
+                previous,
+                ...patch,
+            }),
         );
     }
 

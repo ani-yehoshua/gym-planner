@@ -10,6 +10,9 @@ import { DeleteDayButton } from "@/components/danger-button";
 import { ChevronLeftIcon } from "@/components/icons";
 import { StopProgramButton } from "@/components/stop-program-button";
 import { distanceUnitLabel, type Unit } from "@/lib/units";
+import { PartyChangeProposals } from "@/components/party-change-proposals";
+import { RealtimeRefresh } from "@/components/realtime-refresh";
+import { fetchPendingProposals } from "@/lib/party-proposals";
 import DayEditor from "./DayEditor";
 
 // stable per-member accent colors
@@ -330,6 +333,11 @@ export default async function DayPage({
         };
     }
 
+    // sets/reps changes other members made to this shared session
+    const proposals = day.party_id
+        ? await fetchPendingProposals(supabase, user.id, { dayId: day.id })
+        : [];
+
     const backHref = day.party_id ? `/parties/${day.party_id}` : "/";
 
     return (
@@ -385,6 +393,21 @@ export default async function DayPage({
                     </p>
                 )}
             </div>
+
+            {day.party_id && (
+                <>
+                    <RealtimeRefresh
+                        channel={`proposals:${day.id}`}
+                        tables={[
+                            {
+                                table: "party_change_proposals",
+                                filter: `recipient=eq.${user.id}`,
+                            },
+                        ]}
+                    />
+                    <PartyChangeProposals groups={proposals} />
+                </>
+            )}
 
             <DayEditor
                 day={{

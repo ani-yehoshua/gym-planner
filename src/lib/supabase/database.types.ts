@@ -318,6 +318,86 @@ export type Database = {
           },
         ]
       }
+      party_change_proposals: {
+        Row: {
+          created_at: string
+          id: string
+          new_rep_max: number | null
+          new_rep_min: number | null
+          new_sets: number | null
+          old_rep_max: number | null
+          old_rep_min: number | null
+          old_sets: number | null
+          planned_day_exercise_id: string
+          planned_day_id: string
+          proposer: string
+          recipient: string
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          new_rep_max?: number | null
+          new_rep_min?: number | null
+          new_sets?: number | null
+          old_rep_max?: number | null
+          old_rep_min?: number | null
+          old_sets?: number | null
+          planned_day_exercise_id: string
+          planned_day_id: string
+          proposer: string
+          recipient: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          new_rep_max?: number | null
+          new_rep_min?: number | null
+          new_sets?: number | null
+          old_rep_max?: number | null
+          old_rep_min?: number | null
+          old_sets?: number | null
+          planned_day_exercise_id?: string
+          planned_day_id?: string
+          proposer?: string
+          recipient?: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_change_proposals_planned_day_exercise_id_fkey"
+            columns: ["planned_day_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "planned_day_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_change_proposals_planned_day_id_fkey"
+            columns: ["planned_day_id"]
+            isOneToOne: false
+            referencedRelation: "planned_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_change_proposals_proposer_fkey"
+            columns: ["proposer"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_change_proposals_recipient_fkey"
+            columns: ["recipient"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       party_invites: {
         Row: {
           code: string

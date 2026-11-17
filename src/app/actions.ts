@@ -910,6 +910,8 @@ export async function updateDayExerciseTarget(input: {
     repMax?: number | null;
     weight?: number | null;
     distance?: number | null;
+    /** what sets and reps were before this change, for telling the party */
+    previous?: { sets: number; repMin: number | null; repMax: number | null };
 }) {
     const { supabase, user } = await requireUser();
 
@@ -952,7 +954,183 @@ export async function updateDayExerciseTarget(input: {
         ),
         'update target',
     );
+
+    // on a shared party day, sets and reps changes are offered to the others
+    if (
+        input.previous &&
+        (input.sets !== undefined ||
+            input.repMin !== undefined ||
+            input.repMax !== undefined)
+    ) {
+        const prev = input.previous;
+        await proposePartyChange(
+            supabase,
+            user.id,
+            input.dayId,
+            input.pdeId,
+            prev,
+            {
+                sets:
+                    input.sets !== undefined
+                        ? Math.max(1, Math.min(12, input.sets))
+                        : prev.sets,
+                repMin: input.repMin !== undefined ? input.repMin : prev.repMin,
+                repMax: input.repMax !== undefined ? input.repMax : prev.repMax,
+            },
+        );
+    }
     revalidatePath(`/day/${input.dayId}`);
+}
+
+type SetsAndReps = {
+    sets: number;
+    repMin: number | null;
+    repMax: number | null;
+};
+
+/** Offer a sets/reps change on a party day to every other member of the party:
+ *  one proposal per member, folded into any earlier one from the same person
+ *  for the same exercise (a change and its undo cancel out). */
+async function proposePartyChange(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    userId: string,
+    dayId: string,
+    pdeId: string,
+    previous: SetsAndReps,
+    next: SetsAndReps,
+) {
+    const { data: day } = await supabase
+        .from('planned_days')
+        .select('party_id')
+        .eq('id', dayId)
+        .maybeSingle();
+    if (!day?.party_id) return;
+    const { data: members } = await supabase
+        .from('party_members')
+        .select('user_id')
+        .eq('party_id', day.party_id)
+        .neq('user_id', userId);
+    if (!members?.length) return;
+    const { data: earlier } = await supabase
+        .from('party_change_proposals')
+        .select('id, recipient, status, old_sets, old_rep_min, old_rep_max')
+        .eq('planned_day_exercise_id', pdeId)
+        .eq('proposer', userId);
+
+    for (const m of members) {
+        const before = earlier?.find(e => e.recipient === m.user_id);
+        // an unanswered proposal keeps its original starting point
+        const base =
+            before?.status === 'pending'
+                ? {
+                      sets: before.old_sets ?? previous.sets,
+                      repMin: before.old_rep_min,
+                      repMax: before.old_rep_max,
+                  }
+                : previous;
+        const row = {
+            planned_day_id: dayId,
+            planned_day_exercise_id: pdeId,
+            proposer: userId,
+            recipient: m.user_id,
+            old_sets: base.sets,
+            old_rep_min: base.repMin,
+            old_rep_max: base.repMax,
+            new_sets: next.sets !== base.sets ? next.sets : null,
+            // clearing a rep bound isn't something to propose
+            new_rep_min:
+                next.repMin !== null && next.repMin !== base.repMin
+                    ? next.repMin
+                    : null,
+            new_rep_max:
+                next.repMax !== null && next.repMax !== base.repMax
+                    ? next.repMax
+                    : null,
+            status: 'pending',
+            resolved_at: null,
+        };
+        const nothingChanged =
+            row.new_sets === null &&
+            row.new_rep_min === null &&
+            row.new_rep_max === null;
+        if (nothingChanged) {
+            if (before?.status === 'pending') {
+                await supabase
+                    .from('party_change_proposals')
+                    .delete()
+                    .eq('id', before.id);
+            }
+            continue;
+        }
+        await supabase.from('party_change_proposals').upsert(row, {
+            onConflict: 'planned_day_exercise_id,recipient,proposer',
+        });
+    }
+}
+
+/** Answer proposed changes. Accepting applies each one to your own targets for
+ *  that exercise (only the fields that changed); declining leaves your session
+ *  as it is. */
+export async function respondToPartyChanges(
+    ids: string[],
+    accept: boolean,
+    dayId?: string,
+) {
+    const { supabase, user } = await requireUser();
+    if (!ids.length) return;
+    const { data: rows } = await supabase
+        .from('party_change_proposals')
+        .select(
+            'id, planned_day_id, planned_day_exercise_id, new_sets, new_rep_min, new_rep_max, old_rep_min, old_rep_max',
+        )
+        .in('id', ids)
+        .eq('recipient', user.id)
+        .eq('status', 'pending');
+
+    if (accept) {
+        for (const r of rows ?? []) {
+            const { data: mine } = await supabase
+                .from('day_exercise_user_targets')
+                .select('target_sets, target_rep_min, target_rep_max')
+                .eq('planned_day_exercise_id', r.planned_day_exercise_id)
+                .eq('user_id', user.id)
+                .maybeSingle();
+            check(
+                await supabase.from('day_exercise_user_targets').upsert(
+                    {
+                        planned_day_exercise_id: r.planned_day_exercise_id,
+                        user_id: user.id,
+                        target_sets: r.new_sets ?? mine?.target_sets ?? null,
+                        target_rep_min:
+                            r.new_rep_min ?? mine?.target_rep_min ?? null,
+                        target_rep_max:
+                            r.new_rep_max ?? mine?.target_rep_max ?? null,
+                    },
+                    { onConflict: 'planned_day_exercise_id,user_id' },
+                ),
+                'apply party change',
+            );
+        }
+    }
+    check(
+        await supabase
+            .from('party_change_proposals')
+            .update({
+                status: accept ? 'accepted' : 'declined',
+                resolved_at: new Date().toISOString(),
+            })
+            .in(
+                'id',
+                (rows ?? []).map(r => r.id),
+            ),
+        'answer party change',
+    );
+    for (const d of new Set([
+        ...(rows ?? []).map(r => r.planned_day_id),
+        ...(dayId ? [dayId] : []),
+    ]))
+        revalidatePath(`/day/${d}`);
+    revalidatePath('/parties/[id]', 'page');
 }
 
 /** A day's exercises in order, each with the superset group it belongs to. */
