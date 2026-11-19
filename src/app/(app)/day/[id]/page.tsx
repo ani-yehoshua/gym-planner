@@ -10,7 +10,6 @@ import { DeleteDayButton } from "@/components/danger-button";
 import { ChevronLeftIcon } from "@/components/icons";
 import { StopProgramButton } from "@/components/stop-program-button";
 import { distanceUnitLabel, type Unit } from "@/lib/units";
-import { PartyChangeProposals } from "@/components/party-change-proposals";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { fetchPendingProposals } from "@/lib/party-proposals";
 import DayEditor from "./DayEditor";
@@ -395,18 +394,15 @@ export default async function DayPage({
             </div>
 
             {day.party_id && (
-                <>
-                    <RealtimeRefresh
-                        channel={`proposals:${day.id}`}
-                        tables={[
-                            {
-                                table: "party_change_proposals",
-                                filter: `recipient=eq.${user.id}`,
-                            },
-                        ]}
-                    />
-                    <PartyChangeProposals groups={proposals} />
-                </>
+                <RealtimeRefresh
+                    channel={`proposals:${day.id}`}
+                    tables={[
+                        {
+                            table: "party_change_proposals",
+                            filter: `recipient=eq.${user.id}`,
+                        },
+                    ]}
+                />
             )}
 
             <DayEditor
@@ -453,6 +449,7 @@ export default async function DayPage({
                     timeBased: c.time_based,
                 }))}
                 lastByExercise={prevByExercise}
+                proposals={proposals}
                 goal={goal}
                 experience={constants?.experience ?? null}
                 focusMuscles={constants?.focus_muscles ?? []}

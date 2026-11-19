@@ -53,7 +53,9 @@ import {
 } from "@/lib/labels";
 import { isCompound, suggestedSets, type Goal } from "@/lib/targets";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
+import { PartyChangeProposals } from "@/components/party-change-proposals";
 import { PlateCalculator } from "@/components/plate-calculator";
+import type { ProposalGroup } from "@/lib/party-proposals";
 import { ExerciseTimer } from "@/components/exercise-timer";
 import { SwapIcon } from "@/components/icons";
 import {
@@ -194,6 +196,7 @@ export default function DayEditor({
     notes,
     catalog,
     lastByExercise,
+    proposals,
     goal,
     experience,
     focusMuscles,
@@ -215,6 +218,8 @@ export default function DayEditor({
     notes: NoteRow[];
     catalog: CatalogItem[];
     lastByExercise: Record<string, LastEntry>;
+    /** sets/reps changes other party members proposed for me to answer */
+    proposals: ProposalGroup[];
     goal: string | null;
     experience: Enums<"experience_level"> | null;
     focusMuscles: string[];
@@ -879,6 +884,9 @@ export default function DayEditor({
                     units={units}
                     floating={stuck}
                 />
+                {/* changes other members proposed: last in the sticky block, so
+                    they stay in view under the calculator */}
+                {day.partyId && <PartyChangeProposals groups={proposals} />}
             </div>
 
             {/* exercises */}

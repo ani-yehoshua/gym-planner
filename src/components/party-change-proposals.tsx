@@ -55,9 +55,11 @@ export function PartyChangeProposals({
     if (live.length === 0) return null;
 
     return (
+        // capped in height, so a long list scrolls inside it (it can sit in a
+        // sticky block that mustn't take over the screen)
         <section
             aria-label='Changes proposed by your party'
-            className='flex flex-col gap-3 rounded-xl border border-amber-400/60 bg-amber-400/5 p-3'>
+            className='flex max-h-[40vh] flex-col gap-3 overflow-y-auto rounded-xl border border-amber-400/60 bg-bg p-3'>
             {live.map(g => (
                 <div
                     key={g.key}
