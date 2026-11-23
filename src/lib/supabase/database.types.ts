@@ -49,6 +49,56 @@ export type Database = {
           },
         ]
       }
+      body_measurements: {
+        Row: {
+          calf: number | null
+          chest: number | null
+          created_at: string
+          date: string
+          forearm: number | null
+          id: string
+          neck: number | null
+          thigh: number | null
+          upper_arm: number | null
+          user_id: string
+          waist: number | null
+        }
+        Insert: {
+          calf?: number | null
+          chest?: number | null
+          created_at?: string
+          date: string
+          forearm?: number | null
+          id?: string
+          neck?: number | null
+          thigh?: number | null
+          upper_arm?: number | null
+          user_id: string
+          waist?: number | null
+        }
+        Update: {
+          calf?: number | null
+          chest?: number | null
+          created_at?: string
+          date?: string
+          forearm?: number | null
+          id?: string
+          neck?: number | null
+          thigh?: number | null
+          upper_arm?: number | null
+          user_id?: string
+          waist?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_measurements_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bodyweight_logs: {
         Row: {
           date: string

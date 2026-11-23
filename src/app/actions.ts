@@ -5,7 +5,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { addDays } from '@/lib/date';
 import { DEFAULT_SETS } from '@/lib/targets';
-import { distanceUnitLabel } from '@/lib/units';
+import { distanceUnitLabel, type Unit } from '@/lib/units';
+import { SITES, toCm, type SiteId } from '@/lib/measurements';
 import { cleanDrops, type Drop } from '@/lib/drops';
 import { GRIPS } from '@/lib/grips';
 import { EQUIPMENT } from '@/lib/equipment';
@@ -1454,6 +1455,56 @@ export async function logBodyweight(formData: FormData) {
             { user_id: user.id, date, weight, note },
             { onConflict: 'user_id,date' },
         );
+    revalidatePath('/progress');
+}
+
+/** Log tape measurements for a date. Sites left blank are left as they were,
+ *  so a day can be filled in a few sites at a time. */
+export async function logMeasurements(formData: FormData) {
+    const { supabase, user } = await requireUser();
+    const date = String(formData.get('date'));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('units')
+        .eq('id', user.id)
+        .maybeSingle();
+    const units = (profile?.units as Unit) ?? 'lb';
+
+    const values: Partial<Record<SiteId, number>> = {};
+    for (const s of SITES) {
+        const raw = String(formData.get(s.id) ?? '').trim();
+        const n = Number(raw);
+        if (raw && Number.isFinite(n) && n > 0)
+            values[s.id] = Math.round(toCm(n, units) * 100) / 100;
+    }
+    if (Object.keys(values).length === 0) return;
+
+    check(
+        await supabase
+            .from('body_measurements')
+            .upsert(
+                { user_id: user.id, date, ...values },
+                { onConflict: 'user_id,date' },
+            ),
+        'log measurements',
+    );
+    revalidatePath('/progress');
+}
+
+export async function deleteMeasurements(formData: FormData) {
+    const { supabase, user } = await requireUser();
+    const date = String(formData.get('date'));
+    if (!date) return;
+    check(
+        await supabase
+            .from('body_measurements')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('date', date),
+        'delete measurements',
+    );
     revalidatePath('/progress');
 }
 

@@ -8,6 +8,9 @@ import {
     StrengthWidgets,
     type StrengthRow,
 } from "@/components/strength-widgets";
+import { MeasurementsPanel } from "@/components/measurements-panel";
+import { ProgressAccordion } from "@/components/progress-accordion";
+import type { MeasurementRow } from "@/lib/measurements";
 import { fetchOneRmHistory } from "@/lib/one-rm-history";
 import { unitLabel, type Unit } from "@/lib/units";
 
@@ -28,6 +31,7 @@ export default async function ProgressPage() {
         { data: sets },
         { data: pastDays },
         { data: profile },
+        { data: measurementRows },
     ] = await Promise.all([
         supabase
             .from("bodyweight_logs")
@@ -59,6 +63,12 @@ export default async function ProgressPage() {
             .select("units")
             .eq("id", user.id)
             .maybeSingle(),
+        supabase
+            .from("body_measurements")
+            .select("date, waist, neck, upper_arm, forearm, chest, thigh, calf")
+            .eq("user_id", user.id)
+            .order("date", { ascending: false })
+            .limit(365),
     ]);
 
     const oneRms = await fetchOneRmHistory(supabase, user.id);
@@ -236,15 +246,12 @@ export default async function ProgressPage() {
     }
     for (const w of weeks) w.days.sort((a, b) => a.date.localeCompare(b.date));
 
-    return (
-        <div className='flex flex-col gap-6'>
-            <h1 className='text-lg font-semibold'>Progress</h1>
-
-            <section className='rounded-xl border border-border p-4'>
-                <h2 className='text-sm font-medium'>Bodyweight ({u})</h2>
+    const bodyweight = (
+        <div>
+            <div>
                 <form
                     action={logBodyweight}
-                    className='mt-3 flex flex-wrap gap-2'>
+                    className='flex flex-wrap gap-2'>
                     <input
                         type='date'
                         name='date'
@@ -400,28 +407,72 @@ export default async function ProgressPage() {
                         </div>
                     </>
                 )}
-            </section>
+            </div>
+        </div>
+    );
 
-            <section>
-                <h2 className='mb-2 text-sm font-medium'>History</h2>
-                <p className='mb-2 text-xs text-text-muted'>
-                    Tick 2–4 days to compare them.
+    const measurements = (
+        <MeasurementsPanel
+            rows={(measurementRows ?? []) as MeasurementRow[]}
+            units={units}
+            todayISO={todayISO}
+        />
+    );
+
+    const historySection = (
+        <div>
+            <p className='mb-2 text-xs text-text-muted'>
+                Tick 2–4 days to compare them.
+            </p>
+            {weeks.length === 0 ? (
+                <p className='text-sm text-text-muted'>
+                    Completed days show up here once you&apos;ve logged sets on
+                    them.
                 </p>
-                {weeks.length === 0 ? (
-                    <p className='text-sm text-text-muted'>
-                        Completed days show up here once you&apos;ve logged sets
-                        on them.
-                    </p>
-                ) : (
-                    <HistoryList weeks={weeks} />
-                )}
-            </section>
+            ) : (
+                <HistoryList weeks={weeks} />
+            )}
+        </div>
+    );
 
-            <StrengthWidgets
-                rows={strengthRows}
-                oneRms={oneRms}
-                todayISO={todayISO}
-                units={units}
+    const lifts = (
+        <StrengthWidgets
+            rows={strengthRows}
+            oneRms={oneRms}
+            todayISO={todayISO}
+            units={units}
+        />
+    );
+
+    return (
+        <div className='flex flex-col gap-4'>
+            <h1 className='text-lg font-semibold'>Progress</h1>
+            <ProgressAccordion
+                defaultOpen='bodyweight'
+                sections={[
+                    {
+                        id: "bodyweight",
+                        title: `Bodyweight (${u})`,
+                        summary: bw?.length
+                            ? `${bw[0].weight} ${u}`
+                            : undefined,
+                        content: bodyweight,
+                    },
+                    {
+                        id: "measurements",
+                        title: "Measurements",
+                        content: measurements,
+                    },
+                    {
+                        id: "history",
+                        title: "History",
+                        summary: weeks.length
+                            ? `${history.length} ${history.length === 1 ? "day" : "days"}`
+                            : undefined,
+                        content: historySection,
+                    },
+                    { id: "lifts", title: "Lifts", content: lifts },
+                ]}
             />
         </div>
     );
