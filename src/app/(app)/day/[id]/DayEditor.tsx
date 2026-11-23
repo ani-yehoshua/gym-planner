@@ -31,6 +31,7 @@ import { formatShort } from "@/lib/date";
 import { formatDuration, parseDuration } from "@/lib/duration";
 import { dropVolume, parseDrops, type Drop } from "@/lib/drops";
 import { formatSet } from "@/lib/format-set";
+import type { LastEntry } from "@/lib/last-time";
 import { EquipmentFilter } from "@/components/equipment-filter";
 import { GroupedExerciseList } from "@/components/grouped-exercise-list";
 import { matchesEquipment } from "@/lib/equipment";
@@ -158,19 +159,6 @@ const TrashIcon = () => (
         <path d='M10 11v6M14 11v6' />
     </svg>
 );
-
-type LastEntry = {
-    date: string;
-    sets: {
-        weight: number;
-        reps: number;
-        distance: number | null;
-        drops: Drop[];
-    }[];
-    /** total volume of that session (weight × reps, drops included) */
-    volume: number;
-    note?: string;
-};
 
 /** Resolved tracking mode for an exercise instance: reps, a duration, or a
  *  distance — 'distance' vs 'time' on a dual exercise is per-day (logMode). */

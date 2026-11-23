@@ -3,7 +3,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong } from "@/lib/date";
 import { PROGRAM_STYLE } from "@/lib/labels";
-import { parseDrops, type Drop } from "@/lib/drops";
 import { parseSetReps } from "@/lib/programs";
 import { isCompound, recommendedReps, type Goal } from "@/lib/targets";
 import { DeleteDayButton } from "@/components/danger-button";
@@ -12,6 +11,11 @@ import { StopProgramButton } from "@/components/stop-program-button";
 import { distanceUnitLabel, type Unit } from "@/lib/units";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { fetchPendingProposals } from "@/lib/party-proposals";
+import {
+    computeLastTimes,
+    stampLastTime,
+    type LastEntry,
+} from "@/lib/last-time";
 import DayEditor from "./DayEditor";
 
 // stable per-member accent colors
@@ -71,8 +75,7 @@ export default async function DayPage({
         { data: m },
         { data: constants },
         { data: catalog },
-        { data: prevLogs },
-        { data: prevNotes },
+        { data: lastSnapshots },
         { data: profile },
     ] = await Promise.all([
         pdeIds.length
@@ -127,26 +130,13 @@ export default async function DayPage({
             )
             .is("archived_at", null)
             .order("name"),
-        // my own prior sets for these exercises — for the "last time" line on each card
-        exIds.length
+        // the "Last" rows already stamped onto this day's exercises
+        pdeIds.length
             ? supabase
-                  .from("set_logs")
-                  .select(
-                      "set_no, weight, reps, distance, volume, drops, planned_day_exercises!inner(exercise_id, planned_days!inner(id, date))",
-                  )
+                  .from("day_exercise_last")
+                  .select("planned_day_exercise_id, entry")
                   .eq("user_id", user.id)
-                  .in("planned_day_exercises.exercise_id", exIds)
-                  .order("set_no")
-            : Promise.resolve({ data: [] }),
-        // my own prior notes for these exercises — shown under the "last time" line
-        exIds.length
-            ? supabase
-                  .from("day_exercise_notes")
-                  .select(
-                      "note, planned_day_exercises!inner(exercise_id, planned_days!inner(id, date))",
-                  )
-                  .eq("user_id", user.id)
-                  .in("planned_day_exercises.exercise_id", exIds)
+                  .in("planned_day_exercise_id", pdeIds)
             : Promise.resolve({ data: [] }),
         supabase
             .from("profiles")
@@ -180,94 +170,47 @@ export default async function DayPage({
 
     const goal = (constants?.primary_goal as Goal) ?? null;
 
-    // most recent prior session per exercise (this user), for the card summary
-    type PrevEmbed = {
-        exercise_id: string;
-        planned_days: { id: string; date: string } | null;
-    } | null;
-    type PrevRow = {
-        set_no: number;
-        weight: number | null;
-        reps: number | null;
-        distance: number | null;
-        volume: number | null;
-        drops: unknown;
-        planned_day_exercises: PrevEmbed;
-    };
-    type PrevNoteRow = {
-        note: string | null;
-        planned_day_exercises: PrevEmbed;
-    };
-    const prevByExercise: Record<
-        string,
-        {
-            date: string;
-            sets: {
-                weight: number;
-                reps: number;
-                distance: number | null;
-                drops: Drop[];
-            }[];
-            volume: number;
-            note?: string;
-        }
-    > = {};
+    // The "Last" row on each card. It's stamped with what the last time was when
+    // you first logged the exercise on this day, and kept: looking back at a
+    // day later shows the last time as it was then. An exercise with nothing
+    // logged yet shows the live answer, and gets stamped once you log it.
+    const prevByExercise: Record<string, LastEntry> = {};
     {
-        const rowsByEx: Record<
-            string,
-            {
-                date: string;
-                set_no: number;
-                weight: number;
-                reps: number;
-                distance: number | null;
-                drops: Drop[];
-                volume: number;
-            }[]
-        > = {};
-        for (const row of (prevLogs ?? []) as PrevRow[]) {
-            const pde = row.planned_day_exercises;
-            const pd = pde?.planned_days;
-            if (!pde || !pd || pd.id === id || pd.date >= day.date) continue;
-            if (row.weight == null && row.reps == null && row.distance == null)
-                continue;
-            (rowsByEx[pde.exercise_id] ??= []).push({
-                date: pd.date,
-                set_no: row.set_no,
-                weight: row.weight ?? 0,
-                reps: row.reps ?? 0,
-                distance: row.distance,
-                drops: parseDrops(row.drops),
-                volume: row.volume ?? 0,
-            });
+        const stampedByPde = new Map(
+            (lastSnapshots ?? []).map(r => [r.planned_day_exercise_id, r]),
+        );
+        const open: string[] = [];
+        for (const p of pdeRows) {
+            const snap = stampedByPde.get(p.id);
+            if (snap) {
+                if (snap.entry && !prevByExercise[p.exercises.id])
+                    prevByExercise[p.exercises.id] =
+                        snap.entry as unknown as LastEntry;
+            } else if (!open.includes(p.exercises.id)) {
+                open.push(p.exercises.id);
+            }
         }
-        for (const [exId, rows] of Object.entries(rowsByEx)) {
-            const maxDate = rows.reduce(
-                (a, r) => (r.date > a ? r.date : a),
-                "",
-            );
-            const latest = rows
-                .filter(r => r.date === maxDate)
-                .sort((a, b) => a.set_no - b.set_no);
-            prevByExercise[exId] = {
-                date: maxDate,
-                sets: latest.map(r => ({
-                    weight: r.weight,
-                    reps: r.reps,
-                    distance: r.distance,
-                    drops: r.drops,
-                })),
-                volume: latest.reduce((sum, r) => sum + r.volume, 0),
-            };
-        }
-        for (const row of (prevNotes ?? []) as unknown as PrevNoteRow[]) {
-            const pde = row.planned_day_exercises;
-            const pd = pde?.planned_days;
-            const entry = pde ? prevByExercise[pde.exercise_id] : undefined;
-            if (!pde || !pd || !entry || pd.date !== entry.date) continue;
-            const note = (row.note ?? "").trim();
-            if (note) entry.note = note;
-        }
+        const live = await computeLastTimes(
+            supabase,
+            user.id,
+            open.filter(exId => !prevByExercise[exId]),
+            day.date,
+        );
+        for (const [exId, entry] of Object.entries(live))
+            prevByExercise[exId] = entry;
+
+        // days logged before stamping existed: stamp them on first view, from
+        // the history before that day (the same answer they'd have shown then)
+        const loggedPdes = new Set(
+            (logs ?? [])
+                .filter(l => l.user_id === user.id)
+                .map(l => l.planned_day_exercise_id),
+        );
+        await Promise.all(
+            pdeRows
+                .filter(p => loggedPdes.has(p.id) && !stampedByPde.has(p.id))
+                .map(p => stampLastTime(supabase, user.id, p.id)),
+        );
     }
 
     /** effective target for the current user. Sets/reps: my day edit -> my saved

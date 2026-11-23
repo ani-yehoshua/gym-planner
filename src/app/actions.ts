@@ -8,6 +8,7 @@ import { DEFAULT_SETS } from '@/lib/targets';
 import { distanceUnitLabel, type Unit } from '@/lib/units';
 import { SITES, toCm, type SiteId } from '@/lib/measurements';
 import { cleanDrops, type Drop } from '@/lib/drops';
+import { stampLastTime } from '@/lib/last-time';
 import { GRIPS } from '@/lib/grips';
 import { EQUIPMENT } from '@/lib/equipment';
 import { getUserToday } from '@/lib/user-today';
@@ -1339,6 +1340,19 @@ export async function logSet(input: {
             },
             { onConflict: 'planned_day_exercise_id,user_id,set_no' },
         );
+    }
+
+    // the "Last" row on this exercise's card is stamped with what the last time
+    // was as of now, and stays that way (a no-op once stamped)
+    if (
+        !(
+            input.weight === null &&
+            input.reps === null &&
+            distance === null &&
+            drops.length === 0
+        )
+    ) {
+        await stampLastTime(supabase, user.id, input.pdeId);
     }
 
     // On a 1RM day, or an exercise marked as a 1RM attempt, a logged single is

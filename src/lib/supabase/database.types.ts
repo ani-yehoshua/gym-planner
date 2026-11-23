@@ -131,6 +131,42 @@ export type Database = {
           },
         ]
       }
+      day_exercise_last: {
+        Row: {
+          entry: Json | null
+          planned_day_exercise_id: string
+          stamped_at: string
+          user_id: string
+        }
+        Insert: {
+          entry?: Json | null
+          planned_day_exercise_id: string
+          stamped_at?: string
+          user_id: string
+        }
+        Update: {
+          entry?: Json | null
+          planned_day_exercise_id?: string
+          stamped_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "day_exercise_last_planned_day_exercise_id_fkey"
+            columns: ["planned_day_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "planned_day_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "day_exercise_last_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       day_exercise_notes: {
         Row: {
           note: string
