@@ -50,14 +50,19 @@ export default async function ProgressPage() {
             .order("logged_at", { ascending: false })
             .limit(2000),
         // ---- history: past days where you logged something --------------------
+        // Only days with one of your logged sets come back (the inner joins),
+        // each with just those exercises and your sets, so every logged day
+        // shows up however old it is, not just the newest few planned ones.
         supabase
             .from("planned_days")
             .select(
-                "id, date, category, party_id, is_deload, program_id, program_day_number, parties(name), programs(name), planned_day_exercises(id, sort, exercises(name, primary_muscles, time_based, measurement))",
+                "id, date, category, party_id, is_deload, program_id, program_day_number, parties(name), programs(name), planned_day_exercises!inner(id, sort, exercises(name, primary_muscles, time_based, measurement), set_logs!inner(set_no, weight, reps))",
             )
+            .eq("planned_day_exercises.set_logs.user_id", user.id)
+            .not("planned_day_exercises.set_logs.reps", "is", null)
             .lte("date", todayISO)
             .order("date", { ascending: false })
-            .limit(60),
+            .limit(1000),
         supabase
             .from("profiles")
             .select("units")
@@ -140,28 +145,6 @@ export default async function ProgressPage() {
         m.weeks.push(w);
     }
 
-    const pastPdeIds = (pastDays ?? []).flatMap(d =>
-        d.planned_day_exercises.map(p => p.id),
-    );
-    const { data: pastLogs } = pastPdeIds.length
-        ? await supabase
-              .from("set_logs")
-              .select("planned_day_exercise_id, set_no, weight, reps")
-              .eq("user_id", user.id)
-              .in("planned_day_exercise_id", pastPdeIds)
-              .order("set_no")
-        : { data: [] };
-
-    const logsByPde = new Map<
-        string,
-        { set_no: number; weight: number | null; reps: number | null }[]
-    >();
-    for (const l of pastLogs ?? []) {
-        const arr = logsByPde.get(l.planned_day_exercise_id) ?? [];
-        arr.push(l);
-        logsByPde.set(l.planned_day_exercise_id, arr);
-    }
-
     const history: HistoryDay[] = (pastDays ?? [])
         .map(d => {
             // rep-based and timed volume are kept apart: timed sets store seconds
@@ -176,9 +159,9 @@ export default async function ProgressPage() {
                 (a, b) => a.sort - b.sort,
             )) {
                 // a set needs reps; weight is optional (bodyweight exercises)
-                const done = (logsByPde.get(pde.id) ?? []).filter(
-                    l => l.reps != null,
-                );
+                const done = [...pde.set_logs]
+                    .sort((a, b) => a.set_no - b.set_no)
+                    .filter(l => l.reps != null);
                 if (done.length === 0) continue;
                 let exVol = 0;
                 let exTop = 0;
@@ -232,8 +215,7 @@ export default async function ProgressPage() {
                 exercises,
             };
         })
-        .filter(d => d.exercisesDone > 0)
-        .slice(0, 60);
+        .filter(d => d.exercisesDone > 0);
 
     // group history into Sun–Sat weeks: weeks newest-first, days within a week
     // in chronological (ascending) order
