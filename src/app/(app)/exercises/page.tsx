@@ -8,6 +8,7 @@ import {
 } from "@/app/actions";
 import { CATEGORY_LABEL, CATEGORY_ORDER, muscleList } from "@/lib/labels";
 import { ExerciseDetailBody } from "@/components/exercise-detail";
+import { FavoriteHeart } from "@/components/favorite-heart";
 import { ExercisePrefForm } from "@/components/exercise-pref-form";
 import { ExerciseForm } from "@/components/exercise-form";
 import { ExerciseSearch } from "@/components/exercise-search";
@@ -75,7 +76,14 @@ export default async function ExercisesPage() {
             .maybeSingle(),
     ]);
 
-    const oneRms = await fetchOneRmHistory(supabase, user.id);
+    const [oneRms, { data: favoriteRows }] = await Promise.all([
+        fetchOneRmHistory(supabase, user.id),
+        supabase
+            .from("user_favorite_exercises")
+            .select("exercise_id")
+            .eq("user_id", user.id),
+    ]);
+    const favoriteIds = new Set((favoriteRows ?? []).map(f => f.exercise_id));
     const exercises = (allExercises ?? []).filter(e => !e.archived_at);
     const archived = admin
         ? (allExercises ?? []).filter(e => e.archived_at)
@@ -85,12 +93,142 @@ export default async function ExercisesPage() {
     const goal = (constants?.primary_goal as Goal) ?? null;
 
     type Ex = (typeof exercises)[number];
+    const favorites = exercises.filter(e => favoriteIds.has(e.id));
     const grouped = new Map<Enums<"muscle_category">, Ex[]>();
     for (const e of exercises) {
         const arr = grouped.get(e.category) ?? [];
         arr.push(e);
         grouped.set(e.category, arr);
     }
+
+    // one exercise row, shared by Favorites and the full list
+    const renderExercise = (e: Ex, label: string | null) => (
+        <li
+            key={e.id}
+            data-exercise-name={e.name}
+            data-equipment={e.equipment ?? "none"}
+            className='rounded-lg border border-border'>
+            <details className='group'>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm'>
+                    <span>{label ?? e.name}</span>
+                    <span className='flex items-center gap-2'>
+                        <span className='text-xs text-text-muted group-open:hidden'>
+                            {muscleList(e.primary_muscles)}
+                        </span>
+                        <FavoriteHeart
+                            exerciseId={e.id}
+                            initial={favoriteIds.has(e.id)}
+                            className='p-1'
+                        />
+                    </span>
+                </summary>
+                <div className='border-t border-border px-3 py-3'>
+                    <ExerciseDetailBody ex={e} />
+                    {(() => {
+                        const tested = oneRms.filter(
+                            r => r.exerciseId === e.id,
+                        );
+                        if (!tested.length) return null;
+                        const u = unitLabel((profile?.units as Unit) ?? "lb");
+                        return (
+                            <div className='mt-3 rounded-lg bg-surface p-3 text-xs'>
+                                <div className='mb-1 font-medium'>
+                                    Tested 1RMs
+                                </div>
+                                <ul className='flex flex-col gap-0.5 text-text-muted'>
+                                    {tested.map(t => (
+                                        <li
+                                            key={t.date}
+                                            className='flex justify-between'>
+                                            <span>{formatShort(t.date)}</span>
+                                            <span className='tabular-nums text-text'>
+                                                {t.weight} {u}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        );
+                    })()}
+                    {(() => {
+                        const [rMin, rMax] = recommendedReps(
+                            goal,
+                            isCompound(e),
+                        );
+                        const p = prefs.get(e.id) ?? null;
+                        return (
+                            <ExercisePrefForm
+                                // remount when the saved pref changes (e.g. via the
+                                // day page's "Set default") so stale client state
+                                // from an earlier navigation doesn't stick around
+                                key={`${e.id}:${p?.default_sets ?? ""}:${p?.default_rep_min ?? ""}:${p?.default_rep_max ?? ""}:${p?.default_weight ?? ""}:${p?.default_1rm ?? ""}:${p?.default_distance ?? ""}:${p?.default_log_mode ?? ""}`}
+                                exerciseId={e.id}
+                                pref={p}
+                                // what you'd get with no personal default:
+                                // the exercise's own catalog default first,
+                                // goal suggestion only if it has none
+                                fallback={{
+                                    sets: e.default_sets ?? 2,
+                                    repMin: e.default_rep_min ?? rMin,
+                                    repMax: e.default_rep_max ?? rMax,
+                                }}
+                                timeBased={e.time_based}
+                                weighted={e.weighted}
+                                measurement={e.measurement}
+                                units={(profile?.units as Unit) ?? "lb"}
+                                distanceUnit={distanceUnitLabel(
+                                    profile?.distance_unit,
+                                )}
+                            />
+                        );
+                    })()}
+                    {admin && (
+                        <div className='mt-3 border-t border-border pt-3'>
+                            <details>
+                                <summary className='cursor-pointer text-xs font-medium text-text-muted'>
+                                    Edit exercise
+                                </summary>
+                                <div className='mt-3'>
+                                    <ExerciseForm exercise={e} />
+                                </div>
+                            </details>
+                            <div className='mt-3 flex gap-2'>
+                                <form action={setExerciseArchived}>
+                                    <input
+                                        type='hidden'
+                                        name='exercise_id'
+                                        value={e.id}
+                                    />
+                                    <input
+                                        type='hidden'
+                                        name='archived'
+                                        value='true'
+                                    />
+                                    <SubmitButton
+                                        pendingText='…'
+                                        className={archiveBtn}>
+                                        Archive
+                                    </SubmitButton>
+                                </form>
+                                <form action={deleteExercise}>
+                                    <input
+                                        type='hidden'
+                                        name='exercise_id'
+                                        value={e.id}
+                                    />
+                                    <SubmitButton
+                                        pendingText='…'
+                                        className={deleteBtn}>
+                                        Delete
+                                    </SubmitButton>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </details>
+        </li>
+    );
 
     return (
         <div className='flex flex-col gap-2'>
@@ -255,6 +393,47 @@ export default async function ExercisesPage() {
                 </details>
             )}
 
+            {/* your hearted exercises, with their own search and filters */}
+            <details
+                open={favorites.length > 0}
+                className='rounded-xl border border-rose-400/40'>
+                <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold'>
+                    <span className='flex items-center gap-2'>
+                        <span
+                            aria-hidden
+                            className='text-rose-500'>
+                            ♥
+                        </span>
+                        Favorites
+                    </span>
+                    <span className='text-xs font-normal text-text-muted'>
+                        {favorites.length} ▾
+                    </span>
+                </summary>
+                <div className='border-t border-border p-2'>
+                    {favorites.length === 0 ? (
+                        <p className='px-1 py-2 text-sm text-text-muted'>
+                            Tap the heart on an exercise, here or on a session,
+                            to keep it here.
+                        </p>
+                    ) : (
+                        <ExerciseSearch>
+                            <div data-exercise-group>
+                                <ul className='flex flex-col gap-1'>
+                                    <GroupedExerciseList
+                                        items={favorites}
+                                        renderItem={renderExercise}
+                                    />
+                                </ul>
+                            </div>
+                        </ExerciseSearch>
+                    )}
+                </div>
+            </details>
+
+            <h2 className='mt-2 text-sm font-semibold text-text-muted'>
+                All exercises
+            </h2>
             <ExerciseSearch>
                 {[...CATEGORY_ORDER]
                     .filter(c => grouped.has(c))
@@ -275,193 +454,7 @@ export default async function ExercisesPage() {
                             <ul className='flex flex-col gap-1 border-t border-border p-2'>
                                 <GroupedExerciseList
                                     items={grouped.get(c)!}
-                                    renderItem={(e, label) => (
-                                        <li
-                                            key={e.id}
-                                            data-exercise-name={e.name}
-                                            data-equipment={
-                                                e.equipment ?? "none"
-                                            }
-                                            className='rounded-lg border border-border'>
-                                            <details className='group'>
-                                                <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm'>
-                                                    <span>
-                                                        {label ?? e.name}
-                                                    </span>
-                                                    <span className='text-xs text-text-muted group-open:hidden'>
-                                                        {muscleList(
-                                                            e.primary_muscles,
-                                                        )}
-                                                    </span>
-                                                </summary>
-                                                <div className='border-t border-border px-3 py-3'>
-                                                    <ExerciseDetailBody
-                                                        ex={e}
-                                                    />
-                                                    {(() => {
-                                                        const tested =
-                                                            oneRms.filter(
-                                                                r =>
-                                                                    r.exerciseId ===
-                                                                    e.id,
-                                                            );
-                                                        if (!tested.length)
-                                                            return null;
-                                                        const u = unitLabel(
-                                                            (profile?.units as Unit) ??
-                                                                "lb",
-                                                        );
-                                                        return (
-                                                            <div className='mt-3 rounded-lg bg-surface p-3 text-xs'>
-                                                                <div className='mb-1 font-medium'>
-                                                                    Tested 1RMs
-                                                                </div>
-                                                                <ul className='flex flex-col gap-0.5 text-text-muted'>
-                                                                    {tested.map(
-                                                                        t => (
-                                                                            <li
-                                                                                key={
-                                                                                    t.date
-                                                                                }
-                                                                                className='flex justify-between'>
-                                                                                <span>
-                                                                                    {formatShort(
-                                                                                        t.date,
-                                                                                    )}
-                                                                                </span>
-                                                                                <span className='tabular-nums text-text'>
-                                                                                    {
-                                                                                        t.weight
-                                                                                    }{" "}
-                                                                                    {
-                                                                                        u
-                                                                                    }
-                                                                                </span>
-                                                                            </li>
-                                                                        ),
-                                                                    )}
-                                                                </ul>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                    {(() => {
-                                                        const [rMin, rMax] =
-                                                            recommendedReps(
-                                                                goal,
-                                                                isCompound(e),
-                                                            );
-                                                        const p =
-                                                            prefs.get(e.id) ??
-                                                            null;
-                                                        return (
-                                                            <ExercisePrefForm
-                                                                // remount when the saved pref changes (e.g. via the
-                                                                // day page's "Set default") so stale client state
-                                                                // from an earlier navigation doesn't stick around
-                                                                key={`${e.id}:${p?.default_sets ?? ""}:${p?.default_rep_min ?? ""}:${p?.default_rep_max ?? ""}:${p?.default_weight ?? ""}:${p?.default_1rm ?? ""}:${p?.default_distance ?? ""}:${p?.default_log_mode ?? ""}`}
-                                                                exerciseId={
-                                                                    e.id
-                                                                }
-                                                                pref={p}
-                                                                // what you'd get with no personal default:
-                                                                // the exercise's own catalog default first,
-                                                                // goal suggestion only if it has none
-                                                                fallback={{
-                                                                    sets:
-                                                                        e.default_sets ??
-                                                                        2,
-                                                                    repMin:
-                                                                        e.default_rep_min ??
-                                                                        rMin,
-                                                                    repMax:
-                                                                        e.default_rep_max ??
-                                                                        rMax,
-                                                                }}
-                                                                timeBased={
-                                                                    e.time_based
-                                                                }
-                                                                weighted={
-                                                                    e.weighted
-                                                                }
-                                                                measurement={
-                                                                    e.measurement
-                                                                }
-                                                                units={
-                                                                    (profile?.units as Unit) ??
-                                                                    "lb"
-                                                                }
-                                                                distanceUnit={distanceUnitLabel(
-                                                                    profile?.distance_unit,
-                                                                )}
-                                                            />
-                                                        );
-                                                    })()}
-                                                    {admin && (
-                                                        <div className='mt-3 border-t border-border pt-3'>
-                                                            <details>
-                                                                <summary className='cursor-pointer text-xs font-medium text-text-muted'>
-                                                                    Edit
-                                                                    exercise
-                                                                </summary>
-                                                                <div className='mt-3'>
-                                                                    <ExerciseForm
-                                                                        exercise={
-                                                                            e
-                                                                        }
-                                                                    />
-                                                                </div>
-                                                            </details>
-                                                            <div className='mt-3 flex gap-2'>
-                                                                <form
-                                                                    action={
-                                                                        setExerciseArchived
-                                                                    }>
-                                                                    <input
-                                                                        type='hidden'
-                                                                        name='exercise_id'
-                                                                        value={
-                                                                            e.id
-                                                                        }
-                                                                    />
-                                                                    <input
-                                                                        type='hidden'
-                                                                        name='archived'
-                                                                        value='true'
-                                                                    />
-                                                                    <SubmitButton
-                                                                        pendingText='…'
-                                                                        className={
-                                                                            archiveBtn
-                                                                        }>
-                                                                        Archive
-                                                                    </SubmitButton>
-                                                                </form>
-                                                                <form
-                                                                    action={
-                                                                        deleteExercise
-                                                                    }>
-                                                                    <input
-                                                                        type='hidden'
-                                                                        name='exercise_id'
-                                                                        value={
-                                                                            e.id
-                                                                        }
-                                                                    />
-                                                                    <SubmitButton
-                                                                        pendingText='…'
-                                                                        className={
-                                                                            deleteBtn
-                                                                        }>
-                                                                        Delete
-                                                                    </SubmitButton>
-                                                                </form>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </details>
-                                        </li>
-                                    )}
+                                    renderItem={renderExercise}
                                 />
                             </ul>
                         </details>

@@ -914,8 +914,12 @@ export async function updateDayExerciseTarget(input: {
     distance?: number | null;
     /** what sets and reps were before this change, for telling the party */
     previous?: { sets: number; repMin: number | null; repMax: number | null };
+    /** on a party day: set another member's targets (the database checks you
+     *  share the party) */
+    forUserId?: string;
 }) {
     const { supabase, user } = await requireUser();
+    const who = input.forUserId ?? user.id;
 
     const { data: existing } = await supabase
         .from('day_exercise_user_targets')
@@ -923,14 +927,14 @@ export async function updateDayExerciseTarget(input: {
             'target_sets, target_rep_min, target_rep_max, target_weight, target_distance',
         )
         .eq('planned_day_exercise_id', input.pdeId)
-        .eq('user_id', user.id)
+        .eq('user_id', who)
         .maybeSingle();
 
     check(
         await supabase.from('day_exercise_user_targets').upsert(
             {
                 planned_day_exercise_id: input.pdeId,
-                user_id: user.id,
+                user_id: who,
                 target_sets:
                     input.sets !== undefined
                         ? Math.max(1, Math.min(12, input.sets))
@@ -958,7 +962,9 @@ export async function updateDayExerciseTarget(input: {
     );
 
     // on a shared party day, sets and reps changes are offered to the others
+    // (only your own; setting someone else's numbers isn't a proposal)
     if (
+        who === user.id &&
         input.previous &&
         (input.sets !== undefined ||
             input.repMin !== undefined ||
@@ -1310,8 +1316,13 @@ export async function logSet(input: {
     distance?: number | null;
     /** weight drops after the top weight (a drop set) */
     drops?: Drop[];
+    /** on a party day: log for another member of the party (the database
+     *  checks you share it) */
+    forUserId?: string;
 }) {
     const { supabase, user } = await requireUser();
+    const who = input.forUserId ?? user.id;
+    const forMe = who === user.id;
     const distance = input.distance ?? null;
     const drops = cleanDrops(input.drops ?? []).slice(0, MAX_DROPS);
 
@@ -1325,13 +1336,13 @@ export async function logSet(input: {
             .from('set_logs')
             .delete()
             .eq('planned_day_exercise_id', input.pdeId)
-            .eq('user_id', user.id)
+            .eq('user_id', who)
             .eq('set_no', input.setNo);
     } else {
         await supabase.from('set_logs').upsert(
             {
                 planned_day_exercise_id: input.pdeId,
-                user_id: user.id,
+                user_id: who,
                 set_no: input.setNo,
                 weight: input.weight,
                 reps: input.reps,
@@ -1343,8 +1354,10 @@ export async function logSet(input: {
     }
 
     // the "Last" row on this exercise's card is stamped with what the last time
-    // was as of now, and stays that way (a no-op once stamped)
+    // was as of now, and stays that way (a no-op once stamped). Only for your
+    // own sets: someone else's history isn't readable to you.
     if (
+        forMe &&
         !(
             input.weight === null &&
             input.reps === null &&
@@ -1357,7 +1370,7 @@ export async function logSet(input: {
 
     // On a 1RM day, or an exercise marked as a 1RM attempt, a logged single is
     // a max attempt: remember the heaviest one as this lift's 1RM.
-    if (input.reps === 1) {
+    if (forMe && input.reps === 1) {
         await saveOneRepMax(supabase, user.id, input.dayId, input.pdeId);
     }
     revalidatePath(`/day/${input.dayId}`);
@@ -2230,6 +2243,31 @@ export async function startProgram(formData: FormData) {
         redirect(`/parties/${partyId}`);
     }
     redirect(`/?week=${start}`);
+}
+
+/** Heart or un-heart an exercise for yourself. */
+export async function setFavoriteExercise(
+    exerciseId: string,
+    favorite: boolean,
+) {
+    const { supabase, user } = await requireUser();
+    check(
+        favorite
+            ? await supabase.from('user_favorite_exercises').upsert(
+                  { user_id: user.id, exercise_id: exerciseId },
+                  {
+                      onConflict: 'user_id,exercise_id',
+                      ignoreDuplicates: true,
+                  },
+              )
+            : await supabase
+                  .from('user_favorite_exercises')
+                  .delete()
+                  .eq('user_id', user.id)
+                  .eq('exercise_id', exerciseId),
+        'favorite exercise',
+    );
+    revalidatePath('/exercises');
 }
 
 /** Slide a program day, and the rest of its program week, later by `days`

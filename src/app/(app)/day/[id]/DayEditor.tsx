@@ -59,6 +59,7 @@ import { PlateCalculator } from "@/components/plate-calculator";
 import type { ProposalGroup } from "@/lib/party-proposals";
 import { ExerciseTimer } from "@/components/exercise-timer";
 import { SwapIcon } from "@/components/icons";
+import { FavoriteHeart } from "@/components/favorite-heart";
 import {
     unitLabel,
     distanceUnitLabel,
@@ -185,6 +186,9 @@ export default function DayEditor({
     catalog,
     lastByExercise,
     proposals,
+    slideControl,
+    favorites,
+    memberTargets,
     goal,
     experience,
     focusMuscles,
@@ -208,6 +212,26 @@ export default function DayEditor({
     lastByExercise: Record<string, LastEntry>;
     /** sets/reps changes other party members proposed for me to answer */
     proposals: ProposalGroup[];
+    /** "slide this program day" box, shown between the day types and Deload */
+    slideControl?: React.ReactNode;
+    /** exercise ids I've hearted */
+    favorites: string[];
+    /** on a party day: each other member's targets per exercise instance */
+    memberTargets: Record<
+        string,
+        Record<
+            string,
+            Pick<
+                DayEx,
+                | "targetSets"
+                | "targetRepMin"
+                | "targetRepMax"
+                | "targetWeight"
+                | "targetDistance"
+                | "logMode"
+            >
+        >
+    >;
     goal: string | null;
     experience: Enums<"experience_level"> | null;
     focusMuscles: string[];
@@ -239,10 +263,15 @@ export default function DayEditor({
         return () => clearTimeout(t);
     }, [pending]);
 
+    // On a party day you can log for another member: the set boxes and targets
+    // below then show and save theirs.
+    const [actingFor, setActingFor] = useState(currentUserId);
+    const actingForOther = actingFor !== currentUserId;
+
     const initial = useMemo(() => {
         const m = new Map<string, Cell>();
         for (const l of logs) {
-            if (l.user_id !== currentUserId) continue;
+            if (l.user_id !== actingFor) continue;
             m.set(`${l.planned_day_exercise_id}:${l.set_no}`, {
                 weight: l.weight?.toString() ?? "",
                 reps: l.reps?.toString() ?? "",
@@ -254,9 +283,31 @@ export default function DayEditor({
             });
         }
         return m;
-    }, [logs, currentUserId]);
+    }, [logs, actingFor]);
 
     const [values, setValues] = useState(initial);
+    // boxes typed into but not saved yet: a refresh from the server (someone
+    // else logging for you, or you for them) leaves those alone
+    const [dirty, setDirty] = useState<Set<string>>(() => new Set());
+    const markDirty = (key: string) =>
+        setDirty(d => (d.has(key) ? d : new Set(d).add(key)));
+    // fresh logs from the server flow into the boxes; switching who you're
+    // logging for starts from that member's sets
+    const [syncedFrom, setSyncedFrom] = useState({ initial, actingFor });
+    if (syncedFrom.initial !== initial) {
+        const switched = syncedFrom.actingFor !== actingFor;
+        setSyncedFrom({ initial, actingFor });
+        setValues(prev => {
+            if (switched) return initial;
+            const next = new Map(initial);
+            for (const k of dirty) {
+                const v = prev.get(k);
+                if (v) next.set(k, v);
+            }
+            return next;
+        });
+        if (switched) setDirty(new Set());
+    }
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [query, setQuery] = useState("");
     // equipment filters for the add and swap pickers
@@ -480,6 +531,7 @@ export default function DayEditor({
         save: boolean,
     ) {
         const next = { ...cell(pdeId, setNo), drops };
+        markDirty(`${pdeId}:${setNo}`);
         setValues(prev => new Map(prev).set(`${pdeId}:${setNo}`, next));
         if (save) persistCell(pdeId, setNo, next);
     }
@@ -490,22 +542,46 @@ export default function DayEditor({
         raw: string,
     ) {
         const key = `${pdeId}:${setNo}`;
+        markDirty(key);
         setValues(prev =>
             new Map(prev).set(key, { ...cell(pdeId, setNo), [f]: raw }),
         );
     }
-    function persistCell(pdeId: string, setNo: number, c: Cell) {
-        start(() =>
-            logSet({
+    /** Save one set, for me or for the member I'm logging for. Until the save
+     *  lands, a refresh from the server leaves that box alone. */
+    function saveSet(
+        pdeId: string,
+        setNo: number,
+        fields: {
+            weight: number | null;
+            reps: number | null;
+            distance: number | null;
+            drops: Drop[];
+        },
+    ) {
+        const key = `${pdeId}:${setNo}`;
+        start(async () => {
+            await logSet({
                 pdeId,
                 dayId: day.id,
                 setNo,
-                weight: c.weight === "" ? null : Number(c.weight),
-                reps: c.reps === "" ? null : Number(c.reps),
-                distance: c.distance === "" ? null : Number(c.distance),
-                drops: dropsOf(c),
-            }),
-        );
+                ...fields,
+                forUserId: actingForOther ? actingFor : undefined,
+            });
+            setDirty(d => {
+                const n = new Set(d);
+                n.delete(key);
+                return n;
+            });
+        });
+    }
+    function persistCell(pdeId: string, setNo: number, c: Cell) {
+        saveSet(pdeId, setNo, {
+            weight: c.weight === "" ? null : Number(c.weight),
+            reps: c.reps === "" ? null : Number(c.reps),
+            distance: c.distance === "" ? null : Number(c.distance),
+            drops: dropsOf(c),
+        });
     }
     function persist(pdeId: string, setNo: number) {
         persistCell(pdeId, setNo, cell(pdeId, setNo));
@@ -523,17 +599,12 @@ export default function DayEditor({
             "reps",
             parsed == null ? "" : formatDuration(parsed),
         );
-        start(() =>
-            logSet({
-                pdeId,
-                dayId: day.id,
-                setNo,
-                weight: c.weight === "" ? null : Number(c.weight),
-                reps: parsed,
-                distance: null,
-                drops: dropsOf(c),
-            }),
-        );
+        saveSet(pdeId, setNo, {
+            weight: c.weight === "" ? null : Number(c.weight),
+            reps: parsed,
+            distance: null,
+            drops: dropsOf(c),
+        });
     }
 
     function nextOpenSet(ex: DayEx) {
@@ -547,17 +618,12 @@ export default function DayEditor({
         const s = nextOpenSet(ex);
         const c = cell(ex.id, s);
         update(ex.id, s, "reps", formatDuration(elapsed));
-        start(() =>
-            logSet({
-                pdeId: ex.id,
-                dayId: day.id,
-                setNo: s,
-                weight: c.weight === "" ? null : Number(c.weight),
-                reps: elapsed,
-                distance: null,
-                drops: dropsOf(c),
-            }),
-        );
+        saveSet(ex.id, s, {
+            weight: c.weight === "" ? null : Number(c.weight),
+            reps: elapsed,
+            distance: null,
+            drops: dropsOf(c),
+        });
     }
 
     function maxLoggedSet(pdeId: string) {
@@ -565,7 +631,7 @@ export default function DayEditor({
         for (const l of logs) {
             if (
                 l.planned_day_exercise_id === pdeId &&
-                l.user_id === currentUserId &&
+                l.user_id === actingFor &&
                 l.set_no > max
             ) {
                 max = l.set_no;
@@ -628,9 +694,8 @@ export default function DayEditor({
         let exercisesLogged = 0;
         for (const ex of day.exercises) {
             const s =
-                userId === currentUserId
-                    ? myStats(ex)
-                    : otherStats(ex.id, userId);
+                // the boxes on screen hold whoever I'm logging for
+                userId === actingFor ? myStats(ex) : otherStats(ex.id, userId);
             if (modeFor(ex) === "time") timedVolume += s.volume;
             else volume += s.volume;
             if (s.volume > 0) exercisesLogged++;
@@ -650,9 +715,10 @@ export default function DayEditor({
     ) {
         // on a party day the rest of the party is offered sets/reps changes,
         // so say what they were before
+        // (only for my own numbers: setting another member's isn't a proposal)
         const ex = day.exercises.find(e => e.id === pdeId);
         const previous =
-            day.partyId && ex
+            day.partyId && ex && !actingForOther
                 ? {
                       sets: ex.targetSets,
                       repMin: ex.targetRepMin,
@@ -664,9 +730,19 @@ export default function DayEditor({
                 pdeId,
                 dayId: day.id,
                 previous,
+                forUserId: actingForOther ? actingFor : undefined,
                 ...patch,
             }),
         );
+    }
+
+    /** An exercise as the member I'm logging for sees it: their own sets,
+     *  reps, weight and distance targets. */
+    function viewFor(ex: DayEx): DayEx {
+        const theirs = actingForOther
+            ? memberTargets[actingFor]?.[ex.id]
+            : undefined;
+        return theirs ? { ...ex, ...theirs } : ex;
     }
 
     function tryAdd(item: CatalogItem) {
@@ -780,6 +856,8 @@ export default function DayEditor({
                 ))}
             </div>
 
+            {slideControl}
+
             <button
                 type='button'
                 onClick={() =>
@@ -808,6 +886,50 @@ export default function DayEditor({
             <div
                 ref={stickyBlockRef}
                 className='sticky top-14 z-10 flex flex-col gap-2 bg-bg pb-1 shadow-sm'>
+                {/* whose sets the boxes below show and save: on a party day one
+                    member can log for another */}
+                {day.partyId && members.length > 1 && (
+                    <div
+                        className={`flex flex-wrap items-center gap-1.5 rounded-xl border px-3 py-2 text-xs ${
+                            actingForOther
+                                ? "border-accent/60 bg-accent/10"
+                                : "border-border"
+                        }`}>
+                        <span className='text-text-muted'>Logging for</span>
+                        {members.map(m => {
+                            const on = m.user_id === actingFor;
+                            return (
+                                <button
+                                    key={m.user_id}
+                                    type='button'
+                                    aria-pressed={on}
+                                    onClick={() => setActingFor(m.user_id)}
+                                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
+                                        on
+                                            ? "border-text font-medium text-text"
+                                            : "border-border text-text-muted hover:text-text"
+                                    }`}>
+                                    <span
+                                        className='inline-block h-2 w-2 rounded-full'
+                                        style={{ background: m.color }}
+                                    />
+                                    {m.user_id === currentUserId
+                                        ? "Me"
+                                        : m.display_name || "Member"}
+                                </button>
+                            );
+                        })}
+                        {actingForOther && (
+                            <span className='w-full text-text-muted'>
+                                Sets, reps, weights and targets you enter now
+                                are saved for{" "}
+                                {memberById.get(actingFor)?.display_name ||
+                                    "them"}
+                                .
+                            </span>
+                        )}
+                    </div>
+                )}
                 {/* party progress */}
                 {day.partyId && members.length > 1 && (
                     <details className='relative rounded-xl border border-border bg-bg'>
@@ -937,7 +1059,7 @@ export default function DayEditor({
                     day.exercises.map(e => ({ group: e.supersetGroup, e })),
                 ).map(block => {
                     const cards = block.items.map(({ item, index: idx }) => {
-                        const ex = item.e;
+                        const ex = viewFor(item.e);
                         const mine = myStats(ex);
                         const others = members.filter(
                             m => m.user_id !== currentUserId,
@@ -993,7 +1115,11 @@ export default function DayEditor({
                         const gridCols = showWeight
                             ? "grid-cols-[1.5rem_1fr_1fr]"
                             : "grid-cols-[1.5rem_1fr]";
-                        const last = lastByExercise[ex.exercise.id];
+                        // "Last" is my own history; not shown while logging
+                        // for someone else
+                        const last = actingForOther
+                            ? undefined
+                            : lastByExercise[ex.exercise.id];
                         const fmtLastSet = (s: {
                             weight: number;
                             reps: number;
@@ -1027,6 +1153,7 @@ export default function DayEditor({
                         // already treats every exercise that way
                         const isOneRmAttempt = oneRmMarks[ex.id] ?? ex.isOneRm;
                         const canMarkOneRm =
+                            !actingForOther &&
                             day.category !== "one_rm" &&
                             showWeight &&
                             mode !== "distance" &&
@@ -1095,6 +1222,13 @@ export default function DayEditor({
                                         )}
                                     </button>
                                     <div className='flex shrink-0 gap-1'>
+                                        <FavoriteHeart
+                                            exerciseId={ex.exercise.id}
+                                            initial={favorites.includes(
+                                                ex.exercise.id,
+                                            )}
+                                            className={`${stepBtn} hover:border-rose-400`}
+                                        />
                                         <button
                                             aria-label='Move up'
                                             onClick={() =>
@@ -1562,14 +1696,19 @@ export default function DayEditor({
                                                     repMin: secs,
                                                     repMax: secs,
                                                 });
-                                                startQuiet(() =>
-                                                    setExerciseDefaultSeconds({
-                                                        exerciseId:
-                                                            ex.exercise.id,
-                                                        dayId: day.id,
-                                                        seconds: secs,
-                                                    }),
-                                                );
+                                                // my own default; not someone else's
+                                                if (!actingForOther)
+                                                    startQuiet(() =>
+                                                        setExerciseDefaultSeconds(
+                                                            {
+                                                                exerciseId:
+                                                                    ex.exercise
+                                                                        .id,
+                                                                dayId: day.id,
+                                                                seconds: secs,
+                                                            },
+                                                        ),
+                                                    );
                                             }}
                                             onFinish={elapsed =>
                                                 logTimerResult(ex, elapsed)
@@ -1595,7 +1734,10 @@ export default function DayEditor({
                                                     setTarget(ex.id, {
                                                         distance: val,
                                                     });
-                                                    if (val != null)
+                                                    if (
+                                                        val != null &&
+                                                        !actingForOther
+                                                    )
                                                         startQuiet(() =>
                                                             setExerciseDefaultDistance(
                                                                 {
@@ -1652,20 +1794,24 @@ export default function DayEditor({
                                                 }
                                                 className='w-14 rounded-md border border-border bg-surface px-1 py-1 text-center'
                                             />
-                                            <button
-                                                type='button'
-                                                onClick={() =>
-                                                    saveDefaultWeight(
-                                                        ex.id,
-                                                        ex.exercise.id,
-                                                    )
-                                                }
-                                                className='rounded-md border border-border px-1.5 py-1 text-[11px] text-text-muted enabled:hover:text-text disabled:opacity-50'
-                                                disabled={pending}>
-                                                {savedDefault === ex.id
-                                                    ? "Saved ✓"
-                                                    : "Set default"}
-                                            </button>
+                                            {/* my own saved default: not while
+                                                logging for someone else */}
+                                            {!actingForOther && (
+                                                <button
+                                                    type='button'
+                                                    onClick={() =>
+                                                        saveDefaultWeight(
+                                                            ex.id,
+                                                            ex.exercise.id,
+                                                        )
+                                                    }
+                                                    className='rounded-md border border-border px-1.5 py-1 text-[11px] text-text-muted enabled:hover:text-text disabled:opacity-50'
+                                                    disabled={pending}>
+                                                    {savedDefault === ex.id
+                                                        ? "Saved ✓"
+                                                        : "Set default"}
+                                                </button>
+                                            )}
                                         </div>
                                     ) : (
                                         <button
@@ -2065,8 +2211,9 @@ export default function DayEditor({
                                             1RM attempt
                                         </label>
                                     )}
-                                    {(day.category === "one_rm" ||
-                                        isOneRmAttempt) &&
+                                    {!actingForOther &&
+                                        (day.category === "one_rm" ||
+                                            isOneRmAttempt) &&
                                         bestSingle(ex) > 0 && (
                                             <span>
                                                 1RM today{" "}
@@ -2078,21 +2225,25 @@ export default function DayEditor({
                                             </span>
                                         )}
                                     <span>
-                                        Your top set{" "}
+                                        {actingForOther ? "Their" : "Your"} top
+                                        set{" "}
                                         <span className='text-text'>
                                             {mine.top || "—"}
                                         </span>
                                     </span>
                                     <span>
-                                        Your volume{" "}
+                                        {actingForOther ? "Their" : "Your"}{" "}
+                                        volume{" "}
                                         <span className='text-text'>
                                             {mine.volume || "—"}
                                         </span>
                                     </span>
                                 </div>
 
-                                {/* notes */}
+                                {/* notes (my own: not while logging for
+                                    someone else) */}
                                 <textarea
+                                    hidden={actingForOther}
                                     key={`note-${ex.id}`}
                                     defaultValue={myNote(ex.id)}
                                     placeholder='Notes — how it felt, what to change next time…'

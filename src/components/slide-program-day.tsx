@@ -37,14 +37,30 @@ export function SlideProgramDay({
     };
 
     return (
-        <div className='flex flex-col gap-1'>
-            <div className='flex flex-wrap items-center gap-2 text-xs'>
+        <div
+            className={`flex flex-col gap-2 rounded-lg border-2 px-3 py-2.5 ${
+                behind > 0
+                    ? "border-accent/60 bg-accent/10"
+                    : "border-dashed border-border"
+            }`}>
+            <p className='text-sm'>
+                <span className='font-semibold'>
+                    {behind > 0
+                        ? `Day ${dayNumber} was missed.`
+                        : "Skipping this day?"}
+                </span>{" "}
+                <span className='text-text-muted'>
+                    Slide it and the rest of this week later; the weeks after
+                    stay put.
+                </span>
+            </p>
+            <div className='flex flex-wrap gap-2'>
                 {behind > 0 && (
                     <button
                         type='button'
                         disabled={pending}
                         onClick={() => slide(behind, "to today")}
-                        className='rounded-md border border-accent/50 bg-accent/10 px-2 py-1 font-medium text-accent hover:bg-accent/20 disabled:opacity-50'>
+                        className='rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50'>
                         Move to today
                     </button>
                 )}
@@ -52,7 +68,7 @@ export function SlideProgramDay({
                     type='button'
                     disabled={pending}
                     onClick={() => slide(1, "a day later")}
-                    className='rounded-md border border-border px-2 py-1 text-text-muted hover:text-text disabled:opacity-50'>
+                    className='rounded-md border border-border px-3 py-1.5 text-sm hover:bg-surface disabled:opacity-50'>
                     {pending ? "Moving…" : "Push back a day"}
                 </button>
             </div>

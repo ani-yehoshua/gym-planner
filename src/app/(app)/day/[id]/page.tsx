@@ -68,6 +68,16 @@ export default async function DayPage({
     type PdeRow = (typeof pdeRows)[number];
     const pdeIds = pdeRows.map(p => p.id);
     const exIds = [...new Set(pdeRows.map(p => p.exercises.id))];
+    // whose numbers to load: just mine, or the whole party on a party day
+    const { data: partyRows } = day.party_id
+        ? await supabase
+              .from("party_members")
+              .select("user_id")
+              .eq("party_id", day.party_id)
+        : { data: [] };
+    const partyMemberIds = [
+        ...new Set([user.id, ...(partyRows ?? []).map(r => r.user_id)]),
+    ];
 
     const [
         { data: logs },
@@ -79,6 +89,7 @@ export default async function DayPage({
         { data: catalog },
         { data: lastSnapshots },
         { data: profile },
+        { data: favoriteRows },
     ] = await Promise.all([
         pdeIds.length
             ? supabase
@@ -94,23 +105,24 @@ export default async function DayPage({
                   .select("planned_day_exercise_id, user_id, note")
                   .in("planned_day_exercise_id", pdeIds)
             : Promise.resolve({ data: [] }),
-        // my own per-exercise targets for this day + my saved catalog defaults
+        // per-exercise targets for this day + saved catalog defaults: mine, and
+        // on a party day every member's (so one member can log for another)
         pdeIds.length
             ? supabase
                   .from("day_exercise_user_targets")
                   .select(
-                      "planned_day_exercise_id, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, is_one_rm",
+                      "planned_day_exercise_id, user_id, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, is_one_rm",
                   )
-                  .eq("user_id", user.id)
+                  .in("user_id", partyMemberIds)
                   .in("planned_day_exercise_id", pdeIds)
             : Promise.resolve({ data: [] }),
         exIds.length
             ? supabase
                   .from("user_exercise_prefs")
                   .select(
-                      "exercise_id, default_sets, default_rep_min, default_rep_max, default_weight, default_distance, default_log_mode",
+                      "exercise_id, user_id, default_sets, default_rep_min, default_rep_max, default_weight, default_distance, default_log_mode",
                   )
-                  .eq("user_id", user.id)
+                  .in("user_id", partyMemberIds)
                   .in("exercise_id", exIds)
             : Promise.resolve({ data: [] }),
         day.party_id
@@ -145,13 +157,22 @@ export default async function DayPage({
             .select("units, distance_unit")
             .eq("id", user.id)
             .maybeSingle(),
+        // my hearted exercises, for the heart on each card
+        supabase
+            .from("user_favorite_exercises")
+            .select("exercise_id")
+            .eq("user_id", user.id),
     ]);
 
+    // keyed by member and exercise instance / exercise
     const targetByPde = new Map(
-        (myTargets ?? []).map(t => [t.planned_day_exercise_id, t]),
+        (myTargets ?? []).map(t => [
+            `${t.user_id}:${t.planned_day_exercise_id}`,
+            t,
+        ]),
     );
     const prefByExercise = new Map(
-        (myPrefs ?? []).map(p => [p.exercise_id, p]),
+        (myPrefs ?? []).map(p => [`${p.user_id}:${p.exercise_id}`, p]),
     );
 
     const members = (m ?? []).map((x, i) => ({
@@ -220,9 +241,9 @@ export default async function DayPage({
      *  default -> goal recommendation (last resort, only when nothing was ever
      *  set for this exercise). Weight is purely personal: my day edit -> my
      *  saved default -> nothing. */
-    function effectiveTarget(p: PdeRow) {
-        const t = targetByPde.get(p.id);
-        const pref = prefByExercise.get(p.exercises.id);
+    function effectiveTarget(p: PdeRow, userId: string = user!.id) {
+        const t = targetByPde.get(`${userId}:${p.id}`);
+        const pref = prefByExercise.get(`${userId}:${p.exercises.id}`);
         const [recMin, recMax] = recommendedReps(goal, isCompound(p.exercises));
         // a program's exercise carries the program's own sets and reps, which
         // beat the member's saved exercise defaults (those are for exercises
@@ -323,16 +344,6 @@ export default async function DayPage({
                         {followingThisProgram && (
                             <StopProgramButton redirectTo='/' />
                         )}
-                        {/* skipping a day: slide it and the rest of this
-                            program week later, nothing logged on it yet */}
-                        {day.program_run_id && !dayLogged && (
-                            <SlideProgramDay
-                                dayId={day.id}
-                                dayNumber={day.program_day_number}
-                                date={day.date}
-                                todayISO={todayISO}
-                            />
-                        )}
                     </div>
                 ) : (
                     day.label &&
@@ -385,7 +396,8 @@ export default async function DayPage({
                                 targetDistance: e.distance,
                                 logMode: e.logMode,
                                 isOneRm:
-                                    targetByPde.get(p.id)?.is_one_rm ?? false,
+                                    targetByPde.get(`${user.id}:${p.id}`)
+                                        ?.is_one_rm ?? false,
                                 addedBy: p.added_by,
                                 fromProgram: p.from_program,
                                 programSetReps: parseSetReps(
@@ -410,6 +422,46 @@ export default async function DayPage({
                 }))}
                 lastByExercise={prevByExercise}
                 proposals={proposals}
+                // every other member's targets on this party day, for when
+                // you log for them
+                memberTargets={Object.fromEntries(
+                    partyMemberIds
+                        .filter(uid => uid !== user.id)
+                        .map(uid => [
+                            uid,
+                            Object.fromEntries(
+                                day.planned_day_exercises.map(p => {
+                                    const e = effectiveTarget(p, uid);
+                                    return [
+                                        p.id,
+                                        {
+                                            targetSets: e.sets,
+                                            targetRepMin: e.repMin,
+                                            targetRepMax: e.repMax,
+                                            targetWeight: e.weight,
+                                            targetDistance: e.distance,
+                                            logMode: e.logMode,
+                                        },
+                                    ];
+                                }),
+                            ),
+                        ]),
+                )}
+                favorites={(favoriteRows ?? []).map(f => f.exercise_id)}
+                // skipping a program day: slide it and the rest of its program
+                // week later (only while nothing's logged on it)
+                slideControl={
+                    day.program_run_id &&
+                    day.program_day_number &&
+                    !dayLogged ? (
+                        <SlideProgramDay
+                            dayId={day.id}
+                            dayNumber={day.program_day_number}
+                            date={day.date}
+                            todayISO={todayISO}
+                        />
+                    ) : null
+                }
                 goal={goal}
                 experience={constants?.experience ?? null}
                 focusMuscles={constants?.focus_muscles ?? []}
