@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { startProgram } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { ChevronLeftIcon } from "@/components/icons";
-import { addDays, formatShort } from "@/lib/date";
+import { formatShort } from "@/lib/date";
 import { ProgramProgressList } from "@/components/program-progress-list";
 import { fetchProgramProgress } from "@/lib/program-progress";
 import { unitLabel, type Unit } from "@/lib/units";
@@ -53,21 +53,32 @@ export default async function ProgramDetailPage({
     ]);
     if (!program) notFound();
 
-    // your progress: this run while you're following it, else every run of it
-    // that's still on your calendar
+    // The run of this program you're on, if any: your own or one your party
+    // started, still with days today or later (a missed day has already been
+    // moved up to today, so an unfinished run always has one).
+    const { data: runDays } = await supabase
+        .from("planned_days")
+        .select("program_run_id, date")
+        .eq("program_id", program.id)
+        .not("program_run_id", "is", null);
+    const runs = new Map<string, { start: string; end: string }>();
+    for (const d of runDays ?? []) {
+        const r = runs.get(d.program_run_id!);
+        runs.set(d.program_run_id!, {
+            start: r && r.start < d.date ? r.start : d.date,
+            end: r && r.end > d.date ? r.end : d.date,
+        });
+    }
     const activeRun =
-        run && run.program_id === program.id && run.end_date >= todayISO
-            ? run
-            : null;
+        [...runs.entries()]
+            .filter(([, r]) => r.end >= todayISO)
+            .map(([id, r]) => ({ id, ...r }))
+            .sort((a, b) => b.start.localeCompare(a.start))[0] ?? null;
+
+    // your progress: this run while you're on it, else every run of it that's
+    // still on your calendar
     const [progress, { data: profile }] = await Promise.all([
-        fetchProgramProgress(
-            supabase,
-            user.id,
-            program.id,
-            activeRun
-                ? { start: activeRun.start_date, end: activeRun.end_date }
-                : undefined,
-        ),
+        fetchProgramProgress(supabase, user.id, program.id, activeRun?.id),
         supabase
             .from("profiles")
             .select("units")
@@ -85,33 +96,48 @@ export default async function ProgramDetailPage({
     const sessions = Array.from({ length: total }, (_, i) =>
         days.length ? days[i % days.length] : null,
     ).filter(d => d && !d.is_rest).length;
-    // the run laid out week by week (rest days included), so the week and day
-    // you're on can be picked out
-    // Every week of the program, each day with the cycle day it falls on. When
-    // you're following it the days also carry their dates and what you've done.
-    const weeks = days.length
-        ? Array.from({ length: Math.ceil(total / 7) }, (_, w) => ({
-              entries: Array.from(
-                  { length: Math.min(7, total - w * 7) },
-                  (_, k) => {
-                      const i = w * 7 + k;
-                      const date = activeRun
-                          ? addDays(activeRun.start_date, i)
-                          : null;
-                      return {
-                          i,
-                          d: days[i % days.length],
-                          date,
-                          planned: date
-                              ? progress.days.find(p => p.date === date)
-                              : undefined,
-                      };
-                  },
-              ),
-          }))
-        : [];
-    const thisWeek = weeks.findIndex(w =>
-        w.entries.some(e => e.date === todayISO),
+    // Every day of the program, each with the cycle day it falls on. When
+    // you're on a run, the days also carry their dates and what you've done:
+    // a training day's date is wherever it sits on the calendar now (missed
+    // days move), and a rest day falls the day after the one before it.
+    const entries: {
+        i: number;
+        d: (typeof days)[number];
+        date: string | null;
+        planned: (typeof progress.days)[number] | undefined;
+    }[] = [];
+    if (days.length) {
+        for (let i = 0; i < total; i++) {
+            const planned = activeRun
+                ? progress.days.find(p => p.number === i + 1)
+                : undefined;
+            // rest days aren't on the calendar, and a slid week can sit on
+            // them, so only training days carry a date
+            entries.push({
+                i,
+                d: days[i % days.length],
+                date: planned?.date ?? null,
+                planned,
+            });
+        }
+    }
+    // ...shown a week (7 program days) at a time
+    const weeks = Array.from(
+        { length: Math.ceil(entries.length / 7) },
+        (_, w) => ({
+            entries: entries.slice(w * 7, w * 7 + 7),
+        }),
+    );
+    // the week you're on: the one holding your next training day (today's, or
+    // the first one after it)
+    const thisWeek = weeks.findIndex(
+        w =>
+            w.entries.some(e => e.date !== null && e.date >= todayISO) &&
+            !weeks
+                .slice(0, weeks.indexOf(w))
+                .some(p =>
+                    p.entries.some(e => e.date !== null && e.date >= todayISO),
+                ),
     );
     // arriving from a Calendar day's "Plan session…" pre-fills that date
     const defaultStart = /^\d{4}-\d{2}-\d{2}$/.test(start ?? "")
@@ -385,7 +411,7 @@ export default async function ProgramDetailPage({
                         <h2 className='text-sm font-medium'>Your progress</h2>
                         <span className='text-xs text-text-muted'>
                             {activeRun
-                                ? `${formatShort(activeRun.start_date)} – ${formatShort(activeRun.end_date)}`
+                                ? `${formatShort(activeRun.start)} – ${formatShort(activeRun.end)}`
                                 : "all runs"}
                         </span>
                     </div>

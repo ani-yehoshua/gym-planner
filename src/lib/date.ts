@@ -18,6 +18,14 @@ export function addDays(s: string, n: number): string {
     return toISODate(d);
 }
 
+/** Whole days from `from` to `to` (positive when `to` is later). */
+export function dayDiff(from: string, to: string): number {
+    return Math.round(
+        (parseISODate(to).getTime() - parseISODate(from).getTime()) /
+            86_400_000,
+    );
+}
+
 // Sunday-start week containing `s`
 export function startOfWeek(s: string): string {
     const d = parseISODate(s);

@@ -2082,7 +2082,10 @@ export async function startProgram(formData: FormData) {
             plan.push({ date: addDays(start, i), number: i + 1, day });
     }
 
-    // one planned day per training date (a date appears once in the plan)
+    // one planned day per training date (a date appears once in the plan); the
+    // run id ties this start's days together, so a missed day can carry the
+    // rest of them forward
+    const runId = crypto.randomUUID();
     const dayIdByDate = new Map<string, string>();
     for (const part of chunk(plan)) {
         const { data: created, error } = await supabase
@@ -2099,6 +2102,7 @@ export async function startProgram(formData: FormData) {
                     label: p.day.name,
                     program_id: programId,
                     program_day_number: p.number,
+                    program_run_id: runId,
                     created_by: user.id,
                 })),
             )
@@ -2226,6 +2230,27 @@ export async function startProgram(formData: FormData) {
         redirect(`/parties/${partyId}`);
     }
     redirect(`/?week=${start}`);
+}
+
+/** Slide a program day, and the rest of its program week, later by `days`
+ *  (Thursday and Friday become Friday and Saturday); later weeks stay where
+ *  they are. Logged days don't move. Says why when it can't (it would run into
+ *  next week). */
+export async function slideProgramWeek(
+    dayId: string,
+    days: number,
+): Promise<{ error: string | null }> {
+    const { supabase } = await requireUser();
+    const { error } = await supabase.rpc('slide_program_week', {
+        p_day: dayId,
+        p_days: days,
+    });
+    if (error) return { error: error.message };
+    revalidatePath('/');
+    revalidatePath(`/day/${dayId}`);
+    revalidatePath('/parties/[id]', 'page');
+    revalidatePath('/programs/[id]', 'page');
+    return { error: null };
 }
 
 /** Stop following the current program. Every day it put on the calendar comes

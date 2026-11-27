@@ -35,13 +35,14 @@ export type ProgramProgress = {
 };
 
 /** How far along a member is in a program, from their own logged sets on the
- *  program's calendar days. With a range it covers just that run; without one,
- *  every run of the program that's still on the calendar. */
+ *  program's calendar days. With a run id it covers just that run (its days
+ *  move together when one is missed, so dates can't pick them out); without
+ *  one, every run of the program that's still on the calendar. */
 export async function fetchProgramProgress(
     supabase: Client,
     userId: string,
     programId: string,
-    range?: { start: string; end: string },
+    runId?: string,
 ): Promise<ProgramProgress> {
     let daysQuery = supabase
         .from('planned_days')
@@ -54,11 +55,12 @@ export async function fetchProgramProgress(
         )
         .eq('user_id', userId)
         .eq('planned_day_exercises.planned_days.program_id', programId);
-    if (range) {
-        daysQuery = daysQuery.gte('date', range.start).lte('date', range.end);
-        logsQuery = logsQuery
-            .gte('planned_day_exercises.planned_days.date', range.start)
-            .lte('planned_day_exercises.planned_days.date', range.end);
+    if (runId) {
+        daysQuery = daysQuery.eq('program_run_id', runId);
+        logsQuery = logsQuery.eq(
+            'planned_day_exercises.planned_days.program_run_id',
+            runId,
+        );
     }
     const [{ data: days }, { data: logs }] = await Promise.all([
         daysQuery,

@@ -16,6 +16,8 @@ import {
     stampLastTime,
     type LastEntry,
 } from "@/lib/last-time";
+import { SlideProgramDay } from "@/components/slide-program-day";
+import { getUserToday } from "@/lib/user-today";
 import DayEditor from "./DayEditor";
 
 // stable per-member accent colors
@@ -45,7 +47,7 @@ export default async function DayPage({
     const { data: day } = await supabase
         .from("planned_days")
         .select(
-            "id, date, category, label, owner_user, party_id, is_deload, program_id, program_day_number, parties(name), programs(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, from_program, program_set_reps, superset_group, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance, default_sets, default_rep_min, default_rep_max, variant_group, variant_label, grip, equipment))",
+            "id, date, category, label, owner_user, party_id, is_deload, program_id, program_day_number, program_run_id, parties(name), programs(name), planned_day_exercises(id, sort, target_sets, target_rep_min, target_rep_max, target_weight, target_distance, log_mode, added_by, from_program, program_set_reps, superset_group, exercises(id, name, category, primary_muscles, secondary_muscles, howto_text, media_url, time_based, weighted, measurement, default_distance, default_sets, default_rep_min, default_rep_max, variant_group, variant_label, grip, equipment))",
         )
         .eq("id", id)
         .maybeSingle();
@@ -281,6 +283,11 @@ export default async function DayPage({
         : [];
 
     const backHref = day.party_id ? `/parties/${day.party_id}` : "/";
+    // anyone's logged set pins a program day in place
+    const dayLogged = (logs ?? []).some(
+        l => l.weight != null || l.reps != null || l.distance != null,
+    );
+    const todayISO = await getUserToday();
 
     return (
         <div className='flex flex-col gap-4'>
@@ -315,6 +322,16 @@ export default async function DayPage({
                         </p>
                         {followingThisProgram && (
                             <StopProgramButton redirectTo='/' />
+                        )}
+                        {/* skipping a day: slide it and the rest of this
+                            program week later, nothing logged on it yet */}
+                        {day.program_run_id && !dayLogged && (
+                            <SlideProgramDay
+                                dayId={day.id}
+                                dayNumber={day.program_day_number}
+                                date={day.date}
+                                todayISO={todayISO}
+                            />
                         )}
                     </div>
                 ) : (

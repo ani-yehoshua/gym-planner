@@ -657,6 +657,7 @@ export type Database = {
           party_id: string | null
           program_day_number: number | null
           program_id: string | null
+          program_run_id: string | null
         }
         Insert: {
           category?: Database["public"]["Enums"]["muscle_category"] | null
@@ -670,6 +671,7 @@ export type Database = {
           party_id?: string | null
           program_day_number?: number | null
           program_id?: string | null
+          program_run_id?: string | null
         }
         Update: {
           category?: Database["public"]["Enums"]["muscle_category"] | null
@@ -683,6 +685,7 @@ export type Database = {
           party_id?: string | null
           program_day_number?: number | null
           program_id?: string | null
+          program_run_id?: string | null
         }
         Relationships: [
           {
@@ -1205,6 +1208,7 @@ export type Database = {
       is_party_member: { Args: { p_party: string }; Returns: boolean }
       is_party_owner: { Args: { p_party: string }; Returns: boolean }
       join_party_with_code: { Args: { p_code: string }; Returns: string }
+      slide_program_week: { Args: { p_day: string; p_days: number }; Returns: undefined }
       sync_program_days: { Args: { p_program: string }; Returns: number }
     }
     Enums: {
